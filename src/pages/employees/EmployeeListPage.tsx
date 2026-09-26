@@ -36,7 +36,12 @@ export function EmployeeListPage() {
           </GradientButton>
         ) : (
           <Link to="/employees/new">
-            <GradientButton><Plus className="h-4 w-4 mr-2" />Add Employee</GradientButton>
+            <GradientButton>
+              <span className="inline-flex items-center justify-center gap-2">
+                <Plus className="h-4 w-4 shrink-0" />
+                <span>Add Employee</span>
+              </span>
+            </GradientButton>
           </Link>
         )}
       </div>
