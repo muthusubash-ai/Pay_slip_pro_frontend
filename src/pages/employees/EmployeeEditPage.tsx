@@ -1,0 +1,168 @@
+import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
+import { GlassCard } from '../../components/ui/GlassCard';
+import { AnimatedInput } from '../../components/ui/AnimatedInput';
+import { GradientButton } from '../../components/ui/GradientButton';
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { useEmployee, useUpdateEmployee } from '../../hooks/useEmployees';
+
+export function EmployeeEditPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { data: emp, isLoading } = useEmployee(Number(id));
+  const updateEmployee = useUpdateEmployee();
+  const [error, setError] = useState('');
+
+  const [form, setForm] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    department: '',
+    designation: '',
+    bank_name: '',
+    bank_account_number: '',
+    ifsc_code: '',
+    pan_number: '',
+    basic_salary: '',
+    hra: '',
+    conveyance_allowance: '',
+    medical_allowance: '',
+    special_allowance: '',
+    pf_deduction: '',
+    professional_tax: '',
+    tds: '',
+    esi: '',
+  });
+
+  useEffect(() => {
+    if (emp) {
+      setForm({
+        full_name: emp.full_name,
+        email: emp.email,
+        phone: emp.phone || '',
+        department: emp.department || '',
+        designation: emp.designation || '',
+        bank_name: emp.bank_name || '',
+        bank_account_number: emp.bank_account_number || '',
+        ifsc_code: emp.ifsc_code || '',
+        pan_number: emp.pan_number || '',
+        basic_salary: String(emp.basic_salary),
+        hra: String(emp.hra),
+        conveyance_allowance: String(emp.conveyance_allowance),
+        medical_allowance: String(emp.medical_allowance),
+        special_allowance: String(emp.special_allowance),
+        pf_deduction: String(emp.pf_deduction),
+        professional_tax: String(emp.professional_tax),
+        tds: String(emp.tds),
+        esi: String(emp.esi),
+      });
+    }
+  }, [emp]);
+
+  const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const handleSubmit = () => {
+    setError('');
+    if (!form.full_name || !form.email) {
+      setError('Full name and email are required.');
+      return;
+    }
+    updateEmployee.mutate(
+      {
+        id: Number(id),
+        data: {
+          full_name: form.full_name,
+          email: form.email,
+          phone: form.phone || undefined,
+          department: form.department || undefined,
+          designation: form.designation || undefined,
+          bank_name: form.bank_name || undefined,
+          bank_account_number: form.bank_account_number || undefined,
+          ifsc_code: form.ifsc_code || undefined,
+          pan_number: form.pan_number || undefined,
+          basic_salary: parseFloat(form.basic_salary) || 0,
+          hra: parseFloat(form.hra) || 0,
+          conveyance_allowance: parseFloat(form.conveyance_allowance) || 0,
+          medical_allowance: parseFloat(form.medical_allowance) || 0,
+          special_allowance: parseFloat(form.special_allowance) || 0,
+          pf_deduction: parseFloat(form.pf_deduction) || 0,
+          professional_tax: parseFloat(form.professional_tax) || 0,
+          tds: parseFloat(form.tds) || 0,
+          esi: parseFloat(form.esi) || 0,
+        },
+      },
+      {
+        onSuccess: () => navigate(`/employees/${id}`),
+        onError: (err: unknown) => {
+          const msg =
+            err && typeof err === 'object' && 'response' in err
+              ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+              : undefined;
+          setError(msg || 'Failed to update employee.');
+        },
+      }
+    );
+  };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (!emp) return <p className="text-center text-gray-500 mt-10">Employee not found.</p>;
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6">
+      <div className="flex items-center gap-3">
+        <Link to={`/employees/${id}`} className="text-gray-500 hover:text-gray-700"><ArrowLeft className="h-5 w-5" /></Link>
+        <h2 className="text-2xl font-bold text-gray-900">Edit {emp.full_name}</h2>
+      </div>
+
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">{error}</div>}
+
+      <GlassCard>
+        <h3 className="text-lg font-semibold mb-4">Personal Information</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <AnimatedInput label="Full Name *" value={form.full_name} onChange={handleChange('full_name')} />
+          <AnimatedInput label="Email *" type="email" value={form.email} onChange={handleChange('email')} />
+          <AnimatedInput label="Phone" value={form.phone} onChange={handleChange('phone')} />
+          <AnimatedInput label="Department" value={form.department} onChange={handleChange('department')} />
+          <AnimatedInput label="Designation" value={form.designation} onChange={handleChange('designation')} />
+        </div>
+      </GlassCard>
+
+      <GlassCard>
+        <h3 className="text-lg font-semibold mb-4">Bank Details</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <AnimatedInput label="Bank Name" value={form.bank_name} onChange={handleChange('bank_name')} />
+          <AnimatedInput label="Account Number" value={form.bank_account_number} onChange={handleChange('bank_account_number')} />
+          <AnimatedInput label="IFSC Code" value={form.ifsc_code} onChange={handleChange('ifsc_code')} />
+          <AnimatedInput label="PAN Number" value={form.pan_number} onChange={handleChange('pan_number')} />
+        </div>
+      </GlassCard>
+
+      <GlassCard>
+        <h3 className="text-lg font-semibold mb-4">Salary Details</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <AnimatedInput label="Basic Salary" type="number" value={form.basic_salary} onChange={handleChange('basic_salary')} />
+          <AnimatedInput label="HRA" type="number" value={form.hra} onChange={handleChange('hra')} />
+          <AnimatedInput label="Conveyance Allowance" type="number" value={form.conveyance_allowance} onChange={handleChange('conveyance_allowance')} />
+          <AnimatedInput label="Medical Allowance" type="number" value={form.medical_allowance} onChange={handleChange('medical_allowance')} />
+          <AnimatedInput label="Special Allowance" type="number" value={form.special_allowance} onChange={handleChange('special_allowance')} />
+        </div>
+        <h4 className="text-md font-medium mt-6 mb-3">Deductions</h4>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <AnimatedInput label="PF" type="number" value={form.pf_deduction} onChange={handleChange('pf_deduction')} />
+          <AnimatedInput label="Professional Tax" type="number" value={form.professional_tax} onChange={handleChange('professional_tax')} />
+          <AnimatedInput label="TDS" type="number" value={form.tds} onChange={handleChange('tds')} />
+          <AnimatedInput label="ESI" type="number" value={form.esi} onChange={handleChange('esi')} />
+        </div>
+      </GlassCard>
+
+      <div className="flex justify-end gap-3">
+        <Link to={`/employees/${id}`}><GradientButton variant="secondary">Cancel</GradientButton></Link>
+        <GradientButton onClick={handleSubmit} isLoading={updateEmployee.isPending}>Update Employee</GradientButton>
+      </div>
+    </motion.div>
+  );
+}
