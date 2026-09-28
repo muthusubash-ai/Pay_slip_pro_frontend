@@ -38,10 +38,12 @@ export function EmployeeDetailPage() {
           <Link to="/employees" className="text-gray-500 hover:text-gray-700"><ArrowLeft className="h-5 w-5" /></Link>
           <h2 className="truncate text-xl font-bold text-gray-900 sm:text-2xl">{emp.full_name}</h2>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link to={`/employees/${id}/edit`}><GradientButton><Edit className="h-4 w-4 mr-2" />Edit</GradientButton></Link>
-          <GradientButton variant="danger" onClick={handleDeactivate} isLoading={deleteEmployee.isPending}>
-            <Trash2 className="h-4 w-4 mr-2" />Deactivate
+        <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:justify-end">
+          <Link to={`/employees/${id}/edit`} className="flex-1 sm:flex-none">
+            <GradientButton className="w-full gap-2 sm:w-auto"><Edit className="h-4 w-4 shrink-0" />Edit Employee</GradientButton>
+          </Link>
+          <GradientButton className="flex-1 gap-2 sm:flex-none" variant="danger" onClick={handleDeactivate} isLoading={deleteEmployee.isPending}>
+            <Trash2 className="h-4 w-4 shrink-0" />Deactivate
           </GradientButton>
         </div>
       </div>

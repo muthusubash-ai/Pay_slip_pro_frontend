@@ -1,0 +1,30 @@
+export const DEPARTMENT_OPTIONS = [
+  'Administration',
+  'Customer Support',
+  'Engineering',
+  'Finance',
+  'Human Resources',
+  'Information Technology',
+  'Legal',
+  'Marketing',
+  'Operations',
+  'Sales',
+] as const;
+
+export const DESIGNATION_OPTIONS = [
+  'Intern',
+  'Trainee',
+  'Executive',
+  'Associate',
+  'Analyst',
+  'Engineer',
+  'Senior Engineer',
+  'Team Lead',
+  'Manager',
+  'Senior Manager',
+  'HR Manager',
+  'Accountant',
+  'Sales Executive',
+  'Operations Manager',
+  'Director',
+] as const;

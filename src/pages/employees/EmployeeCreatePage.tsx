@@ -4,13 +4,15 @@ import { useNavigate, Link } from 'react-router-dom';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { AnimatedInput } from '../../components/ui/AnimatedInput';
 import { GradientButton } from '../../components/ui/GradientButton';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Landmark } from 'lucide-react';
 import { useCreateEmployee } from '../../hooks/useEmployees';
+import { DEPARTMENT_OPTIONS, DESIGNATION_OPTIONS } from '../../lib/employeeOptions';
 
 export function EmployeeCreatePage() {
   const navigate = useNavigate();
   const createEmployee = useCreateEmployee();
   const [error, setError] = useState('');
+  const [showBankDetails, setShowBankDetails] = useState(false);
 
   const [form, setForm] = useState({
     employee_code: '',
@@ -35,7 +37,7 @@ export function EmployeeCreatePage() {
     esi: '',
   });
 
-  const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
   };
 
@@ -100,20 +102,43 @@ export function EmployeeCreatePage() {
           <AnimatedInput label="Full Name *" placeholder="John Doe" value={form.full_name} onChange={handleChange('full_name')} />
           <AnimatedInput label="Email *" type="email" placeholder="john@company.com" value={form.email} onChange={handleChange('email')} />
           <AnimatedInput label="Phone" placeholder="+91 9876543210" value={form.phone} onChange={handleChange('phone')} />
-          <AnimatedInput label="Department" placeholder="Engineering" value={form.department} onChange={handleChange('department')} />
-          <AnimatedInput label="Designation" placeholder="Software Engineer" value={form.designation} onChange={handleChange('designation')} />
+          <label className="space-y-1">
+            <span className="block text-sm font-medium text-gray-700">Department</span>
+            <select value={form.department} onChange={handleChange('department')} className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 outline-none transition-colors focus:border-black">
+              <option value="">Select department</option>
+              {DEPARTMENT_OPTIONS.map((department) => <option key={department} value={department}>{department}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="block text-sm font-medium text-gray-700">Designation</span>
+            <select value={form.designation} onChange={handleChange('designation')} className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 outline-none transition-colors focus:border-black">
+              <option value="">Select designation</option>
+              {DESIGNATION_OPTIONS.map((designation) => <option key={designation} value={designation}>{designation}</option>)}
+            </select>
+          </label>
           <AnimatedInput label="Date of Joining *" type="date" value={form.date_of_joining} onChange={handleChange('date_of_joining')} />
         </div>
       </GlassCard>
 
       <GlassCard>
-        <h3 className="text-lg font-semibold mb-4">Bank Details</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AnimatedInput label="Bank Name" placeholder="State Bank of India" value={form.bank_name} onChange={handleChange('bank_name')} />
-          <AnimatedInput label="Account Number" placeholder="1234567890" value={form.bank_account_number} onChange={handleChange('bank_account_number')} />
-          <AnimatedInput label="IFSC Code" placeholder="SBIN0001234" value={form.ifsc_code} onChange={handleChange('ifsc_code')} />
-          <AnimatedInput label="PAN Number" placeholder="ABCDE1234F" value={form.pan_number} onChange={handleChange('pan_number')} />
-        </div>
+        <button type="button" onClick={() => setShowBankDetails((open) => !open)} className="flex w-full items-center justify-between gap-4 text-left" aria-expanded={showBankDetails}>
+          <span className="flex items-center gap-3">
+            <span className="rounded-lg bg-gray-100 p-2"><Landmark className="h-4 w-4 text-gray-600" /></span>
+            <span>
+              <span className="block text-lg font-semibold">Bank Details</span>
+              <span className="block text-xs font-normal text-gray-500">Optional payment account information</span>
+            </span>
+          </span>
+          <ChevronDown className={`h-5 w-5 shrink-0 text-gray-500 transition-transform ${showBankDetails ? 'rotate-180' : ''}`} />
+        </button>
+        {showBankDetails && (
+          <div className="mt-5 grid grid-cols-1 gap-4 border-t border-gray-100 pt-5 md:grid-cols-2">
+            <AnimatedInput label="Bank Name" placeholder="State Bank of India" value={form.bank_name} onChange={handleChange('bank_name')} />
+            <AnimatedInput label="Account Number" placeholder="1234567890" value={form.bank_account_number} onChange={handleChange('bank_account_number')} />
+            <AnimatedInput label="IFSC Code" placeholder="SBIN0001234" value={form.ifsc_code} onChange={handleChange('ifsc_code')} />
+            <AnimatedInput label="PAN Number" placeholder="ABCDE1234F" value={form.pan_number} onChange={handleChange('pan_number')} />
+          </div>
+        )}
       </GlassCard>
 
       <GlassCard>
@@ -134,7 +159,7 @@ export function EmployeeCreatePage() {
         </div>
       </GlassCard>
 
-      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      <div className="flex flex-wrap items-center justify-center gap-3 sm:justify-end">
         <Link to="/employees"><GradientButton variant="secondary">Cancel</GradientButton></Link>
         <GradientButton onClick={handleSubmit} isLoading={createEmployee.isPending}>
           Save Employee

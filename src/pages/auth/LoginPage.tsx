@@ -628,7 +628,7 @@ export function LoginPage() {
           animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.2, 0.5] }}
           transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }} />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 pt-28 pb-16 sm:px-6 sm:pt-32 sm:pb-20">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 pt-28 pb-40 sm:px-6 sm:pt-32 sm:pb-44 lg:pb-20">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left text */}
             <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
@@ -688,16 +688,17 @@ export function LoginPage() {
               </div>
 
               {/* 3D Stats */}
-              <div className="grid grid-cols-3 gap-4 sm:flex sm:items-center sm:gap-10" style={{ perspective: '500px' }}>
+              <div className="relative z-10 grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-10" style={{ perspective: '500px' }}>
                 {[{ v: 10000, s: '+', l: 'Slips Generated' }, { v: 500, s: '+', l: 'Companies' }, { v: 99, s: '.9%', l: 'Uptime' }].map((stat, i) => (
                   <motion.div key={stat.l}
                     initial={{ opacity: 0, rotateX: 40, y: 20 }}
                     animate={{ opacity: 1, rotateX: 0, y: 0 }}
                     transition={{ delay: 0.8 + i * 0.15, duration: 0.6, type: 'spring' }}
                     whileHover={{ scale: 1.08, rotateY: 5 }}
+                    className="min-w-0 text-center sm:text-left"
                     style={{ transformStyle: 'preserve-3d' }}>
-                    <div className="text-2xl font-bold"><Counter value={stat.v} suffix={stat.s} /></div>
-                    <div className="text-[11px] text-neutral-500">{stat.l}</div>
+                    <div className="whitespace-nowrap text-xl font-bold sm:text-2xl"><Counter value={stat.v} suffix={stat.s} /></div>
+                    <div className="mt-1 text-[10px] leading-tight text-neutral-400 sm:text-[11px] sm:text-neutral-500">{stat.l}</div>
                   </motion.div>
                 ))}
               </div>
@@ -887,7 +888,7 @@ export function LoginPage() {
         </div>
 
         {/* Multi-layer animated wave divider */}
-        <div className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none">
+        <div className="absolute bottom-0 left-0 right-0 h-28 pointer-events-none sm:h-40">
           {/* Wave layer 3 — deepest, slowest */}
           <motion.svg viewBox="0 0 1440 150" fill="none" className="absolute bottom-0 w-full" preserveAspectRatio="none"
             style={{ height: '100%' }}
