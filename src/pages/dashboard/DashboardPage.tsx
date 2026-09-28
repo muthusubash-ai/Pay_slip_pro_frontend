@@ -59,6 +59,7 @@ export function DashboardPage() {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const navigate = useNavigate();
   const { user } = useAuth();
+  const canViewReports = hasMinimumPlan(user, 'professional');
   const isEnterprise = hasMinimumPlan(user, 'enterprise');
 
   const { data: stats, isLoading } = useDashboardStats();
@@ -164,6 +165,7 @@ export function DashboardPage() {
         </motion.div>
 
         {/* Bottom row: Payroll + Employee table */}
+        {canViewReports && (
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-0">
 
           {/* Monthly Payroll — 2 cols */}
@@ -325,6 +327,7 @@ export function DashboardPage() {
           </motion.div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

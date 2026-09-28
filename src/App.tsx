@@ -66,7 +66,7 @@ export default function App() {
               {/* Protected routes with layout */}
               <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                 <Route index element={<PlanHomeRedirect />} />
-                <Route path="dashboard" element={<PlanRoute minimumPlan="professional"><DashboardPage /></PlanRoute>} />
+                <Route path="dashboard" element={<PlanRoute minimumPlan="starter"><DashboardPage /></PlanRoute>} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="employees" element={<EmployeeListPage />} />
                 <Route path="employees/new" element={<EmployeeCreatePage />} />

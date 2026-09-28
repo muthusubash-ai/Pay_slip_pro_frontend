@@ -507,6 +507,7 @@ export function LoginPage() {
       desc: 'Essential payroll tools for small teams',
       features: [
         'Manage up to 3 employees',
+        'Dashboard overview',
         'Employee salary profiles',
         'Monthly salary slip generation',
         'PDF salary slip downloads',
@@ -526,7 +527,7 @@ export function LoginPage() {
         'Company logo and brand colours',
         'Attendance and leave tracking',
         'Bulk salary slip generation',
-        'Payroll dashboard and reports',
+        'Payroll reports and summaries',
       ],
       cta: 'Choose Professional',
       popular: true,

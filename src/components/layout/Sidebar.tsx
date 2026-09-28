@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getPlan, hasMinimumPlan, type Plan } from '../../lib/plans';
 
 const navItems: Array<{ to: string; label: string; icon: typeof LayoutDashboard; minimumPlan: Plan }> = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, minimumPlan: 'professional' },
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, minimumPlan: 'starter' },
   { to: '/employees', label: 'Employees', icon: Users, minimumPlan: 'starter' },
   { to: '/attendance', label: 'Attendance', icon: CalendarDays, minimumPlan: 'professional' },
   { to: '/salary-slips', label: 'Salary Slips', icon: FileText, minimumPlan: 'starter' },

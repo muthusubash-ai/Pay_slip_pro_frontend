@@ -17,7 +17,7 @@ export function usePayrollSummary(month: number, year: number) {
   return useQuery({
     queryKey: ['payroll-summary', month, year],
     queryFn: () => dashboardService.getPayrollSummary(month, year).then((r) => r.data),
-    enabled: !!user,
+    enabled: hasMinimumPlan(user, 'professional'),
   });
 }
 

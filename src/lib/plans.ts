@@ -23,7 +23,6 @@ export function hasMinimumPlan(user: User | null | undefined, minimumPlan: Plan)
 }
 
 export function getPlanHome(user: User | null | undefined): string {
-  if (getPlan(user) === 'starter') return '/employees';
   if (getPlan(user) === 'enterprise' && user?.role === 'admin') return '/admin';
   return '/dashboard';
 }
