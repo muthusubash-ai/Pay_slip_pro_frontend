@@ -144,7 +144,7 @@ export function CompanySettingsPage() {
           <Upload className="h-5 w-5" /> Company Logo
         </h3>
         {logoSuccess && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl mb-4">{logoSuccess}</div>}
-        <div className="flex items-start gap-6">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">
           {/* Logo preview */}
           <div className="min-w-[120px] max-w-[200px] h-28 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center overflow-hidden bg-white flex-shrink-0 p-2">
             {company?.logo_data ? (
@@ -153,7 +153,7 @@ export function CompanySettingsPage() {
               <span className="text-gray-400 text-xs text-center px-2">No logo</span>
             )}
           </div>
-          <div className="space-y-3">
+          <div className="w-full min-w-0 space-y-3 sm:w-auto">
             <input
               ref={fileInputRef}
               type="file"
@@ -219,7 +219,7 @@ export function CompanySettingsPage() {
         </div>
       </GlassCard>
 
-      <div className="flex justify-end gap-3">
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         {!isEditing && (
           <GradientButton
             variant="secondary"

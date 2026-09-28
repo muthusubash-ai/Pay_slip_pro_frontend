@@ -23,7 +23,7 @@ export function EmployeeListPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Employees</h2>
           <p className="text-xs text-gray-500 mt-1">
@@ -31,12 +31,12 @@ export function EmployeeListPage() {
           </p>
         </div>
         {isAtLimit ? (
-          <GradientButton disabled title={`The ${plan} plan supports up to ${employeeLimit} employees`}>
+          <GradientButton className="w-full sm:w-auto" disabled title={`The ${plan} plan supports up to ${employeeLimit} employees`}>
             Employee Limit Reached
           </GradientButton>
         ) : (
-          <Link to="/employees/new">
-            <GradientButton>
+          <Link to="/employees/new" className="w-full sm:w-auto">
+            <GradientButton className="w-full sm:w-auto">
               <span className="inline-flex items-center justify-center gap-2">
                 <Plus className="h-4 w-4 shrink-0" />
                 <span>Add Employee</span>
@@ -78,14 +78,14 @@ export function EmployeeListPage() {
                   to={`/employees/${emp.id}`}
                   className="block p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors"
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
                       <p className="font-semibold text-gray-900">{emp.full_name}</p>
-                      <p className="text-sm text-gray-500">{emp.employee_code} · {emp.designation || 'No designation'} · {emp.department || 'No department'}</p>
+                      <p className="break-words text-sm text-gray-500">{emp.employee_code} · {emp.designation || 'No designation'} · {emp.department || 'No department'}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="min-w-0 text-left sm:text-right">
                       <p className="font-semibold text-gray-900">₹{emp.basic_salary.toLocaleString()}</p>
-                      <p className="text-sm text-gray-500">{emp.email}</p>
+                      <p className="break-all text-sm text-gray-500">{emp.email}</p>
                     </div>
                   </div>
                 </Link>
@@ -94,7 +94,7 @@ export function EmployeeListPage() {
             </div>
 
             {data.pages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-6">
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}

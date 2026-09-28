@@ -44,9 +44,9 @@ export function GoogleCallbackPage() {
   }, [searchParams, googleLogin, navigate, updateUser]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4 py-6">
       <MeshBackground />
-      <GlassCard className="p-8 text-center">
+      <GlassCard className="p-5 text-center sm:p-8">
         {error ? (
           <div>
             <p className="text-red-600 mb-4">{error}</p>

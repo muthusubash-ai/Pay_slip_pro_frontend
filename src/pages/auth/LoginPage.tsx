@@ -304,7 +304,7 @@ function LoginModal({ onClose, onSignedIn }: { onClose: () => void; onSignedIn?:
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
         style={{ perspective: '1000px' }}
       >
-        <motion.div className="bg-white rounded-2xl shadow-2xl w-full max-w-[420px] p-8 relative"
+        <motion.div className="relative max-h-[calc(100dvh-2rem)] w-full max-w-[420px] overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-8"
           onClick={(e) => e.stopPropagation()}
           style={{ transformStyle: 'preserve-3d' }}
           whileHover={{ boxShadow: '0 30px 80px rgba(0,0,0,0.15)' }}>
@@ -549,7 +549,7 @@ export function LoginPage() {
   ];
 
   return (
-    <div id="landing-scroll" className="h-screen overflow-y-auto bg-white scroll-smooth">
+    <div id="landing-scroll" className="h-dvh overflow-y-auto bg-white scroll-smooth">
       <AnimatePresence>
         {showLogin && (
           <LoginModal
@@ -570,7 +570,7 @@ export function LoginPage() {
         transition={{ duration: 0.5 }}
         className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-md border-b border-neutral-100 shadow-sm' : 'bg-transparent'}`}
       >
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between">
           <motion.div className="flex items-center gap-2.5"
             whileHover={{ scale: 1.03 }} transition={{ type: 'spring', stiffness: 300 }}>
             <motion.div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${scrolled ? 'bg-black' : 'bg-white'}`}
@@ -599,12 +599,12 @@ export function LoginPage() {
 
           <div className="flex items-center gap-3">
             <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => setShowLogin(true)}
-              className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-all ${scrolled ? 'text-neutral-700 hover:bg-neutral-100' : 'text-white/90 hover:text-white'}`}>
+              className={`hidden px-4 py-2 rounded-lg text-[13px] font-semibold transition-all sm:block ${scrolled ? 'text-neutral-700 hover:bg-neutral-100' : 'text-white/90 hover:text-white'}`}>
               Log In
             </motion.button>
             <motion.button whileHover={{ scale: 1.03, boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }} whileTap={{ scale: 0.97 }}
               onClick={() => setShowLogin(true)}
-              className={`px-5 py-2 rounded-lg text-[13px] font-semibold transition-all ${scrolled ? 'bg-black text-white hover:bg-neutral-800' : 'bg-white text-black hover:bg-neutral-100'}`}>
+              className={`px-3 py-2 rounded-lg text-[12px] font-semibold transition-all sm:px-5 sm:text-[13px] ${scrolled ? 'bg-black text-white hover:bg-neutral-800' : 'bg-white text-black hover:bg-neutral-100'}`}>
               Sign Up Free
             </motion.button>
           </div>
@@ -628,7 +628,7 @@ export function LoginPage() {
           animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0.2, 0.5] }}
           transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }} />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-32 pb-20">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 pt-28 pb-16 sm:px-6 sm:pt-32 sm:pb-20">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left text */}
             <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
@@ -659,7 +659,7 @@ export function LoginPage() {
                 Generate, manage, and distribute professional salary slips in minutes. Built for modern teams that value precision, speed, and security.
               </motion.p>
 
-              <div className="flex items-center gap-4 mb-10">
+              <div className="flex flex-col items-start gap-4 mb-10 sm:flex-row sm:items-center">
                 <motion.button
                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}
                   whileHover={{ scale: 1.04, boxShadow: '0 8px 35px rgba(255,255,255,0.15)', y: -2 }}
@@ -688,7 +688,7 @@ export function LoginPage() {
               </div>
 
               {/* 3D Stats */}
-              <div className="flex items-center gap-10" style={{ perspective: '500px' }}>
+              <div className="grid grid-cols-3 gap-4 sm:flex sm:items-center sm:gap-10" style={{ perspective: '500px' }}>
                 {[{ v: 10000, s: '+', l: 'Slips Generated' }, { v: 500, s: '+', l: 'Companies' }, { v: 99, s: '.9%', l: 'Uptime' }].map((stat, i) => (
                   <motion.div key={stat.l}
                     initial={{ opacity: 0, rotateX: 40, y: 20 }}
@@ -1269,8 +1269,8 @@ export function LoginPage() {
       </section>
 
       {/* ═══ PRICING ═══ */}
-      <section id="pricing" className="py-24 bg-white overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6">
+      <section id="pricing" className="py-16 bg-white overflow-hidden sm:py-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <Section className="text-center mb-16">
             <motion.p className="text-[11px] font-bold text-neutral-400 uppercase tracking-[0.2em] mb-3"
               initial={{ opacity: 0, letterSpacing: '0.5em' }} whileInView={{ opacity: 1, letterSpacing: '0.2em' }}
@@ -1301,7 +1301,7 @@ export function LoginPage() {
                   <motion.div
                     whileHover={{ y: -10, boxShadow: plan.popular ? '0 30px 80px rgba(0,0,0,0.2)' : '0 20px 50px rgba(0,0,0,0.08)', rotateY: i === 0 ? 3 : i === 2 ? -3 : 0 }}
                     className={`p-7 rounded-2xl border-2 transition-all relative overflow-hidden ${
-                      plan.popular ? 'border-neutral-900 bg-neutral-950 text-white scale-105' : 'border-neutral-100 bg-white'
+                      plan.popular ? 'border-neutral-900 bg-neutral-950 text-white md:scale-105' : 'border-neutral-100 bg-white'
                     }`}
                     style={{ transformStyle: 'preserve-3d' }}>
                     {plan.popular && (

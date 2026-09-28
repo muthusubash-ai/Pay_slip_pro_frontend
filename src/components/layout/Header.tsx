@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LogOut, Bell, Search, X, Users, FileText, ChevronRight, Calendar, Settings } from 'lucide-react';
+import { LogOut, Bell, Search, X, Users, FileText, ChevronRight, Calendar, Settings, Menu } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -110,7 +110,7 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -20, scale: 0.97 }}
         transition={{ duration: 0.2 }}
-        className="fixed top-[15%] left-1/2 -translate-x-1/2 w-full max-w-lg bg-white rounded-2xl shadow-2xl shadow-black/10 z-50 overflow-hidden border border-neutral-200"
+        className="fixed left-3 right-3 top-[10%] z-50 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl shadow-black/10 sm:left-1/2 sm:right-auto sm:top-[15%] sm:w-full sm:max-w-lg sm:-translate-x-1/2"
       >
         {/* Search Input */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-neutral-100">
@@ -343,7 +343,7 @@ function NotificationDropdown({ onClose }: { onClose: () => void }) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -8, scale: 0.97 }}
       transition={{ duration: 0.15 }}
-      className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl shadow-black/8 border border-neutral-200 z-50 overflow-hidden"
+      className="fixed left-3 right-3 top-16 z-50 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl shadow-black/8 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
@@ -418,7 +418,7 @@ function formatTimeAgo(dateStr: string): string {
 }
 
 /* ═══════════ HEADER ═══════════ */
-export function Header() {
+export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -459,19 +459,27 @@ export function Header() {
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="h-16 bg-white border-b border-neutral-100 flex items-center justify-between px-7 sticky top-0 z-30"
+        className="h-16 bg-white border-b border-neutral-100 flex items-center justify-between px-3 sm:px-5 lg:px-7 sticky top-0 z-30"
       >
         {/* Left — Page title */}
-        <div>
-          <h1 className="text-lg font-bold text-neutral-900 tracking-tight">{pageTitle}</h1>
+        <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onMenuClick}
+            className="rounded-lg p-2 text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-black lg:hidden"
+            aria-label="Open navigation"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <h1 className="truncate text-base font-bold text-neutral-900 tracking-tight sm:text-lg">{pageTitle}</h1>
         </div>
 
         {/* Right — Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-0.5 sm:gap-2">
           {/* Search */}
           <button
             onClick={() => setShowSearch(true)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
+            className="flex items-center gap-2 p-2 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors sm:px-3 sm:py-1.5"
           >
             <Search className="h-4 w-4" />
             <span className="text-[11px] text-neutral-300 hidden sm:inline">Search...</span>
@@ -504,12 +512,12 @@ export function Header() {
           </div>
 
           {/* Divider */}
-          <div className="w-px h-6 bg-neutral-100 mx-1" />
+          <div className="hidden w-px h-6 bg-neutral-100 mx-1 sm:block" />
 
           {/* Profile */}
           <button
             onClick={() => navigate('/profile')}
-            className="flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-lg hover:bg-neutral-50 transition-colors group"
+            className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-neutral-50 transition-colors group sm:pl-2 sm:pr-3"
           >
             <div className="w-8 h-8 rounded-lg bg-neutral-900 flex items-center justify-center text-white text-[11px] font-bold">
               {initials}

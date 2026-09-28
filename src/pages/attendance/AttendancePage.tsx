@@ -124,8 +124,8 @@ export function AttendancePage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <h2 className="text-2xl font-bold text-black flex items-center gap-2">
-        <CalendarDays className="h-6 w-6" /> Attendance / Leave Management
+      <h2 className="flex items-start gap-2 text-xl font-bold text-black sm:items-center sm:text-2xl">
+        <CalendarDays className="mt-0.5 h-6 w-6 shrink-0 sm:mt-0" /> Attendance / Leave Management
       </h2>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">{error}</div>}
@@ -195,14 +195,14 @@ export function AttendancePage() {
       {/* Calendar Grid */}
       {selectedEmployee > 0 && (
         <GlassCard>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col gap-4 mb-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 className="text-lg font-semibold text-black">
                 {MONTH_NAMES[month - 1]} {year} — Click to cycle: Present → Leave → Weekoff
               </h3>
               <p className="text-xs text-gray-500 mt-1">Weekoffs are paid days (no deduction). Only Leave days are deducted from salary.</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 xs:flex-row sm:shrink-0">
               <button
                 onClick={clearAll}
                 className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 flex items-center gap-1"
@@ -218,14 +218,14 @@ export function AttendancePage() {
           {attLoading ? <LoadingSpinner /> : (
             <>
               {/* Day headers */}
-              <div className="grid grid-cols-7 gap-2 mb-2">
+              <div className="grid grid-cols-7 gap-1 mb-2 sm:gap-2">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
                   <div key={d} className="text-center text-xs font-semibold text-gray-500 py-1">{d}</div>
                 ))}
               </div>
 
               {/* Calendar days */}
-              <div className="grid grid-cols-7 gap-2">
+              <div className="grid grid-cols-7 gap-1 sm:gap-2">
                 {/* Empty cells for offset */}
                 {Array.from({ length: new Date(year, month - 1, 1).getDay() }, (_, i) => (
                   <div key={`empty-${i}`} />
@@ -250,10 +250,10 @@ export function AttendancePage() {
                     <button
                       key={day}
                       onClick={() => cycleStatus(dateStr)}
-                      className={`p-3 rounded-lg text-center text-sm font-medium transition-all border-2 ${bgClass}`}
+                      className={`min-w-0 rounded-lg border p-1 text-center text-xs font-medium transition-all sm:border-2 sm:p-3 sm:text-sm ${bgClass}`}
                     >
-                      <span className="block text-lg font-bold">{day}</span>
-                      <span className="block text-[10px] mt-0.5">{label}</span>
+                      <span className="block text-sm font-bold sm:text-lg">{day}</span>
+                      <span className="hidden text-[10px] mt-0.5 sm:block">{label}</span>
                     </button>
                   );
                 })}
@@ -273,7 +273,7 @@ export function AttendancePage() {
                   <div className="w-4 h-4 bg-blue-500 rounded" />
                   <span className="text-gray-600">Weekoff ({weekoffCount})</span>
                 </div>
-                <div className="ml-auto font-semibold text-black">
+                <div className="w-full font-semibold text-black sm:ml-auto sm:w-auto">
                   Working Days: {presentCount + weekoffCount} | Leave: {leaveCount} | Total: {totalDays}
                 </div>
               </div>
@@ -288,8 +288,8 @@ export function AttendancePage() {
           Leave Summary — {MONTH_NAMES[month - 1]} {year}
         </h3>
         {leaveSummary && leaveSummary.length > 0 ? (
-          <div className="overflow-x-auto">
-            <div className="grid grid-cols-7 gap-4 px-3 py-2 bg-black text-white rounded-lg text-sm font-semibold mb-2">
+          <div className="overflow-x-auto pb-1">
+            <div className="grid min-w-[760px] grid-cols-7 gap-4 px-3 py-2 bg-black text-white rounded-lg text-sm font-semibold mb-2">
               <span>Employee</span>
               <span>Code</span>
               <span className="text-center">Total Days</span>
@@ -300,7 +300,7 @@ export function AttendancePage() {
             </div>
             <div className="space-y-1">
               {leaveSummary.map((s) => (
-                <div key={s.employee_id} className="grid grid-cols-7 gap-4 px-3 py-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 rounded-lg">
+                <div key={s.employee_id} className="grid min-w-[760px] grid-cols-7 gap-4 px-3 py-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 rounded-lg">
                   <span className="font-medium text-black">{s.employee_name}</span>
                   <span className="text-gray-600">{s.employee_code}</span>
                   <span className="text-center text-gray-700">{s.total_days}</span>

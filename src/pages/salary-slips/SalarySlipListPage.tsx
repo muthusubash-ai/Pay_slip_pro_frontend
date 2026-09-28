@@ -27,10 +27,10 @@ export function SalarySlipListPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-2xl font-bold text-gray-900">Salary Slips</h2>
-        <Link to="/salary-slips/generate">
-          <GradientButton>
+        <Link to="/salary-slips/generate" className="w-full sm:w-auto">
+          <GradientButton className="w-full sm:w-auto">
             <span className="inline-flex items-center justify-center gap-2">
               <Plus className="h-4 w-4 shrink-0" />
               <span>Generate Slips</span>
@@ -58,13 +58,13 @@ export function SalarySlipListPage() {
                   to={`/salary-slips/${slip.id}`}
                   className="block p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors"
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
                       <p className="font-semibold text-gray-900">{slip.employee?.full_name || `Employee #${slip.employee_id}`}</p>
                       <p className="text-sm text-gray-500">{monthNames[slip.month]} {slip.year} · {slip.employee?.employee_code || ''}</p>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
+                    <div className="flex items-center justify-between gap-3 sm:justify-end">
+                      <div className="text-left sm:text-right">
                         <p className="font-semibold text-gray-900">₹{slip.net_pay.toLocaleString()}</p>
                         <span className={`text-xs px-2 py-0.5 rounded-full ${
                           slip.status === 'sent' ? 'bg-green-100 text-green-700' :
@@ -89,7 +89,7 @@ export function SalarySlipListPage() {
             </div>
 
             {data.pages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-6">
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
                 <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-1 rounded-lg border border-gray-200 disabled:opacity-50">Previous</button>
                 <span className="text-sm text-gray-600">Page {page} of {data.pages}</span>
                 <button onClick={() => setPage((p) => Math.min(data.pages, p + 1))} disabled={page >= data.pages} className="px-3 py-1 rounded-lg border border-gray-200 disabled:opacity-50">Next</button>

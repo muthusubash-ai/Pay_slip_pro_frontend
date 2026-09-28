@@ -49,12 +49,12 @@ export function AdminUsersPage() {
           <>
             <AnimatedList>
               {users.map((user) => (
-                <div key={user.id} className="flex items-center justify-between p-4 rounded-xl border border-gray-100">
-                  <div>
+                <div key={user.id} className="flex flex-col gap-4 rounded-xl border border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
                     <p className="font-semibold text-gray-900">{user.full_name}</p>
-                    <p className="text-sm text-gray-500">{user.email}</p>
+                    <p className="break-all text-sm text-gray-500">{user.email}</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2 sm:justify-end sm:gap-3">
                     <select
                       value={user.role}
                       onChange={(e) => updateRole.mutate({ userId: user.id, role: e.target.value })}
@@ -79,7 +79,7 @@ export function AdminUsersPage() {
             </AnimatedList>
 
             {pages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-6">
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
                 <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="px-3 py-1 rounded-lg border border-gray-200 disabled:opacity-50">Previous</button>
                 <span className="text-sm text-gray-600">Page {page} of {pages}</span>
                 <button onClick={() => setPage((p) => Math.min(pages, p + 1))} disabled={page >= pages} className="px-3 py-1 rounded-lg border border-gray-200 disabled:opacity-50">Next</button>

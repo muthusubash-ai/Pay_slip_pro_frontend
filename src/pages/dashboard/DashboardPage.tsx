@@ -90,20 +90,20 @@ export function DashboardPage() {
   ];
 
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col overflow-hidden -m-7">
-      <div className="flex-1 overflow-hidden p-6 flex flex-col gap-5">
+    <div className="-m-4 min-h-full sm:-m-5 lg:-m-7 lg:h-[calc(100vh-64px)] lg:overflow-hidden">
+      <div className="flex min-h-full flex-col gap-5 p-4 sm:p-5 lg:h-full lg:overflow-hidden lg:p-6">
 
         {/* Welcome bar */}
         <motion.div
           {...fadeUp}
           transition={{ duration: 0.4 }}
-          className="flex items-center justify-between shrink-0"
+          className="flex items-start justify-between gap-3 shrink-0"
         >
           <div>
             <h2 className="text-xl font-bold text-neutral-900 tracking-tight">
               {greeting}, {firstName}
             </h2>
-            <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-1.5">
+            <p className="text-xs text-neutral-400 mt-0.5 flex items-start gap-1.5">
               <Activity className="h-3 w-3" />
               {MONTH_NAMES[now.getMonth()]} {now.getDate()}, {now.getFullYear()} — Dashboard Overview
             </p>
@@ -122,7 +122,7 @@ export function DashboardPage() {
         <motion.div
           {...fadeUp}
           transition={{ duration: 0.4, delay: 0.06 }}
-          className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 shrink-0"
         >
           {cards.map((stat, i) => (
             <motion.div
@@ -166,7 +166,7 @@ export function DashboardPage() {
 
         {/* Bottom row: Payroll + Employee table */}
         {canViewReports && (
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-0">
+        <div className="grid flex-1 grid-cols-1 gap-4 lg:min-h-0 lg:grid-cols-5">
 
           {/* Monthly Payroll — 2 cols */}
           <motion.div
@@ -174,7 +174,7 @@ export function DashboardPage() {
             transition={{ duration: 0.4, delay: 0.12 }}
             className={`${isEnterprise ? 'lg:col-span-2' : 'lg:col-span-5'} bg-white rounded-2xl border border-neutral-100 p-5 flex flex-col`}
           >
-            <div className="flex items-center justify-between mb-4 shrink-0">
+            <div className="flex flex-col gap-3 mb-4 shrink-0 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-neutral-100">
                   <Wallet className="h-3.5 w-3.5 text-neutral-600" />
@@ -265,7 +265,7 @@ export function DashboardPage() {
 
             {departments && departments.length > 0 ? (
               <div className="flex-1 overflow-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[560px]">
                   <thead className="sticky top-0 bg-neutral-50/90 backdrop-blur-sm z-10">
                     <tr>
                       <th className="text-left text-[10px] font-semibold text-neutral-400 uppercase tracking-wider px-5 py-2.5">Employee</th>

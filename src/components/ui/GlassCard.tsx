@@ -14,7 +14,7 @@ export function GlassCard({ children, className }: GlassCardProps) {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.18 }}
       className={cn(
-        'p-6 rounded-2xl bg-white border border-neutral-100 shadow-sm',
+        'p-4 sm:p-6 rounded-2xl bg-white border border-neutral-100 shadow-sm',
         className
       )}
     >

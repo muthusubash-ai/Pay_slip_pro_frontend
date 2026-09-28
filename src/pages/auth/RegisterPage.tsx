@@ -84,10 +84,10 @@ export function RegisterPage() {
   );
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4 py-6">
       <MeshBackground />
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-md">
-        <GlassCard className="p-8">
+        <GlassCard className="p-5 sm:p-8">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Create Account</h1>
             <p className="text-gray-500 mt-2">Get started with PaySlip Pro</p>

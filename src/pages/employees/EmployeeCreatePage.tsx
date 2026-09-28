@@ -84,9 +84,9 @@ export function EmployeeCreatePage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         <Link to="/employees" className="text-gray-500 hover:text-gray-700"><ArrowLeft className="h-5 w-5" /></Link>
-        <h2 className="text-2xl font-bold text-gray-900">Add Employee</h2>
+        <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">Add Employee</h2>
       </div>
 
       {error && (
@@ -134,7 +134,7 @@ export function EmployeeCreatePage() {
         </div>
       </GlassCard>
 
-      <div className="flex justify-end gap-3">
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <Link to="/employees"><GradientButton variant="secondary">Cancel</GradientButton></Link>
         <GradientButton onClick={handleSubmit} isLoading={createEmployee.isPending}>
           Save Employee

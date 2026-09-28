@@ -33,12 +33,12 @@ export function EmployeeDetailPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           <Link to="/employees" className="text-gray-500 hover:text-gray-700"><ArrowLeft className="h-5 w-5" /></Link>
-          <h2 className="text-2xl font-bold text-gray-900">{emp.full_name}</h2>
+          <h2 className="truncate text-xl font-bold text-gray-900 sm:text-2xl">{emp.full_name}</h2>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link to={`/employees/${id}/edit`}><GradientButton><Edit className="h-4 w-4 mr-2" />Edit</GradientButton></Link>
           <GradientButton variant="danger" onClick={handleDeactivate} isLoading={deleteEmployee.isPending}>
             <Trash2 className="h-4 w-4 mr-2" />Deactivate
@@ -48,7 +48,7 @@ export function EmployeeDetailPage() {
 
       <GlassCard>
         <h3 className="text-lg font-semibold mb-4">Personal Information</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           <Field label="Employee Code" value={emp.employee_code} />
           <Field label="Email" value={emp.email} />
           <Field label="Phone" value={emp.phone} />
@@ -60,7 +60,7 @@ export function EmployeeDetailPage() {
 
       <GlassCard>
         <h3 className="text-lg font-semibold mb-4">Bank Details</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           <Field label="Bank Name" value={emp.bank_name} />
           <Field label="Account Number" value={emp.bank_account_number} />
           <Field label="IFSC Code" value={emp.ifsc_code} />
@@ -70,7 +70,7 @@ export function EmployeeDetailPage() {
 
       <GlassCard>
         <h3 className="text-lg font-semibold mb-4">Salary Details</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           <Field label="Basic Salary" value={`₹${emp.basic_salary.toLocaleString()}`} />
           <Field label="HRA" value={`₹${emp.hra.toLocaleString()}`} />
           <Field label="Conveyance" value={`₹${emp.conveyance_allowance.toLocaleString()}`} />
@@ -78,7 +78,7 @@ export function EmployeeDetailPage() {
           <Field label="Special Allowance" value={`₹${emp.special_allowance.toLocaleString()}`} />
         </div>
         <h4 className="text-md font-medium mt-6 mb-3">Deductions</h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <Field label="PF" value={`₹${emp.pf_deduction.toLocaleString()}`} />
           <Field label="Professional Tax" value={`₹${emp.professional_tax.toLocaleString()}`} />
           <Field label="TDS" value={`₹${emp.tds.toLocaleString()}`} />

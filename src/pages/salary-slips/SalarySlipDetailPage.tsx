@@ -55,14 +55,14 @@ export function SalarySlipDetailPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           <Link to="/salary-slips" className="text-gray-500 hover:text-black"><ArrowLeft className="h-5 w-5" /></Link>
-          <h2 className="text-2xl font-bold text-black">
+          <h2 className="truncate text-xl font-bold text-black sm:text-2xl">
             Salary Slip — {monthNames[slip.month]} {slip.year}
           </h2>
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-1 gap-2 xs:grid-cols-3 sm:flex">
           <GradientButton onClick={() => downloadPdf.mutate(Number(id))} isLoading={downloadPdf.isPending}>
             <Download className="h-4 w-4 mr-2" />Download PDF
           </GradientButton>
@@ -86,7 +86,7 @@ export function SalarySlipDetailPage() {
 
       <GlassCard>
         <h3 className="text-lg font-semibold mb-2">Employee</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2 md:grid-cols-4">
           <div><p className="text-sm text-gray-500">Name</p><p className="font-medium text-black">{slip.employee?.full_name}</p></div>
           <div><p className="text-sm text-gray-500">Code</p><p className="font-medium text-black">{slip.employee?.employee_code}</p></div>
           <div><p className="text-sm text-gray-500">Department</p><p className="font-medium text-black">{slip.employee?.department || '—'}</p></div>
@@ -122,7 +122,7 @@ export function SalarySlipDetailPage() {
           </div>
         </div>
 
-        <div className="mt-6 p-4 bg-black rounded-xl flex justify-between items-center">
+        <div className="mt-6 flex flex-col gap-1 rounded-xl bg-black p-4 sm:flex-row sm:items-center sm:justify-between">
           <span className="text-lg font-bold text-white">Net Pay</span>
           <span className="text-2xl font-bold text-white">₹{slip.net_pay.toLocaleString()}</span>
         </div>
