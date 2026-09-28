@@ -30,7 +30,12 @@ export function SalarySlipListPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-gray-900">Salary Slips</h2>
         <Link to="/salary-slips/generate">
-          <GradientButton><Plus className="h-4 w-4 mr-2" />Generate Slips</GradientButton>
+          <GradientButton>
+            <span className="inline-flex items-center justify-center gap-2">
+              <Plus className="h-4 w-4 shrink-0" />
+              <span>Generate Slips</span>
+            </span>
+          </GradientButton>
         </Link>
       </div>
       <GlassCard>
