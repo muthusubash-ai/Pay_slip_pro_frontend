@@ -54,9 +54,17 @@ const fadeUp = {
 };
 
 export function DashboardPage() {
-  const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const [selectedMonth, setSelectedMonth] = useState(currentTime.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(currentTime.getFullYear());
   const navigate = useNavigate();
   const { user } = useAuth();
   const canViewReports = hasMinimumPlan(user, 'professional');
@@ -75,12 +83,16 @@ export function DashboardPage() {
   }
 
   const yearOptions: number[] = [];
-  for (let y = now.getFullYear(); y >= now.getFullYear() - 5; y--) {
+  for (let y = currentTime.getFullYear(); y >= currentTime.getFullYear() - 5; y--) {
     yearOptions.push(y);
   }
 
-  const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening';
-  const firstName = (user?.full_name || 'there').split(' ')[0];
+  const hour = currentTime.getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const fullName = user?.full_name || 'Admin';
+
+  const formattedDate = `${MONTH_NAMES[currentTime.getMonth()]} ${currentTime.getDate()}, ${currentTime.getFullYear()}`;
+  const formattedTime = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
 
   const cards = [
     { label: 'Total Employees', value: stats?.total_employees ?? 0, icon: Users, trend: '+12%', trendUp: true },
@@ -101,20 +113,25 @@ export function DashboardPage() {
         >
           <div>
             <h2 className="text-xl font-bold text-neutral-900 tracking-tight">
-              {greeting}, {firstName}
+              {greeting}, {fullName}
             </h2>
-            <p className="text-xs text-neutral-400 mt-0.5 flex items-start gap-1.5">
-              <Activity className="h-3 w-3" />
-              {MONTH_NAMES[now.getMonth()]} {now.getDate()}, {now.getFullYear()} — Dashboard Overview
+            <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <Activity className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
+              <span>{formattedDate}</span>
+              <span className="text-neutral-300">·</span>
+              <span className="font-medium text-neutral-600 font-mono text-[11px]">{formattedTime}</span>
+              <span className="text-neutral-300">—</span>
+              <span>Dashboard Overview</span>
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-neutral-50 border border-neutral-200/80 shadow-xs">
             <motion.div
-              animate={{ scale: [1, 1.15, 1] }}
+              animate={{ scale: [1, 1.25, 1], opacity: [0.7, 1, 0.7] }}
               transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-              className="w-2 h-2 rounded-full bg-neutral-900"
+              className="w-2 h-2 rounded-full bg-emerald-500"
             />
-            <span className="text-[11px] text-neutral-400 font-medium">Live</span>
+            <span className="text-[11px] text-neutral-700 font-medium font-mono">{formattedTime}</span>
+            <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider">LIVE</span>
           </div>
         </motion.div>
 
