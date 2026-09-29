@@ -1,1 +1,190 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark body {
+  background-color: #0a0a0a;
+  color: #ededed;
+}
+
+/* Global Dark Mode mappings for existing light palette classes */
+html.dark .bg-neutral-50 {
+  background-color: #0d0d0d !important;
+}
+
+html.dark .bg-white:not(.keep-white) {
+  background-color: #171717 !important;
+}
+
+/* Elements that must stay bright white with black text in dark mode (e.g. Primary Buttons) */
+html.dark .keep-white,
+html.dark button.keep-white,
+html.dark a.keep-white {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+html.dark .keep-white:hover,
+html.dark button.keep-white:hover,
+html.dark a.keep-white:hover {
+  background-color: #f0f0f0 !important;
+}
+
+html.dark .keep-white svg,
+html.dark .keep-white span,
+html.dark button.keep-white svg,
+html.dark button.keep-white span,
+html.dark a.keep-white svg,
+html.dark a.keep-white span {
+  color: #000000 !important;
+}
+
+/* Inverted White Card in Dark Mode (Professional Plan Card) */
+html.dark .dark-card-white {
+  background-color: #ffffff !important;
+  border-color: #ffffff !important;
+  color: #171717 !important;
+}
+
+html.dark .dark-card-white .card-title,
+html.dark .dark-card-white .card-price {
+  color: #111827 !important;
+}
+
+html.dark .dark-card-white .card-subtext {
+  color: #4b5563 !important;
+}
+
+html.dark .dark-card-white .card-feature {
+  color: #374151 !important;
+}
+
+html.dark .dark-card-white .card-icon {
+  color: #059669 !important;
+}
+
+html.dark .dark-card-white .card-badge {
+  background-color: #0a0a0a !important;
+  color: #ffffff !important;
+}
+
+/* Dark button inside inverted white card in dark mode */
+html.dark .keep-dark,
+html.dark button.keep-dark,
+html.dark a.keep-dark,
+html.dark .dark\:bg-neutral-950 {
+  background-color: #0a0a0a !important;
+  color: #ffffff !important;
+}
+
+html.dark .keep-dark:hover,
+html.dark button.keep-dark:hover,
+html.dark a.keep-dark:hover {
+  background-color: #1c1c1c !important;
+}
+
+html.dark .keep-dark svg,
+html.dark .keep-dark span,
+html.dark button.keep-dark svg,
+html.dark button.keep-dark span,
+html.dark a.keep-dark svg,
+html.dark a.keep-dark span,
+html.dark .dark\:bg-neutral-950 svg,
+html.dark .dark\:bg-neutral-950 span {
+  color: #ffffff !important;
+}
+
+html.dark .dark\:text-neutral-900 {
+  color: #171717 !important;
+}
+
+html.dark .dark\:text-white {
+  color: #ffffff !important;
+}
+
+html.dark .dark\:text-black {
+  color: #000000 !important;
+}
+
+html.dark .bg-neutral-100 {
+  background-color: #262626 !important;
+}
+
+html.dark .border-neutral-100,
+html.dark .border-neutral-200,
+html.dark .border-gray-100,
+html.dark .border-gray-200 {
+  border-color: #2b2b2b !important;
+}
+
+html.dark .text-neutral-900,
+html.dark .text-neutral-800,
+html.dark .text-gray-900,
+html.dark .text-gray-800 {
+  color: #f5f5f5 !important;
+}
+
+html.dark .text-neutral-700,
+html.dark .text-neutral-600,
+html.dark .text-gray-700,
+html.dark .text-gray-600 {
+  color: #d4d4d4 !important;
+}
+
+html.dark .text-neutral-500,
+html.dark .text-gray-500 {
+  color: #a3a3a3 !important;
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #1c1c1c !important;
+  color: #f5f5f5 !important;
+  border-color: #333333 !important;
+}
+
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #ededed !important;
+}
+
+html.dark .hover\:bg-neutral-50:hover,
+html.dark .hover\:bg-neutral-100:hover,
+html.dark .hover\:bg-gray-50:hover {
+  background-color: #262626 !important;
+}
+
+html.dark .shadow-md,
+html.dark .shadow-lg,
+html.dark .shadow-2xl {
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Attractive Red Branding for Zigmaa Tech in Sidebar */
+.zigmaa-tech-brand {
+  color: #dc2626 !important;
+  font-weight: 700 !important;
+  transition: all 0.25s ease-in-out;
+}
+
+.zigmaa-tech-brand:hover {
+  color: #b91c1c !important;
+  text-decoration: underline !important;
+}
+
+html.dark .zigmaa-tech-brand {
+  color: #f87171 !important;
+  text-shadow: 0 0 10px rgba(248, 113, 113, 0.45);
+}
+
+html.dark .zigmaa-tech-brand:hover {
+  color: #fca5a5 !important;
+  text-shadow: 0 0 14px rgba(248, 113, 113, 0.75);
+}
+

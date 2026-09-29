@@ -2,6 +2,7 @@ export interface User {
   id: number;
   email: string;
   full_name: string;
+  company_name?: string;
   role: 'admin' | 'hr_manager';
   is_active: boolean;
   plan: 'starter' | 'professional' | 'enterprise';

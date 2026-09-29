@@ -7,6 +7,8 @@ import { AnimatedInput } from '../../components/ui/AnimatedInput';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { useEmployee, useUpdateEmployee } from '../../hooks/useEmployees';
+import { DEPARTMENT_OPTIONS, DESIGNATION_OPTIONS } from '../../lib/employeeOptions';
+import { ThemedSelect } from '../../components/ui/ThemedSelect';
 
 export function EmployeeEditPage() {
   const { id } = useParams();
@@ -155,8 +157,22 @@ export function EmployeeEditPage() {
           <AnimatedInput label="Full Name *" value={form.full_name} onChange={handleChange('full_name', 'alphabets')} />
           <AnimatedInput label="Email *" type="email" value={form.email} onChange={handleChange('email')} />
           <AnimatedInput label="Phone" value={form.phone} onChange={handleChange('phone', 'phone')} />
-          <AnimatedInput label="Department" value={form.department} onChange={handleChange('department')} />
-          <AnimatedInput label="Designation" value={form.designation} onChange={handleChange('designation')} />
+          <ThemedSelect
+            label="Department"
+            value={form.department}
+            onChange={(val) => setForm((prev) => ({ ...prev, department: val }))}
+            options={DEPARTMENT_OPTIONS}
+            placeholder="Select department"
+            customPlaceholder="Type custom department..."
+          />
+          <ThemedSelect
+            label="Designation"
+            value={form.designation}
+            onChange={(val) => setForm((prev) => ({ ...prev, designation: val }))}
+            options={DESIGNATION_OPTIONS}
+            placeholder="Select designation"
+            customPlaceholder="Type custom designation..."
+          />
         </div>
       </GlassCard>
 

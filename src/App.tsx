@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MotionConfig } from 'framer-motion';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
 import { PageLoader } from './components/layout/PageLoader';
@@ -16,7 +17,7 @@ import { getPlanHome } from './lib/plans';
 const LoginPage = lazy(() => import('./pages/auth/LoginPage').then((m) => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import('./pages/auth/RegisterPage').then((m) => ({ default: m.RegisterPage })));
 const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
-const ProfilePage = lazy(() => import('./pages/auth/ProfilePage').then((m) => ({ default: m.ProfilePage })));
+const SettingsPage = lazy(() => import('./pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const GoogleCallbackPage = lazy(() => import('./pages/auth/GoogleCallbackPage').then((m) => ({ default: m.GoogleCallbackPage })));
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const EmployeeListPage = lazy(() => import('./pages/employees/EmployeeListPage').then((m) => ({ default: m.EmployeeListPage })));
@@ -53,37 +54,40 @@ export default function App() {
   return (
     <MotionConfig reducedMotion="never" transition={{ duration: 0.18 }}>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <BrowserRouter>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-              {/* Public routes */}
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-              <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
+        <ThemeProvider>
+          <AuthProvider>
+            <BrowserRouter>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                {/* Public routes */}
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
 
-              {/* Protected routes with layout */}
-              <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                <Route index element={<PlanHomeRedirect />} />
-                <Route path="dashboard" element={<PlanRoute minimumPlan="starter"><DashboardPage /></PlanRoute>} />
-                <Route path="profile" element={<ProfilePage />} />
-                <Route path="employees" element={<EmployeeListPage />} />
-                <Route path="employees/new" element={<EmployeeCreatePage />} />
-                <Route path="employees/:id" element={<EmployeeDetailPage />} />
-                <Route path="employees/:id/edit" element={<EmployeeEditPage />} />
-                <Route path="attendance" element={<PlanRoute minimumPlan="professional"><AttendancePage /></PlanRoute>} />
-                <Route path="salary-slips" element={<SalarySlipListPage />} />
-                <Route path="salary-slips/generate" element={<GenerateSlipsPage />} />
-                <Route path="salary-slips/:id" element={<SalarySlipDetailPage />} />
-                <Route path="settings/company" element={<PlanRoute minimumPlan="professional"><CompanySettingsPage /></PlanRoute>} />
-                <Route path="admin" element={<PlanRoute minimumPlan="enterprise" adminOnly><AdminDashboardPage /></PlanRoute>} />
-                <Route path="admin/users" element={<PlanRoute minimumPlan="enterprise" adminOnly><AdminUsersPage /></PlanRoute>} />
-              </Route>
-              </Routes>
-            </Suspense>
-          </BrowserRouter>
-        </AuthProvider>
+                {/* Protected routes with layout */}
+                <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+                  <Route index element={<PlanHomeRedirect />} />
+                  <Route path="dashboard" element={<PlanRoute minimumPlan="starter"><DashboardPage /></PlanRoute>} />
+                  <Route path="profile" element={<SettingsPage />} />
+                  <Route path="settings" element={<PlanRoute minimumPlan="starter"><SettingsPage /></PlanRoute>} />
+                  <Route path="employees" element={<EmployeeListPage />} />
+                  <Route path="employees/new" element={<EmployeeCreatePage />} />
+                  <Route path="employees/:id" element={<EmployeeDetailPage />} />
+                  <Route path="employees/:id/edit" element={<EmployeeEditPage />} />
+                  <Route path="attendance" element={<PlanRoute minimumPlan="professional"><AttendancePage /></PlanRoute>} />
+                  <Route path="salary-slips" element={<SalarySlipListPage />} />
+                  <Route path="salary-slips/generate" element={<GenerateSlipsPage />} />
+                  <Route path="salary-slips/:id" element={<SalarySlipDetailPage />} />
+                  <Route path="settings/company" element={<PlanRoute minimumPlan="professional"><CompanySettingsPage /></PlanRoute>} />
+                  <Route path="admin" element={<PlanRoute minimumPlan="enterprise" adminOnly><AdminDashboardPage /></PlanRoute>} />
+                  <Route path="admin/users" element={<PlanRoute minimumPlan="enterprise" adminOnly><AdminUsersPage /></PlanRoute>} />
+                </Route>
+                </Routes>
+              </Suspense>
+            </BrowserRouter>
+          </AuthProvider>
+        </ThemeProvider>
       </QueryClientProvider>
     </MotionConfig>
   );

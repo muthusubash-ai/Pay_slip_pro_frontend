@@ -16,16 +16,16 @@ export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
 
     return (
       <div className="space-y-1">
-        {label && <label className="block text-sm font-medium text-gray-700">{label}</label>}
+        {label && <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">{label}</label>}
         <div className="relative">
           <motion.input
             ref={ref}
             type={canTogglePassword && isPasswordVisible ? 'text' : type}
             whileFocus={{ scale: 1.01 }}
             className={cn(
-              'w-full rounded-xl border-2 bg-white px-4 py-3 outline-none transition-colors',
+              'w-full rounded-xl border-2 bg-white px-4 py-3 outline-none transition-colors text-neutral-900 dark:text-white dark:bg-neutral-900 dark:border-neutral-800 focus:border-black dark:focus:border-white disabled:bg-neutral-100 disabled:text-neutral-500 disabled:border-neutral-200 disabled:cursor-not-allowed dark:disabled:bg-neutral-800/50 dark:disabled:text-neutral-400 dark:disabled:border-neutral-800',
               canTogglePassword && 'pr-12',
-              error ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-black',
+              error ? 'border-red-400 focus:border-red-500 dark:border-red-500' : 'border-gray-200',
               className
             )}
             {...props}

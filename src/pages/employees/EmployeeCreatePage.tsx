@@ -7,6 +7,8 @@ import { GradientButton } from '../../components/ui/GradientButton';
 import { ArrowLeft, ChevronDown, Landmark } from 'lucide-react';
 import { useCreateEmployee } from '../../hooks/useEmployees';
 import { DEPARTMENT_OPTIONS, DESIGNATION_OPTIONS } from '../../lib/employeeOptions';
+import { ThemedSelect } from '../../components/ui/ThemedSelect';
+import { ThemedDatePicker } from '../../components/ui/ThemedDatePicker';
 
 export function EmployeeCreatePage() {
   const navigate = useNavigate();
@@ -115,52 +117,62 @@ export function EmployeeCreatePage() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6">
       <div className="flex min-w-0 items-center gap-3">
-        <Link to="/employees" className="text-gray-500 hover:text-gray-700"><ArrowLeft className="h-5 w-5" /></Link>
-        <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">Add Employee</h2>
+        <Link to="/employees" className="text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-white transition-colors">
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">Add Employee</h2>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">{error}</div>
+        <div className="bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800 text-red-700 dark:text-rose-300 px-4 py-3 rounded-xl text-sm">{error}</div>
       )}
 
       <GlassCard>
-        <h3 className="text-lg font-semibold mb-4">Personal Information</h3>
+        <h3 className="text-lg font-semibold mb-4 text-neutral-900 dark:text-white">Personal Information</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <AnimatedInput label="Employee Code *" placeholder="EMP001" value={form.employee_code} onChange={handleChange('employee_code', 'alphanumeric')} />
           <AnimatedInput label="Full Name *" placeholder="John Doe" value={form.full_name} onChange={handleChange('full_name', 'alphabets')} />
           <AnimatedInput label="Email *" type="email" placeholder="john@company.com" value={form.email} onChange={handleChange('email')} />
           <AnimatedInput label="Phone" placeholder="+91 9876543210" value={form.phone} onChange={handleChange('phone', 'phone')} />
-          <label className="space-y-1">
-            <span className="block text-sm font-medium text-gray-700">Department</span>
-            <select value={form.department} onChange={handleChange('department')} className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 outline-none transition-colors focus:border-black">
-              <option value="">Select department</option>
-              {DEPARTMENT_OPTIONS.map((department) => <option key={department} value={department}>{department}</option>)}
-            </select>
-          </label>
-          <label className="space-y-1">
-            <span className="block text-sm font-medium text-gray-700">Designation</span>
-            <select value={form.designation} onChange={handleChange('designation')} className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 outline-none transition-colors focus:border-black">
-              <option value="">Select designation</option>
-              {DESIGNATION_OPTIONS.map((designation) => <option key={designation} value={designation}>{designation}</option>)}
-            </select>
-          </label>
-          <AnimatedInput label="Date of Joining *" type="date" value={form.date_of_joining} onChange={handleChange('date_of_joining')} />
+          <ThemedSelect
+            label="Department"
+            value={form.department}
+            onChange={(val) => setForm((prev) => ({ ...prev, department: val }))}
+            options={DEPARTMENT_OPTIONS}
+            placeholder="Select department"
+            customPlaceholder="Type custom department (e.g. AI Research)..."
+          />
+          <ThemedSelect
+            label="Designation"
+            value={form.designation}
+            onChange={(val) => setForm((prev) => ({ ...prev, designation: val }))}
+            options={DESIGNATION_OPTIONS}
+            placeholder="Select designation"
+            customPlaceholder="Type custom designation (e.g. Lead Architect)..."
+          />
+          <ThemedDatePicker
+            label="Date of Joining *"
+            value={form.date_of_joining}
+            onChange={(val) => setForm((prev) => ({ ...prev, date_of_joining: val }))}
+            required
+            placeholder="Select joining date..."
+          />
         </div>
       </GlassCard>
 
       <GlassCard>
         <button type="button" onClick={() => setShowBankDetails((open) => !open)} className="flex w-full items-center justify-between gap-4 text-left" aria-expanded={showBankDetails}>
           <span className="flex items-center gap-3">
-            <span className="rounded-lg bg-gray-100 p-2"><Landmark className="h-4 w-4 text-gray-600" /></span>
+            <span className="rounded-lg bg-gray-100 dark:bg-neutral-800 p-2"><Landmark className="h-4 w-4 text-gray-600 dark:text-neutral-300" /></span>
             <span>
-              <span className="block text-lg font-semibold">Bank Details</span>
-              <span className="block text-xs font-normal text-gray-500">Optional payment account information</span>
+              <span className="block text-lg font-semibold text-neutral-900 dark:text-white">Bank Details</span>
+              <span className="block text-xs font-normal text-gray-500 dark:text-neutral-400">Optional payment account information</span>
             </span>
           </span>
-          <ChevronDown className={`h-5 w-5 shrink-0 text-gray-500 transition-transform ${showBankDetails ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`h-5 w-5 shrink-0 text-gray-500 dark:text-neutral-400 transition-transform ${showBankDetails ? 'rotate-180' : ''}`} />
         </button>
         {showBankDetails && (
-          <div className="mt-5 grid grid-cols-1 gap-4 border-t border-gray-100 pt-5 md:grid-cols-2">
+          <div className="mt-5 grid grid-cols-1 gap-4 border-t border-gray-100 dark:border-neutral-800 pt-5 md:grid-cols-2">
             <AnimatedInput label="Bank Name" placeholder="State Bank of India" value={form.bank_name} onChange={handleChange('bank_name', 'alphabets')} />
             <AnimatedInput label="Account Number" placeholder="1234567890" value={form.bank_account_number} onChange={handleChange('bank_account_number', 'digits')} />
             <AnimatedInput label="IFSC Code" placeholder="SBIN0001234" value={form.ifsc_code} onChange={handleChange('ifsc_code', 'alphanumeric')} />
@@ -170,7 +182,7 @@ export function EmployeeCreatePage() {
       </GlassCard>
 
       <GlassCard>
-        <h3 className="text-lg font-semibold mb-4">Salary Details</h3>
+        <h3 className="text-lg font-semibold mb-4 text-neutral-900 dark:text-white">Salary Details</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <AnimatedInput label="Basic Salary *" type="number" placeholder="0.00" value={form.basic_salary} onChange={handleChange('basic_salary', 'decimal')} />
           <AnimatedInput label="HRA" type="number" placeholder="0.00" value={form.hra} onChange={handleChange('hra', 'decimal')} />
@@ -178,7 +190,7 @@ export function EmployeeCreatePage() {
           <AnimatedInput label="Medical Allowance" type="number" placeholder="0.00" value={form.medical_allowance} onChange={handleChange('medical_allowance', 'decimal')} />
           <AnimatedInput label="Special Allowance" type="number" placeholder="0.00" value={form.special_allowance} onChange={handleChange('special_allowance', 'decimal')} />
         </div>
-        <h4 className="text-md font-medium mt-6 mb-3">Deductions</h4>
+        <h4 className="text-md font-medium mt-6 mb-3 text-neutral-900 dark:text-white">Deductions</h4>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <AnimatedInput label="PF" type="number" placeholder="0.00" value={form.pf_deduction} onChange={handleChange('pf_deduction', 'decimal')} />
           <AnimatedInput label="Professional Tax" type="number" placeholder="0.00" value={form.professional_tax} onChange={handleChange('professional_tax', 'decimal')} />

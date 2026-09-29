@@ -9,6 +9,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { paymentService } from '../../services/paymentService';
 import { getPlanHome, PLAN_CATALOG } from '../../lib/plans';
+import { PlanUpgradeModal } from '../../components/ui/PlanUpgradeModal';
 import type { User } from '../../types';
 
 const ENABLE_DECORATIVE_MOTION = false;
@@ -234,10 +235,105 @@ function FloatingParticles() {
 }
 
 /* ════════════════════════════════════════════
+   UPGRADE AUTH MODAL
+   ════════════════════════════════════════════ */
+
+function UpgradeAuthModal({
+  plan,
+  onClose,
+  onSignIn,
+  onSignUp,
+}: {
+  plan: 'professional' | 'enterprise';
+  onClose: () => void;
+  onSignIn: () => void;
+  onSignUp: () => void;
+}) {
+  const price = plan === 'professional' ? '₹499/month' : '₹999/month';
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      >
+        <div
+          className="relative w-full max-w-[440px] rounded-2xl bg-white p-6 sm:p-7 shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center">
+              <CreditCard className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-neutral-900">
+                {plan === 'professional' ? 'Professional Plan' : 'Enterprise Plan'} ({price})
+              </h3>
+              <p className="text-xs text-neutral-500">Choose how you would like to proceed:</p>
+            </div>
+          </div>
+
+          <div className="space-y-3 mt-6">
+            {/* Option 1: Existing User Sign In */}
+            <button
+              onClick={onSignIn}
+              className="w-full p-4 rounded-xl border-2 border-neutral-900 bg-neutral-950 text-white text-left hover:bg-neutral-900 transition-all flex items-center justify-between group shadow-sm"
+            >
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 mb-0.5">Existing User</p>
+                <p className="text-sm font-bold">Sign In to Upgrade Account</p>
+                <p className="text-xs text-neutral-400 mt-0.5">Keep all your existing employees & salary slips</p>
+              </div>
+              <ArrowRight className="h-5 w-5 text-neutral-400 group-hover:translate-x-1 group-hover:text-white transition-all shrink-0 ml-2" />
+            </button>
+
+            {/* Option 2: New User Sign Up */}
+            <button
+              onClick={onSignUp}
+              className="w-full p-4 rounded-xl border-2 border-neutral-200 bg-neutral-50 hover:bg-white hover:border-neutral-300 text-neutral-900 text-left transition-all flex items-center justify-between group"
+            >
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-0.5">New to PaySlip Pro</p>
+                <p className="text-sm font-bold">Create a New Account</p>
+                <p className="text-xs text-neutral-500 mt-0.5">Register fresh and setup your company</p>
+              </div>
+              <ArrowRight className="h-5 w-5 text-neutral-400 group-hover:translate-x-1 group-hover:text-black transition-all shrink-0 ml-2" />
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
+/* ════════════════════════════════════════════
    LOGIN MODAL
    ════════════════════════════════════════════ */
 
-function LoginModal({ onClose, onSignedIn }: { onClose: () => void; onSignedIn?: (user: User) => void }) {
+function LoginModal({ 
+  onClose, 
+  onSignedIn,
+  selectedPlan,
+}: { 
+  onClose: () => void; 
+  onSignedIn?: (user: User) => void;
+  selectedPlan?: 'professional' | 'enterprise' | null;
+}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -294,10 +390,24 @@ function LoginModal({ onClose, onSignedIn }: { onClose: () => void; onSignedIn?:
               <FileText className="h-4 w-4 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-neutral-900 tracking-tight">Welcome back</h2>
-              <p className="text-[11px] text-neutral-400">Sign in to your account</p>
+              <h2 className="text-lg font-bold text-neutral-900 tracking-tight">
+                {selectedPlan ? `Upgrade to ${selectedPlan.toUpperCase()}` : 'Welcome back'}
+              </h2>
+              <p className="text-[11px] text-neutral-400">
+                {selectedPlan ? 'Sign in to upgrade your existing account' : 'Sign in to your account'}
+              </p>
             </div>
           </div>
+
+          {selectedPlan && (
+            <div className="mb-4 p-3 rounded-xl bg-neutral-950 text-white text-xs flex items-center gap-2.5 border border-neutral-800">
+              <CreditCard className="h-4 w-4 text-emerald-400 shrink-0" />
+              <div>
+                <span className="font-bold uppercase tracking-wider text-emerald-400">Upgrade Flow: </span>
+                <span>Signing in will immediately initiate <strong>{selectedPlan.toUpperCase()}</strong> plan checkout.</span>
+              </div>
+            </div>
+          )}
 
           <AnimatePresence>
             {error && (
@@ -389,25 +499,30 @@ export function LoginPage() {
   const { user, updateUser } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'professional' | 'enterprise' | null>(null);
+  const [showUpgradeAuthModal, setShowUpgradeAuthModal] = useState<'professional' | 'enterprise' | null>(null);
+  const [celebrationPlan, setCelebrationPlan] = useState<'professional' | 'enterprise' | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const planParam = params.get('plan') as 'professional' | 'enterprise' | null;
+    if (planParam && (planParam === 'professional' || planParam === 'enterprise')) {
+      setSelectedPlan(planParam);
+      setShowLogin(true);
+    }
+  }, []);
 
   const startPaidPlan = (targetPlan: 'professional' | 'enterprise', account: User) => {
     paymentService.startPaymentFlow(
       targetPlan,
       { name: account.full_name, email: account.email },
-      (newPlan) => {
-        const upgradedUser = { ...account, plan: newPlan as 'professional' | 'enterprise' };
+      (newPlan, updatedUserData) => {
+        const upgradedUser = updatedUserData || { ...account, plan: newPlan as 'professional' | 'enterprise' };
         updateUser(upgradedUser);
         setSelectedPlan(null);
         sessionStorage.removeItem('selected_plan');
-        setPaymentNotice({
-          type: 'success',
-          message: `🎉 Payment Successful! Your account has been upgraded to ${newPlan.toUpperCase()} Plan.`,
-        });
-        setTimeout(() => {
-          navigate(getPlanHome(upgradedUser));
-        }, 2000);
+        setCelebrationPlan(newPlan as 'professional' | 'enterprise');
       },
       (err) => {
         setPaymentNotice({
@@ -436,9 +551,7 @@ export function LoginPage() {
 
     const targetPlan = planName.toLowerCase() as 'professional' | 'enterprise';
     if (!user) {
-      setSelectedPlan(targetPlan);
-      sessionStorage.setItem('selected_plan', targetPlan);
-      navigate('/register');
+      setShowUpgradeAuthModal(targetPlan);
       return;
     }
 
@@ -474,14 +587,47 @@ export function LoginPage() {
   return (
     <div id="landing-scroll" className="h-dvh overflow-y-auto bg-white scroll-smooth">
       <AnimatePresence>
+        {showUpgradeAuthModal && (
+          <UpgradeAuthModal
+            plan={showUpgradeAuthModal}
+            onClose={() => setShowUpgradeAuthModal(null)}
+            onSignIn={() => {
+              const target = showUpgradeAuthModal;
+              setShowUpgradeAuthModal(null);
+              setSelectedPlan(target);
+              setShowLogin(true);
+            }}
+            onSignUp={() => {
+              const target = showUpgradeAuthModal;
+              setShowUpgradeAuthModal(null);
+              setSelectedPlan(target);
+              sessionStorage.setItem('selected_plan', target);
+              navigate('/register');
+            }}
+          />
+        )}
         {showLogin && (
           <LoginModal
+            selectedPlan={selectedPlan}
             onClose={() => { setShowLogin(false); setSelectedPlan(null); }}
             onSignedIn={(signedInUser) => {
               setShowLogin(false);
               if (selectedPlan) startPaidPlan(selectedPlan, signedInUser);
               else navigate(getPlanHome(signedInUser));
             }}
+          />
+        )}
+        {celebrationPlan && (
+          <PlanUpgradeModal
+            isOpen={!!celebrationPlan}
+            plan={celebrationPlan}
+            onConfirm={() => {
+              const target = celebrationPlan;
+              setCelebrationPlan(null);
+              const upgradedUser = user ? { ...user, plan: target } : undefined;
+              navigate(getPlanHome(upgradedUser));
+            }}
+            onClose={() => setCelebrationPlan(null)}
           />
         )}
       </AnimatePresence>

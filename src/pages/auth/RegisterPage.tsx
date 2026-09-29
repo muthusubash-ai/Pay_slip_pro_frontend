@@ -166,6 +166,25 @@ export function RegisterPage() {
             </div>
           </div>
 
+          {selectedPlan !== 'starter' && (
+            <div className="mb-5 p-3.5 rounded-xl border border-neutral-200 bg-neutral-50 text-neutral-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left">
+              <div>
+                <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Existing Starter User?</p>
+                <p className="text-xs font-bold text-neutral-900">Sign in to upgrade your existing account without registering again</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  sessionStorage.setItem('selected_plan', selectedPlan);
+                  navigate(`/login?plan=${selectedPlan}`);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-black text-white text-xs font-semibold hover:bg-neutral-800 transition-colors whitespace-nowrap shadow-sm"
+              >
+                Sign In & Upgrade
+              </button>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <AnimatedInput
               label="Full Name"

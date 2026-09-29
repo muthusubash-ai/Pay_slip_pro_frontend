@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LogOut, Bell, Search, X, Users, FileText, ChevronRight, Calendar, Settings, Menu } from 'lucide-react';
+import { LogOut, Bell, Search, X, Users, FileText, ChevronRight, Calendar, Settings, Menu, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { employeeService } from '../../services/employeeService';
@@ -78,7 +79,21 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
     return () => clearTimeout(timeout);
   }, [query]);
 
+  const location = useLocation();
+  const isAddEmployeePage = location.pathname === '/employees/new';
+  const isEmployeeDetailPage = /^\/employees\/\d+(\/edit)?$/.test(location.pathname);
+  const isGenerateSlipsPage = location.pathname === '/salary-slips/generate';
+  const isNavigationLocked = isAddEmployeePage || isEmployeeDetailPage || isGenerateSlipsPage;
+
   const goTo = (path: string) => {
+    if (isNavigationLocked) {
+      if ((isAddEmployeePage || isEmployeeDetailPage) && path !== '/employees') {
+        return;
+      }
+      if (isGenerateSlipsPage && path !== '/salary-slips') {
+        return;
+      }
+    }
     navigate(path);
     onClose();
   };
@@ -89,7 +104,13 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
     { label: 'Salary Slips', icon: FileText, path: '/salary-slips' },
     { label: 'Attendance', icon: Calendar, path: '/attendance' },
     { label: 'Settings', icon: Settings, path: '/settings/company' },
-  ];
+  ].filter((l) => {
+    if (isNavigationLocked) {
+      if (isAddEmployeePage) return l.path === '/employees';
+      if (isGenerateSlipsPage) return l.path === '/salary-slips';
+    }
+    return true;
+  });
 
   const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -419,7 +440,8 @@ function formatTimeAgo(dateStr: string): string {
 
 /* ═══════════ HEADER ═══════════ */
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [showSearch, setShowSearch] = useState(false);
@@ -446,12 +468,6 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const closeNotifications = useCallback(() => setShowNotifications(false), []);
 
   const pageTitle = getPageTitle(location.pathname);
-  const initials = (user?.full_name || user?.email || 'U')
-    .split(' ')
-    .map((w: string) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
 
   return (
     <>
@@ -511,26 +527,24 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
             </AnimatePresence>
           </div>
 
+          {/* Theme Toggle (Light / Dark) */}
+          <motion.button
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={toggleTheme}
+            className="p-2 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
+            title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+            aria-label="Toggle theme"
+          >
+            {theme === 'dark' ? (
+              <Sun className="h-4 w-4 text-amber-400" />
+            ) : (
+              <Moon className="h-4 w-4 text-neutral-600" />
+            )}
+          </motion.button>
+
           {/* Divider */}
           <div className="hidden w-px h-6 bg-neutral-100 mx-1 sm:block" />
-
-          {/* Profile */}
-          <button
-            onClick={() => navigate('/profile')}
-            className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-neutral-50 transition-colors group sm:pl-2 sm:pr-3"
-          >
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-neutral-900 text-[10px] font-bold text-white sm:h-8 sm:w-8 sm:text-[11px]">
-              {initials}
-            </div>
-            <div className="text-left hidden sm:block">
-              <p className="text-[13px] font-semibold text-neutral-800 leading-tight group-hover:text-black transition-colors">
-                {user?.full_name || user?.email}
-              </p>
-              <p className="text-[10px] text-neutral-400 leading-tight">
-                {user?.role === 'admin' ? 'Administrator' : 'HR Manager'}
-              </p>
-            </div>
-          </button>
 
           {/* Logout */}
           <motion.button

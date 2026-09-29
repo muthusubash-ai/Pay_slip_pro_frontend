@@ -85,6 +85,8 @@ export function DashboardPage() {
     { label: 'This Month', value: stats?.current_month_salary ?? 0, icon: TrendingUp, trend: '-2%', trendUp: false, isCurrency: true },
   ];
 
+  const currentPlan = user?.plan || 'starter';
+
   return (
     <div className="-m-4 min-h-full sm:-m-5 lg:-m-7 lg:h-[calc(100vh-64px)] lg:overflow-hidden">
       <div className="flex min-h-full flex-col gap-5 p-4 sm:p-5 lg:h-full lg:overflow-hidden lg:p-6">
@@ -93,19 +95,30 @@ export function DashboardPage() {
         <motion.div
           {...fadeUp}
           transition={{ duration: 0.4 }}
-          className="flex items-start justify-between gap-3 shrink-0"
+          className="flex items-start justify-between gap-3 shrink-0 flex-wrap"
         >
           <div>
-            <h2 className="text-xl font-bold text-neutral-900 tracking-tight">
-              {greeting}, {fullName}
-            </h2>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-xl sm:text-2xl font-bold text-neutral-900 dark:text-white tracking-tight">
+                {greeting}, {fullName}
+              </h2>
+              <span className={`text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border shadow-sm ${
+                currentPlan === 'enterprise'
+                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                  : currentPlan === 'professional'
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                    : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700'
+              }`}>
+                {currentPlan === 'enterprise' ? '👑 Enterprise Dashboard' : currentPlan === 'professional' ? '⭐ Professional Dashboard' : 'Starter Tier'}
+              </span>
+            </div>
             <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
               <Activity className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
               <span>{formattedDate}</span>
               <span className="text-neutral-300">·</span>
               <span className="font-medium text-neutral-600 font-mono text-[11px]">{formattedTime}</span>
               <span className="text-neutral-300">—</span>
-              <span>Dashboard Overview</span>
+              <span>{currentPlan === 'enterprise' ? 'Enterprise Operations & Insights' : currentPlan === 'professional' ? 'Professional Payroll & Attendance' : 'Dashboard Overview'}</span>
             </p>
           </div>
         </motion.div>
@@ -164,20 +177,20 @@ export function DashboardPage() {
           <motion.div
             {...fadeUp}
             transition={{ duration: 0.4, delay: 0.12 }}
-            className={`${isEnterprise ? 'lg:col-span-2' : 'lg:col-span-5'} bg-white rounded-2xl border border-neutral-100 p-5 flex flex-col`}
+            className={`${isEnterprise ? 'lg:col-span-2' : 'lg:col-span-5'} bg-white dark:bg-[#121216] rounded-2xl border border-neutral-100 dark:border-white/[0.08] p-5 flex flex-col shadow-sm`}
           >
             <div className="flex flex-col gap-3 mb-4 shrink-0 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-neutral-100">
-                  <Wallet className="h-3.5 w-3.5 text-neutral-600" />
+                <div className="p-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800">
+                  <Wallet className="h-3.5 w-3.5 text-neutral-600 dark:text-neutral-300" />
                 </div>
-                <h3 className="text-[13px] font-bold text-neutral-900">Monthly Payroll</h3>
+                <h3 className="text-[13px] font-bold text-neutral-900 dark:text-white">Monthly Payroll</h3>
               </div>
               <div className="flex items-center gap-1.5">
                 <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                  className="border border-neutral-200 rounded-md px-2 py-1 text-[11px] bg-white text-neutral-600 focus:outline-none focus:border-neutral-400 cursor-pointer"
+                  className="border border-neutral-200 dark:border-neutral-700 rounded-md px-2 py-1 text-[11px] bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 focus:outline-none focus:border-neutral-400 cursor-pointer"
                 >
                   {MONTH_SHORT.map((name, i) => (
                     <option key={i} value={i + 1}>{name}</option>
@@ -186,7 +199,7 @@ export function DashboardPage() {
                 <select
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(Number(e.target.value))}
-                  className="border border-neutral-200 rounded-md px-2 py-1 text-[11px] bg-white text-neutral-600 focus:outline-none focus:border-neutral-400 cursor-pointer"
+                  className="border border-neutral-200 dark:border-neutral-700 rounded-md px-2 py-1 text-[11px] bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 focus:outline-none focus:border-neutral-400 cursor-pointer"
                 >
                   {yearOptions.map((y) => (
                     <option key={y} value={y}>{y}</option>
@@ -210,22 +223,22 @@ export function DashboardPage() {
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.2 + i * 0.06 }}
-                    className="flex items-center justify-between bg-neutral-50 hover:bg-neutral-100 rounded-xl px-4 py-3 flex-1 transition-colors group"
+                    className="flex items-center justify-between bg-neutral-50 dark:bg-neutral-900/60 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 rounded-xl px-4 py-3 flex-1 transition-colors group border border-neutral-100/80 dark:border-white/[0.04]"
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-1.5 h-5 rounded-full bg-neutral-300 group-hover:bg-neutral-900 transition-colors" />
-                      <span className="text-xs font-medium text-neutral-500 group-hover:text-neutral-700 transition-colors">{item.label}</span>
+                      <div className="w-1.5 h-5 rounded-full bg-neutral-300 dark:bg-neutral-700 group-hover:bg-neutral-900 dark:group-hover:bg-white transition-colors" />
+                      <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400 group-hover:text-neutral-700 dark:group-hover:text-neutral-200 transition-colors">{item.label}</span>
                     </div>
-                    <span className="text-sm font-bold text-neutral-800">{item.value}</span>
+                    <span className="text-sm font-bold text-neutral-800 dark:text-white">{item.value}</span>
                   </motion.div>
                 ))}
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center">
-                <div className="w-10 h-10 rounded-xl bg-neutral-100 flex items-center justify-center mb-2">
-                  <Calendar className="h-4 w-4 text-neutral-400" />
+                <div className="w-10 h-10 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-2">
+                  <Calendar className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
                 </div>
-                <p className="text-xs text-neutral-500">No slips for {MONTH_SHORT[selectedMonth - 1]} {selectedYear}</p>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">No slips for {MONTH_SHORT[selectedMonth - 1]} {selectedYear}</p>
               </div>
             )}
           </motion.div>
@@ -235,21 +248,21 @@ export function DashboardPage() {
           <motion.div
             {...fadeUp}
             transition={{ duration: 0.4, delay: 0.18 }}
-            className="lg:col-span-3 bg-white rounded-2xl border border-neutral-100 flex flex-col overflow-hidden"
+            className="lg:col-span-3 bg-white dark:bg-[#121216] rounded-2xl border border-neutral-100 dark:border-white/[0.08] flex flex-col overflow-hidden shadow-sm"
           >
-            <div className="flex items-center justify-between px-5 py-4 shrink-0">
+            <div className="flex items-center justify-between px-5 py-4 shrink-0 border-b border-neutral-100 dark:border-white/[0.06]">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-neutral-100">
-                  <Users className="h-3.5 w-3.5 text-neutral-600" />
+                <div className="p-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800">
+                  <Users className="h-3.5 w-3.5 text-neutral-600 dark:text-neutral-300" />
                 </div>
                 <div>
-                  <h3 className="text-[13px] font-bold text-neutral-900">Employee Overview</h3>
-                  <p className="text-[10px] text-neutral-400">{departments?.length ?? 0} members</p>
+                  <h3 className="text-[13px] font-bold text-neutral-900 dark:text-white">Employee Overview</h3>
+                  <p className="text-[10px] text-neutral-400 dark:text-neutral-500">{departments?.length ?? 0} members</p>
                 </div>
               </div>
               <button
                 onClick={() => navigate('/employees')}
-                className="text-[11px] font-semibold text-neutral-400 hover:text-neutral-800 flex items-center gap-0.5 transition-colors"
+                className="text-[11px] font-semibold text-neutral-400 hover:text-neutral-800 dark:hover:text-white flex items-center gap-0.5 transition-colors"
               >
                 View all <ChevronRight className="h-3 w-3" />
               </button>
@@ -266,29 +279,29 @@ export function DashboardPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 + i * 0.04 }}
                     onClick={() => navigate('/employees')}
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-neutral-100 p-3 text-left transition-colors hover:bg-neutral-50"
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-neutral-100 dark:border-neutral-800 p-3 text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-[10px] font-bold text-neutral-500">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-100 dark:bg-neutral-800 text-[10px] font-bold text-neutral-600 dark:text-neutral-300">
                         {emp.employee_name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-neutral-800">{emp.employee_name}</p>
+                        <p className="truncate text-xs font-semibold text-neutral-800 dark:text-white">{emp.employee_name}</p>
                         <p className="truncate text-[10px] text-neutral-400">{emp.employee_code} · {emp.department}</p>
                       </div>
                     </div>
-                    <span className="shrink-0 text-xs font-bold text-neutral-800">₹{emp.basic_salary.toLocaleString()}</span>
+                    <span className="shrink-0 text-xs font-bold text-neutral-800 dark:text-white">₹{emp.basic_salary.toLocaleString()}</span>
                   </motion.button>
                 ))}
               </div>
               <div className="hidden flex-1 overflow-auto md:block">
                 <table className="w-full min-w-[560px]">
-                  <thead className="sticky top-0 bg-neutral-50/90 backdrop-blur-sm z-10">
+                  <thead className="sticky top-0 bg-neutral-50/90 dark:bg-neutral-900/90 backdrop-blur-sm z-10 border-b border-neutral-100 dark:border-neutral-800">
                     <tr>
-                      <th className="text-left text-[10px] font-semibold text-neutral-400 uppercase tracking-wider px-5 py-2.5">Employee</th>
-                      <th className="text-left text-[10px] font-semibold text-neutral-400 uppercase tracking-wider px-5 py-2.5">Department</th>
-                      <th className="text-left text-[10px] font-semibold text-neutral-400 uppercase tracking-wider px-5 py-2.5 hidden xl:table-cell">Designation</th>
-                      <th className="text-right text-[10px] font-semibold text-neutral-400 uppercase tracking-wider px-5 py-2.5">Salary</th>
+                      <th className="text-left text-[10px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider px-5 py-2.5">Employee</th>
+                      <th className="text-left text-[10px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider px-5 py-2.5">Department</th>
+                      <th className="text-left text-[10px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider px-5 py-2.5 hidden xl:table-cell">Designation</th>
+                      <th className="text-right text-[10px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider px-5 py-2.5">Salary</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -298,28 +311,28 @@ export function DashboardPage() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.25 + i * 0.04 }}
-                        className="border-t border-neutral-50 hover:bg-neutral-50/60 transition-colors group cursor-pointer"
+                        className="border-t border-neutral-50 dark:border-white/[0.04] hover:bg-neutral-50/60 dark:hover:bg-white/[0.04] transition-colors group cursor-pointer"
                         onClick={() => navigate('/employees')}
                       >
                         <td className="px-5 py-2.5">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-lg bg-neutral-100 flex items-center justify-center text-[10px] font-bold text-neutral-500 group-hover:bg-neutral-800 group-hover:text-white transition-all duration-200">
+                            <div className="w-7 h-7 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center text-[10px] font-bold text-neutral-600 dark:text-neutral-300 group-hover:bg-neutral-800 group-hover:text-white dark:group-hover:bg-white dark:group-hover:text-black transition-all duration-200">
                               {emp.employee_name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
                             </div>
                             <div>
-                              <p className="text-[12px] font-semibold text-neutral-800 leading-tight">{emp.employee_name}</p>
+                              <p className="text-[12px] font-semibold text-neutral-800 dark:text-neutral-100 leading-tight">{emp.employee_name}</p>
                               <p className="text-[10px] text-neutral-400 leading-tight">{emp.employee_code}</p>
                             </div>
                           </div>
                         </td>
                         <td className="px-5 py-2.5">
-                          <span className="text-[11px] text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-md font-medium">
+                          <span className="text-[11px] text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 rounded-md font-medium">
                             {emp.department}
                           </span>
                         </td>
-                        <td className="px-5 py-2.5 text-[12px] text-neutral-500 hidden xl:table-cell">{emp.designation}</td>
+                        <td className="px-5 py-2.5 text-[12px] text-neutral-500 dark:text-neutral-400 hidden xl:table-cell">{emp.designation}</td>
                         <td className="px-5 py-2.5 text-right">
-                          <span className="text-[12px] font-bold text-neutral-800">₹{emp.basic_salary.toLocaleString()}</span>
+                          <span className="text-[12px] font-bold text-neutral-800 dark:text-white">₹{emp.basic_salary.toLocaleString()}</span>
                         </td>
                       </motion.tr>
                     ))}
@@ -329,14 +342,14 @@ export function DashboardPage() {
               </>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center p-6">
-                <div className="w-12 h-12 rounded-2xl bg-neutral-100 flex items-center justify-center mb-3">
-                  <Users className="h-5 w-5 text-neutral-400" />
+                <div className="w-12 h-12 rounded-2xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-3">
+                  <Users className="h-5 w-5 text-neutral-400 dark:text-neutral-500" />
                 </div>
-                <p className="text-sm font-medium text-neutral-600 mb-0.5">No employees yet</p>
-                <p className="text-[11px] text-neutral-400 mb-3">Add employees to see the overview</p>
+                <p className="text-sm font-medium text-neutral-600 dark:text-neutral-300 mb-0.5">No employees yet</p>
+                <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mb-3">Add employees to see the overview</p>
                 <button
                   onClick={() => navigate('/employees/new')}
-                  className="px-3 py-1.5 bg-neutral-900 text-white text-[11px] font-semibold rounded-lg hover:bg-neutral-800 transition-colors"
+                  className="px-3 py-1.5 bg-neutral-900 text-white keep-white text-[11px] font-semibold rounded-lg hover:bg-neutral-800 transition-colors shadow-sm"
                 >
                   Add Employee
                 </button>

@@ -10,9 +10,9 @@ interface GradientButtonProps extends HTMLMotionProps<'button'> {
 
 export function GradientButton({ children, variant = 'primary', isLoading, className, disabled, ...props }: GradientButtonProps) {
   const variants = {
-    primary: 'bg-black text-white hover:bg-gray-800',
-    secondary: 'bg-gray-200 text-black hover:bg-gray-300',
-    danger: 'bg-black text-white hover:bg-gray-800',
+    primary: 'bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-100 keep-white shadow-sm font-semibold',
+    secondary: 'bg-gray-200 text-black hover:bg-gray-300 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700',
+    danger: 'bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:text-white',
   };
 
   return (

@@ -140,24 +140,36 @@ export function CompanySettingsPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6">
-      <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">Company Settings</h2>
+      <h2 className="text-xl font-bold text-neutral-900 dark:text-white sm:text-2xl">Company Settings</h2>
 
-      {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl">{success}</div>}
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">{error}</div>}
+      {success && (
+        <div className="bg-green-50 dark:bg-emerald-950/40 border border-green-200 dark:border-emerald-800 text-green-700 dark:text-emerald-300 px-4 py-3 rounded-xl text-sm">
+          {success}
+        </div>
+      )}
+      {error && (
+        <div className="bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800 text-red-700 dark:text-rose-300 px-4 py-3 rounded-xl text-sm">
+          {error}
+        </div>
+      )}
 
       {/* Logo Section */}
       <GlassCard>
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-neutral-900 dark:text-white">
           <Upload className="h-5 w-5" /> Company Logo
         </h3>
-        {logoSuccess && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl mb-4">{logoSuccess}</div>}
+        {logoSuccess && (
+          <div className="bg-green-50 dark:bg-emerald-950/40 border border-green-200 dark:border-emerald-800 text-green-700 dark:text-emerald-300 px-4 py-3 rounded-xl mb-4 text-sm">
+            {logoSuccess}
+          </div>
+        )}
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">
           {/* Logo preview */}
-          <div className="flex h-28 w-full items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-gray-300 bg-white p-2 sm:w-[200px] sm:shrink-0">
+          <div className="flex h-28 w-full items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800/80 p-2 sm:w-[200px] sm:shrink-0">
             {company?.logo_data ? (
               <img src={company.logo_data} alt="Logo" className="max-w-full max-h-full object-contain" />
             ) : (
-              <span className="text-gray-400 text-xs text-center px-2">No logo</span>
+              <span className="text-neutral-400 dark:text-neutral-500 text-xs text-center px-2">No logo</span>
             )}
           </div>
           <div className="w-full min-w-0 space-y-3 sm:w-auto">
@@ -180,22 +192,22 @@ export function CompanySettingsPage() {
               <button
                 onClick={() => { setLogoSuccess(''); deleteLogo.mutate(); }}
                 disabled={!isEditing}
-                className="flex items-center gap-1 text-sm text-gray-500 hover:text-black transition-colors disabled:opacity-50"
+                className="flex items-center gap-1 text-sm text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors disabled:opacity-50"
               >
                 <Trash2 className="h-3.5 w-3.5" /> Remove logo
               </button>
             )}
-            <p className="text-xs text-gray-400">PNG or JPG. Auto-cropped to 1080x1080. Max 5MB.</p>
+            <p className="text-xs text-neutral-400 dark:text-neutral-500">PNG or JPG. Auto-cropped to 1080x1080. Max 5MB.</p>
 
             {/* Extracted color display */}
             {company?.logo_data && (
               <div className="flex items-center gap-2 mt-2">
                 <div
-                  className="w-6 h-6 rounded-full border border-gray-300"
+                  className="w-6 h-6 rounded-full border border-neutral-300 dark:border-neutral-600 shadow-sm"
                   style={{ backgroundColor: extractedColor }}
                 />
-                <span className="text-sm text-gray-600">
-                  Slip theme color: <span className="font-mono font-semibold">{extractedColor}</span>
+                <span className="text-sm text-neutral-600 dark:text-neutral-300">
+                  Slip theme color: <span className="font-mono font-semibold text-neutral-900 dark:text-white">{extractedColor}</span>
                 </span>
               </div>
             )}

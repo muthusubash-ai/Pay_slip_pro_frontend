@@ -123,20 +123,32 @@ export function AttendancePage() {
   const presentCount = totalDays - leaveCount - weekoffCount;
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <h2 className="flex items-start gap-2 text-xl font-bold text-black sm:items-center sm:text-2xl">
-        <CalendarDays className="mt-0.5 h-6 w-6 shrink-0 sm:mt-0" /> Attendance / Leave Management
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 max-w-6xl mx-auto">
+      <h2 className="flex items-start gap-2.5 text-xl font-bold text-neutral-900 dark:text-white sm:items-center sm:text-2xl">
+        <CalendarDays className="mt-0.5 h-6 w-6 shrink-0 sm:mt-0" /> Attendance & Leave Management
       </h2>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">{error}</div>}
-      {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl">{success}</div>}
+      {error && (
+        <div className="bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800 text-red-700 dark:text-rose-300 px-4 py-3 rounded-xl text-sm">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="bg-green-50 dark:bg-emerald-950/40 border border-green-200 dark:border-emerald-800 text-green-700 dark:text-emerald-300 px-4 py-3 rounded-xl text-sm">
+          {success}
+        </div>
+      )}
 
       {/* Filters */}
       <GlassCard>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
-            {empLoading ? <LoadingSpinner /> : (
+            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 mb-1.5">
+              Employee
+            </label>
+            {empLoading ? (
+              <LoadingSpinner />
+            ) : (
               <select
                 value={selectedEmployee}
                 onChange={(e) => {
@@ -146,11 +158,13 @@ export function AttendancePage() {
                   setSuccess('');
                   setError('');
                 }}
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-black outline-none"
+                className="w-full px-4 py-3 rounded-xl border-2 border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white transition-colors text-sm font-medium"
               >
-                <option value={0}>Select Employee</option>
+                <option value={0} className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
+                  Select Employee
+                </option>
                 {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
+                  <option key={emp.id} value={emp.id} className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
                     {emp.full_name} ({emp.employee_code})
                   </option>
                 ))}
@@ -158,7 +172,9 @@ export function AttendancePage() {
             )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 mb-1.5">
+              Month
+            </label>
             <select
               value={month}
               onChange={(e) => {
@@ -166,15 +182,19 @@ export function AttendancePage() {
                 setDayStatuses(new Map());
                 setLastSynced('');
               }}
-              className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-black outline-none"
+              className="w-full px-4 py-3 rounded-xl border-2 border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white transition-colors text-sm font-medium"
             >
               {MONTH_NAMES.map((name, i) => (
-                <option key={i} value={i + 1}>{name}</option>
+                <option key={i} value={i + 1} className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
+                  {name}
+                </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 mb-1.5">
+              Year
+            </label>
             <select
               value={year}
               onChange={(e) => {
@@ -182,10 +202,12 @@ export function AttendancePage() {
                 setDayStatuses(new Map());
                 setLastSynced('');
               }}
-              className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-black outline-none"
+              className="w-full px-4 py-3 rounded-xl border-2 border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white transition-colors text-sm font-medium"
             >
               {[2024, 2025, 2026, 2027].map((y) => (
-                <option key={y} value={y}>{y}</option>
+                <option key={y} value={y} className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
+                  {y}
+                </option>
               ))}
             </select>
           </div>
@@ -197,30 +219,37 @@ export function AttendancePage() {
         <GlassCard>
           <div className="flex flex-col gap-4 mb-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-black">
+              <h3 className="text-base font-bold text-neutral-900 dark:text-white">
                 {MONTH_NAMES[month - 1]} {year} — Click to cycle: Present → Leave → Weekoff
               </h3>
-              <p className="text-xs text-gray-500 mt-1">Weekoffs are paid days (no deduction). Only Leave days are deducted from salary.</p>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                Weekoffs are paid days (no deduction). Only Leave days are deducted from salary.
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
               <button
+                type="button"
                 onClick={clearAll}
-                className="flex min-h-10 items-center justify-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-100"
+                className="flex min-h-10 items-center justify-center gap-1 rounded-xl border border-neutral-200 dark:border-neutral-700 px-3.5 py-1.5 text-xs font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
               >
                 <Trash2 className="h-3.5 w-3.5" /> Clear
               </button>
               <GradientButton onClick={handleSave} isLoading={bulkMark.isPending}>
-                <Save className="h-4 w-4 mr-1" /> Save Attendance
+                <Save className="h-4 w-4 mr-1.5" /> Save Attendance
               </GradientButton>
             </div>
           </div>
 
-          {attLoading ? <LoadingSpinner /> : (
+          {attLoading ? (
+            <LoadingSpinner />
+          ) : (
             <>
               {/* Day headers */}
               <div className="grid grid-cols-7 gap-1 mb-2 sm:gap-2">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                  <div key={d} className="text-center text-xs font-semibold text-gray-500 py-1">{d}</div>
+                  <div key={d} className="text-center text-xs font-semibold text-neutral-500 dark:text-neutral-400 py-1">
+                    {d}
+                  </div>
                 ))}
               </div>
 
@@ -236,44 +265,45 @@ export function AttendancePage() {
                   const dateStr = formatDate(year, month, day);
                   const status = dayStatuses.get(dateStr) || 'present';
 
-                  let bgClass = 'bg-white text-black border-gray-200 hover:border-black';
+                  let bgClass = 'bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white border-neutral-200 dark:border-neutral-700 hover:border-black dark:hover:border-white';
                   let label = 'Present';
                   if (status === 'leave') {
-                    bgClass = 'bg-black text-white border-black';
+                    bgClass = 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 border-neutral-900 dark:border-white shadow-sm';
                     label = 'LEAVE';
                   } else if (status === 'weekoff') {
-                    bgClass = 'bg-blue-500 text-white border-blue-500';
+                    bgClass = 'bg-blue-600 text-white border-blue-600 shadow-sm';
                     label = 'WEEKOFF';
                   }
 
                   return (
                     <button
                       key={day}
+                      type="button"
                       onClick={() => cycleStatus(dateStr)}
-                      className={`min-w-0 rounded-lg border p-1 text-center text-xs font-medium transition-all sm:border-2 sm:p-3 sm:text-sm ${bgClass}`}
+                      className={`min-w-0 rounded-xl border p-1 text-center text-xs font-medium transition-all sm:border-2 sm:p-3 sm:text-sm ${bgClass}`}
                     >
                       <span className="block text-sm font-bold sm:text-lg">{day}</span>
-                      <span className="hidden text-[10px] mt-0.5 sm:block">{label}</span>
+                      <span className="hidden text-[10px] mt-0.5 sm:block font-semibold tracking-wider">{label}</span>
                     </button>
                   );
                 })}
               </div>
 
               {/* Summary */}
-              <div className="mt-4 flex items-center gap-6 text-sm flex-wrap">
+              <div className="mt-5 pt-4 border-t border-neutral-100 dark:border-neutral-800 flex items-center gap-6 text-xs sm:text-sm flex-wrap">
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-white border-2 border-gray-200 rounded" />
-                  <span className="text-gray-600">Present ({presentCount})</span>
+                  <div className="w-3.5 h-3.5 bg-white dark:bg-neutral-900 border-2 border-neutral-300 dark:border-neutral-600 rounded" />
+                  <span className="text-neutral-600 dark:text-neutral-300">Present ({presentCount})</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-black rounded" />
-                  <span className="text-gray-600">Leave ({leaveCount})</span>
+                  <div className="w-3.5 h-3.5 bg-neutral-900 dark:bg-white rounded" />
+                  <span className="text-neutral-600 dark:text-neutral-300">Leave ({leaveCount})</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-blue-500 rounded" />
-                  <span className="text-gray-600">Weekoff ({weekoffCount})</span>
+                  <div className="w-3.5 h-3.5 bg-blue-600 rounded" />
+                  <span className="text-neutral-600 dark:text-neutral-300">Weekoff ({weekoffCount})</span>
                 </div>
-                <div className="w-full font-semibold text-black sm:ml-auto sm:w-auto">
+                <div className="w-full font-bold text-neutral-900 dark:text-white sm:ml-auto sm:w-auto text-xs sm:text-sm">
                   Working Days: {presentCount + weekoffCount} | Leave: {leaveCount} | Total: {totalDays}
                 </div>
               </div>
@@ -282,68 +312,86 @@ export function AttendancePage() {
         </GlassCard>
       )}
 
-      {/* Leave Summary for All Employees */}
-      {isEnterprise && <GlassCard>
-        <h3 className="text-lg font-semibold text-black mb-4">
-          Leave Summary — {MONTH_NAMES[month - 1]} {year}
-        </h3>
-        {leaveSummary && leaveSummary.length > 0 ? (<>
-          <div className="space-y-3 md:hidden">
-            {leaveSummary.map((s) => (
-              <div key={s.employee_id} className="rounded-xl border border-gray-100 p-4">
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="break-words font-semibold text-black">{s.employee_name}</p>
-                    <p className="text-xs text-gray-500">{s.employee_code}</p>
+      {/* Leave Summary for All Employees (Enterprise Plan Feature) */}
+      {isEnterprise && (
+        <GlassCard>
+          <h3 className="text-base font-bold text-neutral-900 dark:text-white mb-4">
+            Leave Summary — {MONTH_NAMES[month - 1]} {year}
+          </h3>
+          {leaveSummary && leaveSummary.length > 0 ? (
+            <>
+              <div className="space-y-3 md:hidden">
+                {leaveSummary.map((s) => (
+                  <div key={s.employee_id} className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 bg-neutral-50 dark:bg-neutral-900/60">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-words font-bold text-neutral-900 dark:text-white text-sm">{s.employee_name}</p>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400">{s.employee_code}</p>
+                      </div>
+                      <span className={`shrink-0 text-sm font-bold ${s.leave_deduction > 0 ? 'text-neutral-900 dark:text-white' : 'text-neutral-400'}`}>
+                        {s.leave_deduction > 0 ? `₹${s.leave_deduction.toLocaleString()}` : '—'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-lg bg-white dark:bg-neutral-800 p-2 border border-neutral-100 dark:border-neutral-700/60">
+                        <span className="block text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-semibold">Total Days</span>
+                        <span className="font-bold text-neutral-800 dark:text-neutral-200">{s.total_days}</span>
+                      </div>
+                      <div className="rounded-lg bg-white dark:bg-neutral-800 p-2 border border-neutral-100 dark:border-neutral-700/60">
+                        <span className="block text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-semibold">Present</span>
+                        <span className="font-bold text-neutral-800 dark:text-neutral-200">{s.present_days}</span>
+                      </div>
+                      <div className="rounded-lg bg-blue-50 dark:bg-blue-950/40 p-2 border border-blue-100 dark:border-blue-900/60">
+                        <span className="block text-[10px] text-blue-600 dark:text-blue-400 uppercase font-semibold">Weekoff</span>
+                        <span className="font-bold text-blue-800 dark:text-blue-300">{s.weekoff_days}</span>
+                      </div>
+                      <div className="rounded-lg bg-neutral-100 dark:bg-neutral-800 p-2 border border-neutral-200 dark:border-neutral-700/60">
+                        <span className="block text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-semibold">Leave</span>
+                        <span className="font-bold text-neutral-800 dark:text-neutral-200">{s.leave_days}</span>
+                      </div>
+                    </div>
                   </div>
-                  <span className={`shrink-0 text-sm font-semibold ${s.leave_deduction > 0 ? 'text-black' : 'text-gray-400'}`}>
-                    {s.leave_deduction > 0 ? `₹${s.leave_deduction.toLocaleString()}` : '—'}
-                  </span>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto pb-1 md:block">
+                <div className="grid min-w-[760px] grid-cols-7 gap-4 px-4 py-2.5 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 rounded-xl text-xs font-bold uppercase tracking-wider mb-2">
+                  <span>Employee</span>
+                  <span>Code</span>
+                  <span className="text-center">Total Days</span>
+                  <span className="text-center">Present</span>
+                  <span className="text-center">Weekoff</span>
+                  <span className="text-center">Leave</span>
+                  <span className="text-right">Deduction</span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="rounded-lg bg-gray-50 p-2"><span className="block text-xs text-gray-500">Total Days</span>{s.total_days}</div>
-                  <div className="rounded-lg bg-gray-50 p-2"><span className="block text-xs text-gray-500">Present</span>{s.present_days}</div>
-                  <div className="rounded-lg bg-blue-50 p-2"><span className="block text-xs text-gray-500">Weekoff</span>{s.weekoff_days}</div>
-                  <div className="rounded-lg bg-gray-100 p-2"><span className="block text-xs text-gray-500">Leave</span>{s.leave_days}</div>
+                <div className="space-y-1">
+                  {leaveSummary.map((s) => (
+                    <div
+                      key={s.employee_id}
+                      className="grid min-w-[760px] grid-cols-7 gap-4 px-4 py-3 border-b border-neutral-100 dark:border-neutral-800 last:border-0 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 rounded-xl transition-colors text-sm"
+                    >
+                      <span className="font-semibold text-neutral-900 dark:text-white">{s.employee_name}</span>
+                      <span className="text-neutral-500 dark:text-neutral-400 font-mono text-xs">{s.employee_code}</span>
+                      <span className="text-center text-neutral-700 dark:text-neutral-300">{s.total_days}</span>
+                      <span className="text-center text-neutral-700 dark:text-neutral-300">{s.present_days}</span>
+                      <span className={`text-center font-bold ${s.weekoff_days > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-neutral-400'}`}>
+                        {s.weekoff_days}
+                      </span>
+                      <span className={`text-center font-bold ${s.leave_days > 0 ? 'text-neutral-900 dark:text-white' : 'text-neutral-400'}`}>
+                        {s.leave_days}
+                      </span>
+                      <span className={`text-right font-bold ${s.leave_deduction > 0 ? 'text-neutral-900 dark:text-white' : 'text-neutral-400'}`}>
+                        {s.leave_deduction > 0 ? `₹${s.leave_deduction.toLocaleString()}` : '—'}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-          <div className="hidden overflow-x-auto pb-1 md:block">
-            <div className="grid min-w-[760px] grid-cols-7 gap-4 px-3 py-2 bg-black text-white rounded-lg text-sm font-semibold mb-2">
-              <span>Employee</span>
-              <span>Code</span>
-              <span className="text-center">Total Days</span>
-              <span className="text-center">Present</span>
-              <span className="text-center">Weekoff</span>
-              <span className="text-center">Leave</span>
-              <span className="text-right">Deduction</span>
-            </div>
-            <div className="space-y-1">
-              {leaveSummary.map((s) => (
-                <div key={s.employee_id} className="grid min-w-[760px] grid-cols-7 gap-4 px-3 py-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 rounded-lg">
-                  <span className="font-medium text-black">{s.employee_name}</span>
-                  <span className="text-gray-600">{s.employee_code}</span>
-                  <span className="text-center text-gray-700">{s.total_days}</span>
-                  <span className="text-center text-gray-700">{s.present_days}</span>
-                  <span className={`text-center font-semibold ${s.weekoff_days > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-                    {s.weekoff_days}
-                  </span>
-                  <span className={`text-center font-semibold ${s.leave_days > 0 ? 'text-black' : 'text-gray-400'}`}>
-                    {s.leave_days}
-                  </span>
-                  <span className={`text-right font-semibold ${s.leave_deduction > 0 ? 'text-black' : 'text-gray-400'}`}>
-                    {s.leave_deduction > 0 ? `₹${s.leave_deduction.toLocaleString()}` : '—'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-          </>
-        ) : (
-          <p className="text-gray-500">No attendance data recorded for this month.</p>
-        )}
-      </GlassCard>}
+            </>
+          ) : (
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">No attendance data recorded for this month.</p>
+          )}
+        </GlassCard>
+      )}
     </motion.div>
   );
 }

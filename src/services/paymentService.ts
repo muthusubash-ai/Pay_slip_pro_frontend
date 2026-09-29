@@ -54,7 +54,7 @@ export const paymentService = {
   },
 
   verifyPayment(payload: VerifyPaymentPayload) {
-    return api.post<{ message: string; plan: string }>('/payments/verify', payload);
+    return api.post<{ message: string; plan: string; user?: any }>('/payments/verify', payload);
   },
 
   getHistory() {
@@ -64,7 +64,7 @@ export const paymentService = {
   async startPaymentFlow(
     planName: 'professional' | 'enterprise',
     userInfo?: { name?: string; email?: string },
-    onSuccess?: (plan: string) => void,
+    onSuccess?: (plan: string, updatedUser?: any) => void,
     onError?: (error: string) => void
   ) {
     const loaded = await this.loadRazorpayScript();
@@ -98,7 +98,7 @@ export const paymentService = {
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
             });
-            onSuccess?.(verifyRes.data.plan);
+            onSuccess?.(verifyRes.data.plan, verifyRes.data.user);
           } catch (err: any) {
             onError?.(err?.response?.data?.detail || 'Payment verification failed.');
           }
