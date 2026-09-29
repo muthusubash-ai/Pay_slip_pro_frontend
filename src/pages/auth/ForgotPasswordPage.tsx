@@ -6,6 +6,7 @@ import { GlassCard } from '../../components/ui/GlassCard';
 import { AnimatedInput } from '../../components/ui/AnimatedInput';
 import { GradientButton } from '../../components/ui/GradientButton';
 import api from '../../services/api';
+import { getPasswordPolicyError } from '../../lib/passwordPolicy';
 
 type Step = 'email' | 'code' | 'done';
 
@@ -48,8 +49,9 @@ export function ForgotPasswordPage() {
     e.preventDefault();
     setError('');
 
-    if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters.');
+    const passwordError = getPasswordPolicyError(newPassword);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -142,7 +144,7 @@ export function ForgotPasswordPage() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
-                placeholder="Min 6 characters"
+                placeholder="12+ chars, upper, lower, number, special"
               />
               <AnimatedInput
                 label="Confirm Password"

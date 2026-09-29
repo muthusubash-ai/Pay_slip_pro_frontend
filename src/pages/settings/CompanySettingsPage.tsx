@@ -118,8 +118,15 @@ export function CompanySettingsPage() {
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Logo must be a PNG, JPEG, or WebP image.');
+      e.target.value = '';
+      return;
+    }
     if (file.size > 5 * 1024 * 1024) {
       setError('Logo must be under 5MB.');
+      e.target.value = '';
       return;
     }
     setLogoSuccess('');
@@ -157,7 +164,7 @@ export function CompanySettingsPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/svg+xml"
+              accept="image/png,image/jpeg,image/webp"
               onChange={handleLogoUpload}
               className="hidden"
             />

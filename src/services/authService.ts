@@ -12,11 +12,9 @@ export const authService = {
     return api.post('/auth/login', form);
   },
 
-  refresh: (refresh_token: string) =>
-    api.post('/auth/refresh', { refresh_token }),
+  refresh: () => api.post('/auth/refresh', {}),
 
-  logout: (refresh_token: string) =>
-    api.post('/auth/logout', { refresh_token }),
+  logout: () => api.post('/auth/logout', {}),
 
   getMe: () => api.get<User>('/auth/me'),
 

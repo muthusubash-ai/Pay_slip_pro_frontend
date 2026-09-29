@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useInView } from 'framer-motion';
 import {
@@ -16,21 +16,6 @@ const ENABLE_DECORATIVE_MOTION = false;
 /* ════════════════════════════════════════════
    HELPERS
    ════════════════════════════════════════════ */
-
-function getPasswordStrength(pw: string) {
-  const checks = {
-    minLength: pw.length >= 8,
-    uppercase: /[A-Z]/.test(pw),
-    lowercase: /[a-z]/.test(pw),
-    number: /[0-9]/.test(pw),
-    special: /[^A-Za-z0-9]/.test(pw),
-  };
-  const passed = Object.values(checks).filter(Boolean).length;
-  let label = 'Weak';
-  if (passed >= 5) label = 'Strong';
-  else if (passed >= 3) label = 'Medium';
-  return { checks, passed, label };
-}
 
 /* ─── typewriter ─── */
 function TypewriterText({ words }: { words: string[] }) {
@@ -261,7 +246,6 @@ function LoginModal({ onClose, onSignedIn }: { onClose: () => void; onSignedIn?:
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const { login } = useAuth();
   const navigate = useNavigate();
-  const strength = useMemo(() => getPasswordStrength(password), [password]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -273,7 +257,6 @@ function LoginModal({ onClose, onSignedIn }: { onClose: () => void; onSignedIn?:
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    if (strength.passed < 3) { setError('Password too weak — need 3 of: 8+ chars, upper, lower, number, special.'); return; }
     setIsLoading(true);
     try {
       const signedInUser = await login(email, password);
@@ -283,13 +266,6 @@ function LoginModal({ onClose, onSignedIn }: { onClose: () => void; onSignedIn?:
     catch { setError('Invalid email or password'); }
     finally { setIsLoading(false); }
   };
-
-  const Rule = ({ met, text }: { met: boolean; text: string }) => (
-    <motion.span initial={false} animate={{ opacity: met ? 1 : 0.4 }}
-      className={`flex items-center gap-1 text-[11px] ${met ? 'text-neutral-800' : 'text-neutral-400'}`}>
-      {met ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />} {text}
-    </motion.span>
-  );
 
   return (
     <>
@@ -356,27 +332,6 @@ function LoginModal({ onClose, onSignedIn }: { onClose: () => void; onSignedIn?:
                 </button>
               </motion.div>
             </div>
-
-            <AnimatePresence>
-              {password.length > 0 && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-2 overflow-hidden">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1 bg-neutral-100 rounded-full overflow-hidden flex gap-0.5">
-                      {[1, 2, 3, 4, 5].map((seg) => (
-                        <motion.div key={seg} className="flex-1 rounded-full" initial={{ scaleX: 0 }}
-                          animate={{ scaleX: strength.passed >= seg ? 1 : 0, backgroundColor: strength.passed >= 5 ? '#171717' : strength.passed >= 3 ? '#737373' : '#d4d4d4' }}
-                          transition={{ duration: 0.3, delay: seg * 0.05 }} style={{ originX: 0 }} />
-                      ))}
-                    </div>
-                    <span className={`text-[11px] font-semibold min-w-[40px] text-right ${strength.passed >= 5 ? 'text-neutral-900' : strength.passed >= 3 ? 'text-neutral-500' : 'text-neutral-300'}`}>{strength.label}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                    <Rule met={strength.checks.minLength} text="8+ chars" /><Rule met={strength.checks.uppercase} text="Upper" />
-                    <Rule met={strength.checks.lowercase} text="Lower" /><Rule met={strength.checks.number} text="Number" /><Rule met={strength.checks.special} text="Special" />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
 
             <motion.button type="submit" disabled={isLoading} whileHover={isLoading ? {} : { scale: 1.01 }} whileTap={isLoading ? {} : { scale: 0.98 }}
               className="group w-full py-3 rounded-xl bg-black text-white font-semibold text-sm hover:bg-neutral-900 transition-all disabled:opacity-50 shadow-lg shadow-black/10 flex items-center justify-center gap-2">
@@ -893,45 +848,30 @@ export function LoginPage() {
           <motion.svg viewBox="0 0 1440 150" fill="none" className="absolute bottom-0 w-full" preserveAspectRatio="none"
             style={{ height: '100%' }}
             initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6, duration: 1 }}>
-            <motion.path fill="rgba(255,255,255,0.15)"
+            <path
+              fill="rgba(255,255,255,0.15)"
               d="M0 150V90C120 60 240 80 360 70C480 60 600 90 720 80C840 70 960 50 1080 60C1200 70 1320 90 1440 80V150H0Z"
-              animate={{ d: [
-                'M0 150V90C120 60 240 80 360 70C480 60 600 90 720 80C840 70 960 50 1080 60C1200 70 1320 90 1440 80V150H0Z',
-                'M0 150V80C120 90 240 60 360 80C480 70 600 50 720 70C840 90 960 80 1080 70C1200 50 1320 70 1440 90V150H0Z',
-                'M0 150V70C120 80 240 90 360 60C480 80 600 70 720 90C840 60 960 70 1080 80C1200 90 1320 60 1440 70V150H0Z',
-                'M0 150V90C120 60 240 80 360 70C480 60 600 90 720 80C840 70 960 50 1080 60C1200 70 1320 90 1440 80V150H0Z',
-              ] }}
-              transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }} />
+            />
           </motion.svg>
 
           {/* Wave layer 2 — mid, medium speed */}
           <motion.svg viewBox="0 0 1440 150" fill="none" className="absolute bottom-0 w-full" preserveAspectRatio="none"
             style={{ height: '100%' }}
             initial={{ y: 25, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.8, duration: 1 }}>
-            <motion.path fill="rgba(255,255,255,0.35)"
+            <path
+              fill="rgba(255,255,255,0.35)"
               d="M0 150V100C160 70 320 90 480 80C640 70 800 100 960 90C1120 80 1280 60 1440 70V150H0Z"
-              animate={{ d: [
-                'M0 150V100C160 70 320 90 480 80C640 70 800 100 960 90C1120 80 1280 60 1440 70V150H0Z',
-                'M0 150V85C160 100 320 70 480 90C640 80 800 60 960 80C1120 100 1280 85 1440 95V150H0Z',
-                'M0 150V95C160 80 320 100 480 70C640 90 800 80 960 100C1120 70 1280 90 1440 80V150H0Z',
-                'M0 150V100C160 70 320 90 480 80C640 70 800 100 960 90C1120 80 1280 60 1440 70V150H0Z',
-              ] }}
-              transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }} />
+            />
           </motion.svg>
 
           {/* Wave layer 1 — front, fastest */}
           <motion.svg viewBox="0 0 1440 150" fill="none" className="absolute bottom-0 w-full" preserveAspectRatio="none"
             style={{ height: '100%' }}
             initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 1, duration: 0.8 }}>
-            <motion.path fill="white"
+            <path
+              fill="white"
               d="M0 150V110C180 75 360 95 540 85C720 75 900 105 1080 95C1260 85 1380 70 1440 80V150H0Z"
-              animate={{ d: [
-                'M0 150V110C180 75 360 95 540 85C720 75 900 105 1080 95C1260 85 1380 70 1440 80V150H0Z',
-                'M0 150V90C180 110 360 75 540 95C720 85 900 70 1080 85C1260 100 1380 90 1440 100V150H0Z',
-                'M0 150V100C180 85 360 110 540 75C720 95 900 85 1080 110C1260 75 1380 95 1440 85V150H0Z',
-                'M0 150V110C180 75 360 95 540 85C720 75 900 105 1080 95C1260 85 1380 70 1440 80V150H0Z',
-              ] }}
-              transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }} />
+            />
           </motion.svg>
 
           {/* Foam particles on wave crests */}

@@ -9,7 +9,6 @@ import api from '../../services/api';
 export function ProfilePage() {
   const { user, updateUser } = useAuth();
   const [fullName, setFullName] = useState(user?.full_name || '');
-  const [role, setRole] = useState(user?.role || 'hr_manager');
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error'>('success');
@@ -17,7 +16,6 @@ export function ProfilePage() {
   useEffect(() => {
     if (user) {
       setFullName(user.full_name || '');
-      setRole(user.role || 'hr_manager');
     }
   }, [user]);
 
@@ -26,7 +24,7 @@ export function ProfilePage() {
     setIsLoading(true);
     setMessage('');
     try {
-      const { data } = await api.put('/auth/me', { full_name: fullName, role });
+      const { data } = await api.put('/auth/me', { full_name: fullName });
       updateUser(data);
       setMessageType('success');
       setMessage('Profile updated successfully');
@@ -50,17 +48,11 @@ export function ProfilePage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <AnimatedInput label="Email" value={user?.email || ''} disabled />
           <AnimatedInput label="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-          <div className="space-y-1">
-            <label className="block text-sm font-medium text-gray-700">Role</label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as 'admin' | 'hr_manager')}
-              className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white outline-none transition-colors focus:border-black"
-            >
-              <option value="hr_manager">HR Manager</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
+          <AnimatedInput
+            label="Role"
+            value={user?.role === 'admin' ? 'Administrator' : 'HR Manager'}
+            disabled
+          />
           <GradientButton type="submit" isLoading={isLoading}>Save Changes</GradientButton>
         </form>
       </GlassCard>

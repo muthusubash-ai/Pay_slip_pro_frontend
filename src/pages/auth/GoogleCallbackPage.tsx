@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { MeshBackground } from '../../components/layout/MeshBackground';
 import { GlassCard } from '../../components/ui/GlassCard';
@@ -8,17 +8,12 @@ import { getPlanHome } from '../../lib/plans';
 import { paymentService } from '../../services/paymentService';
 
 export function GoogleCallbackPage() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { googleLogin, updateUser } = useAuth();
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const accessToken = searchParams.get('access_token');
-    const refreshToken = searchParams.get('refresh_token');
-
-    if (accessToken && refreshToken) {
-      googleLogin(accessToken, refreshToken)
+    googleLogin()
         .then((signedInUser) => {
           const selectedPlan = sessionStorage.getItem('selected_plan');
           if (selectedPlan === 'professional' || selectedPlan === 'enterprise') {
@@ -38,10 +33,7 @@ export function GoogleCallbackPage() {
           }
         })
         .catch(() => setError('Failed to complete Google sign-in.'));
-    } else {
-      setError('Google authentication failed. Please try again.');
-    }
-  }, [searchParams, googleLogin, navigate, updateUser]);
+  }, [googleLogin, navigate, updateUser]);
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-6">

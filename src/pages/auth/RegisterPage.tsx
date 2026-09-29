@@ -9,22 +9,7 @@ import { AnimatedInput } from '../../components/ui/AnimatedInput';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { getPlanHome } from '../../lib/plans';
 import { paymentService } from '../../services/paymentService';
-
-function getPasswordStrength(pw: string) {
-  const checks = {
-    minLength: pw.length >= 8,
-    uppercase: /[A-Z]/.test(pw),
-    lowercase: /[a-z]/.test(pw),
-    number: /[0-9]/.test(pw),
-    special: /[^A-Za-z0-9]/.test(pw),
-  };
-  const passed = Object.values(checks).filter(Boolean).length;
-  let label = 'Weak';
-  let color = 'bg-red-500';
-  if (passed >= 5) { label = 'Strong'; color = 'bg-green-500'; }
-  else if (passed >= 3) { label = 'Medium'; color = 'bg-yellow-500'; }
-  return { checks, passed, label, color };
-}
+import { getPasswordPolicyError, getPasswordStrength } from '../../lib/passwordPolicy';
 
 export function RegisterPage() {
   const [fullName, setFullName] = useState('');
@@ -43,8 +28,9 @@ export function RegisterPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    if (strength.passed < 3) {
-      setError('Password is too weak. Please meet at least 3 criteria.');
+    const passwordError = getPasswordPolicyError(password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
     if (password !== confirmPassword) {
@@ -118,7 +104,7 @@ export function RegisterPage() {
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  <Rule met={strength.checks.minLength} text="8+ characters" />
+                  <Rule met={strength.checks.minLength} text="12+ characters" />
                   <Rule met={strength.checks.uppercase} text="Uppercase" />
                   <Rule met={strength.checks.lowercase} text="Lowercase" />
                   <Rule met={strength.checks.number} text="Number" />

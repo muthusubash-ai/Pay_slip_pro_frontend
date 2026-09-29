@@ -51,7 +51,7 @@ const queryClient = new QueryClient({
 
 export default function App() {
   return (
-    <MotionConfig reducedMotion="always" transition={{ duration: 0.18 }}>
+    <MotionConfig reducedMotion="never" transition={{ duration: 0.18 }}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BrowserRouter>
