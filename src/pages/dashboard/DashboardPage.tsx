@@ -124,15 +124,6 @@ export function DashboardPage() {
               <span>Dashboard Overview</span>
             </p>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-neutral-50 border border-neutral-200/80 shadow-xs">
-            <motion.div
-              animate={{ scale: [1, 1.25, 1], opacity: [0.7, 1, 0.7] }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-              className="w-2 h-2 rounded-full bg-emerald-500"
-            />
-            <span className="text-[11px] text-neutral-700 font-medium font-mono">{formattedTime}</span>
-            <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider">LIVE</span>
-          </div>
         </motion.div>
 
         {/* Stat Cards */}
