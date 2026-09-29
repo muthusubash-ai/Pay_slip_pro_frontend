@@ -61,21 +61,50 @@ export function EmployeeEditPage() {
     }
   }, [emp]);
 
-  const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  const handleChange = (
+    field: string,
+    type: 'text' | 'alphabets' | 'digits' | 'phone' | 'alphanumeric' | 'decimal' = 'text'
+  ) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value;
+    if (type === 'alphabets') {
+      val = val.replace(/[^a-zA-Z\s.'-]/g, '');
+    } else if (type === 'digits') {
+      val = val.replace(/\D/g, '');
+    } else if (type === 'phone') {
+      val = val.replace(/[^\d+]/g, '').slice(0, 15);
+    } else if (type === 'alphanumeric') {
+      val = val.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    } else if (type === 'decimal') {
+      val = val.replace(/[^0-9.]/g, '').replace(/(\..*?)\..*/g, '$1');
+    }
+    setForm((prev) => ({ ...prev, [field]: val }));
   };
 
   const handleSubmit = () => {
     setError('');
-    if (!form.full_name || !form.email) {
+    const trimmedFullName = form.full_name.trim();
+    if (!trimmedFullName || !form.email) {
       setError('Full name and email are required.');
       return;
     }
+    if (!/^[a-zA-Z\s.'-]+$/.test(trimmedFullName)) {
+      setError('Full name must contain only letters and spaces (numbers are not allowed).');
+      return;
+    }
+    if (form.phone && !/^\+?[0-9]{10,15}$/.test(form.phone)) {
+      setError('Please enter a valid phone number (10-15 digits).');
+      return;
+    }
+    if (form.bank_account_number && !/^\d{6,20}$/.test(form.bank_account_number)) {
+      setError('Bank account number must contain only digits (6-20 digits).');
+      return;
+    }
+
     updateEmployee.mutate(
       {
         id: Number(id),
         data: {
-          full_name: form.full_name,
+          full_name: trimmedFullName,
           email: form.email,
           phone: form.phone || undefined,
           department: form.department || undefined,
@@ -123,9 +152,9 @@ export function EmployeeEditPage() {
       <GlassCard>
         <h3 className="text-lg font-semibold mb-4">Personal Information</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AnimatedInput label="Full Name *" value={form.full_name} onChange={handleChange('full_name')} />
+          <AnimatedInput label="Full Name *" value={form.full_name} onChange={handleChange('full_name', 'alphabets')} />
           <AnimatedInput label="Email *" type="email" value={form.email} onChange={handleChange('email')} />
-          <AnimatedInput label="Phone" value={form.phone} onChange={handleChange('phone')} />
+          <AnimatedInput label="Phone" value={form.phone} onChange={handleChange('phone', 'phone')} />
           <AnimatedInput label="Department" value={form.department} onChange={handleChange('department')} />
           <AnimatedInput label="Designation" value={form.designation} onChange={handleChange('designation')} />
         </div>
@@ -134,34 +163,34 @@ export function EmployeeEditPage() {
       <GlassCard>
         <h3 className="text-lg font-semibold mb-4">Bank Details</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AnimatedInput label="Bank Name" value={form.bank_name} onChange={handleChange('bank_name')} />
-          <AnimatedInput label="Account Number" value={form.bank_account_number} onChange={handleChange('bank_account_number')} />
-          <AnimatedInput label="IFSC Code" value={form.ifsc_code} onChange={handleChange('ifsc_code')} />
-          <AnimatedInput label="PAN Number" value={form.pan_number} onChange={handleChange('pan_number')} />
+          <AnimatedInput label="Bank Name" value={form.bank_name} onChange={handleChange('bank_name', 'alphabets')} />
+          <AnimatedInput label="Account Number" value={form.bank_account_number} onChange={handleChange('bank_account_number', 'digits')} />
+          <AnimatedInput label="IFSC Code" value={form.ifsc_code} onChange={handleChange('ifsc_code', 'alphanumeric')} />
+          <AnimatedInput label="PAN Number" value={form.pan_number} onChange={handleChange('pan_number', 'alphanumeric')} />
         </div>
       </GlassCard>
 
       <GlassCard>
         <h3 className="text-lg font-semibold mb-4">Salary Details</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <AnimatedInput label="Basic Salary" type="number" value={form.basic_salary} onChange={handleChange('basic_salary')} />
-          <AnimatedInput label="HRA" type="number" value={form.hra} onChange={handleChange('hra')} />
-          <AnimatedInput label="Conveyance Allowance" type="number" value={form.conveyance_allowance} onChange={handleChange('conveyance_allowance')} />
-          <AnimatedInput label="Medical Allowance" type="number" value={form.medical_allowance} onChange={handleChange('medical_allowance')} />
-          <AnimatedInput label="Special Allowance" type="number" value={form.special_allowance} onChange={handleChange('special_allowance')} />
+          <AnimatedInput label="Basic Salary" type="number" value={form.basic_salary} onChange={handleChange('basic_salary', 'decimal')} />
+          <AnimatedInput label="HRA" type="number" value={form.hra} onChange={handleChange('hra', 'decimal')} />
+          <AnimatedInput label="Conveyance Allowance" type="number" value={form.conveyance_allowance} onChange={handleChange('conveyance_allowance', 'decimal')} />
+          <AnimatedInput label="Medical Allowance" type="number" value={form.medical_allowance} onChange={handleChange('medical_allowance', 'decimal')} />
+          <AnimatedInput label="Special Allowance" type="number" value={form.special_allowance} onChange={handleChange('special_allowance', 'decimal')} />
         </div>
         <h4 className="text-md font-medium mt-6 mb-3">Deductions</h4>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <AnimatedInput label="PF" type="number" value={form.pf_deduction} onChange={handleChange('pf_deduction')} />
-          <AnimatedInput label="Professional Tax" type="number" value={form.professional_tax} onChange={handleChange('professional_tax')} />
-          <AnimatedInput label="TDS" type="number" value={form.tds} onChange={handleChange('tds')} />
-          <AnimatedInput label="ESI" type="number" value={form.esi} onChange={handleChange('esi')} />
+          <AnimatedInput label="PF" type="number" value={form.pf_deduction} onChange={handleChange('pf_deduction', 'decimal')} />
+          <AnimatedInput label="Professional Tax" type="number" value={form.professional_tax} onChange={handleChange('professional_tax', 'decimal')} />
+          <AnimatedInput label="TDS" type="number" value={form.tds} onChange={handleChange('tds', 'decimal')} />
+          <AnimatedInput label="ESI" type="number" value={form.esi} onChange={handleChange('esi', 'decimal')} />
         </div>
       </GlassCard>
 
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-        <Link to={`/employees/${id}`}><GradientButton variant="secondary">Cancel</GradientButton></Link>
-        <GradientButton onClick={handleSubmit} isLoading={updateEmployee.isPending}>Update Employee</GradientButton>
+        <Link to={`/employees/${id}`} className="w-full sm:w-auto"><GradientButton variant="secondary" className="w-full sm:w-auto">Cancel</GradientButton></Link>
+        <GradientButton onClick={handleSubmit} isLoading={updateEmployee.isPending} className="w-full sm:w-auto">Update Employee</GradientButton>
       </div>
     </motion.div>
   );

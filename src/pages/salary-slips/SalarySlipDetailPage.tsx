@@ -11,9 +11,9 @@ const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 
 
 function Row({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="flex justify-between py-2 border-b border-gray-100 last:border-0">
-      <span className="text-gray-500">{label}</span>
-      <span className="font-medium text-black">{typeof value === 'number' ? `₹${value.toLocaleString()}` : value}</span>
+    <div className="flex justify-between gap-4 border-b border-gray-100 py-2 last:border-0">
+      <span className="min-w-0 break-words text-gray-500">{label}</span>
+      <span className="shrink-0 text-right font-medium text-black">{typeof value === 'number' ? `₹${value.toLocaleString()}` : value}</span>
     </div>
   );
 }
@@ -62,7 +62,7 @@ export function SalarySlipDetailPage() {
             Salary Slip — {monthNames[slip.month]} {slip.year}
           </h2>
         </div>
-        <div className="grid grid-cols-1 gap-2 xs:grid-cols-3 sm:flex">
+        <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-3 sm:flex">
           <GradientButton onClick={() => downloadPdf.mutate(Number(id))} isLoading={downloadPdf.isPending}>
             <Download className="h-4 w-4 mr-2" />Download PDF
           </GradientButton>
@@ -71,7 +71,7 @@ export function SalarySlipDetailPage() {
           </GradientButton>
           <button
             onClick={handleDelete}
-            className="px-4 py-2 rounded-xl border-2 border-gray-300 text-black hover:bg-gray-100 transition-colors flex items-center gap-2 font-medium"
+            className="flex items-center justify-center gap-2 rounded-xl border-2 border-gray-300 px-4 py-2 font-medium text-black transition-colors hover:bg-gray-100"
           >
             <Trash2 className="h-4 w-4" />Delete
           </button>

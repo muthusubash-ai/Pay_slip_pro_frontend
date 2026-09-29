@@ -459,10 +459,10 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="h-16 bg-white border-b border-neutral-100 flex items-center justify-between px-3 sm:px-5 lg:px-7 sticky top-0 z-30"
+        className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-neutral-100 bg-white px-2.5 sm:h-16 sm:px-5 lg:px-7"
       >
         {/* Left — Page title */}
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={onMenuClick}
@@ -471,15 +471,15 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <h1 className="truncate text-base font-bold text-neutral-900 tracking-tight sm:text-lg">{pageTitle}</h1>
+          <h1 className="truncate text-sm font-bold tracking-tight text-neutral-900 min-[380px]:text-base sm:text-lg">{pageTitle}</h1>
         </div>
 
         {/* Right — Actions */}
-        <div className="flex shrink-0 items-center gap-0.5 sm:gap-2">
+        <div className="flex shrink-0 items-center sm:gap-2">
           {/* Search */}
           <button
             onClick={() => setShowSearch(true)}
-            className="flex items-center gap-2 p-2 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors sm:px-3 sm:py-1.5"
+            className="hidden items-center gap-2 rounded-lg p-2 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 min-[360px]:flex sm:px-3 sm:py-1.5"
           >
             <Search className="h-4 w-4" />
             <span className="text-[11px] text-neutral-300 hidden sm:inline">Search...</span>
@@ -519,7 +519,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
             onClick={() => navigate('/profile')}
             className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-neutral-50 transition-colors group sm:pl-2 sm:pr-3"
           >
-            <div className="w-8 h-8 rounded-lg bg-neutral-900 flex items-center justify-center text-white text-[11px] font-bold">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-neutral-900 text-[10px] font-bold text-white sm:h-8 sm:w-8 sm:text-[11px]">
               {initials}
             </div>
             <div className="text-left hidden sm:block">

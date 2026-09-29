@@ -140,7 +140,7 @@ export function CompanySettingsPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">Company Settings</h2>
+      <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">Company Settings</h2>
 
       {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl">{success}</div>}
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">{error}</div>}
@@ -153,7 +153,7 @@ export function CompanySettingsPage() {
         {logoSuccess && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl mb-4">{logoSuccess}</div>}
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">
           {/* Logo preview */}
-          <div className="min-w-[120px] max-w-[200px] h-28 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center overflow-hidden bg-white flex-shrink-0 p-2">
+          <div className="flex h-28 w-full items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-gray-300 bg-white p-2 sm:w-[200px] sm:shrink-0">
             {company?.logo_data ? (
               <img src={company.logo_data} alt="Logo" className="max-w-full max-h-full object-contain" />
             ) : (

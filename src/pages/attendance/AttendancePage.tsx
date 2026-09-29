@@ -202,10 +202,10 @@ export function AttendancePage() {
               </h3>
               <p className="text-xs text-gray-500 mt-1">Weekoffs are paid days (no deduction). Only Leave days are deducted from salary.</p>
             </div>
-            <div className="flex flex-col gap-2 xs:flex-row sm:shrink-0">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
               <button
                 onClick={clearAll}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 flex items-center gap-1"
+                className="flex min-h-10 items-center justify-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-100"
               >
                 <Trash2 className="h-3.5 w-3.5" /> Clear
               </button>
@@ -287,8 +287,29 @@ export function AttendancePage() {
         <h3 className="text-lg font-semibold text-black mb-4">
           Leave Summary — {MONTH_NAMES[month - 1]} {year}
         </h3>
-        {leaveSummary && leaveSummary.length > 0 ? (
-          <div className="overflow-x-auto pb-1">
+        {leaveSummary && leaveSummary.length > 0 ? (<>
+          <div className="space-y-3 md:hidden">
+            {leaveSummary.map((s) => (
+              <div key={s.employee_id} className="rounded-xl border border-gray-100 p-4">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words font-semibold text-black">{s.employee_name}</p>
+                    <p className="text-xs text-gray-500">{s.employee_code}</p>
+                  </div>
+                  <span className={`shrink-0 text-sm font-semibold ${s.leave_deduction > 0 ? 'text-black' : 'text-gray-400'}`}>
+                    {s.leave_deduction > 0 ? `₹${s.leave_deduction.toLocaleString()}` : '—'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-lg bg-gray-50 p-2"><span className="block text-xs text-gray-500">Total Days</span>{s.total_days}</div>
+                  <div className="rounded-lg bg-gray-50 p-2"><span className="block text-xs text-gray-500">Present</span>{s.present_days}</div>
+                  <div className="rounded-lg bg-blue-50 p-2"><span className="block text-xs text-gray-500">Weekoff</span>{s.weekoff_days}</div>
+                  <div className="rounded-lg bg-gray-100 p-2"><span className="block text-xs text-gray-500">Leave</span>{s.leave_days}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto pb-1 md:block">
             <div className="grid min-w-[760px] grid-cols-7 gap-4 px-3 py-2 bg-black text-white rounded-lg text-sm font-semibold mb-2">
               <span>Employee</span>
               <span>Code</span>
@@ -318,6 +339,7 @@ export function AttendancePage() {
               ))}
             </div>
           </div>
+          </>
         ) : (
           <p className="text-gray-500">No attendance data recorded for this month.</p>
         )}

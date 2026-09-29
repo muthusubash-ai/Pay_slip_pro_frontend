@@ -82,9 +82,9 @@ export function GenerateSlipsPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         <Link to="/salary-slips" className="text-gray-500 hover:text-gray-700"><ArrowLeft className="h-5 w-5" /></Link>
-        <h2 className="text-2xl font-bold text-gray-900">Generate Salary Slips</h2>
+        <h2 className="truncate text-xl font-bold text-gray-900 sm:text-2xl">Generate Salary Slips</h2>
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">{error}</div>}

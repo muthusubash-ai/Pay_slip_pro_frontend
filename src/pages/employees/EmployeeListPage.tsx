@@ -25,7 +25,7 @@ export function EmployeeListPage() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Employees</h2>
+          <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">Employees</h2>
           <p className="text-xs text-gray-500 mt-1">
             {data?.total ?? 0} of {employeeLimit ?? 'unlimited'} employees · {plan.charAt(0).toUpperCase() + plan.slice(1)} plan
           </p>

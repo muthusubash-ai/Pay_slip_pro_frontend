@@ -25,7 +25,7 @@ export function AdminDashboardPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">Admin Dashboard</h2>
+      <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">Admin Dashboard</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map((stat, i) => (
           <GlassCard key={i} className="flex items-center gap-4">

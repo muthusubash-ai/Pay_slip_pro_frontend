@@ -264,7 +264,32 @@ export function DashboardPage() {
             </div>
 
             {departments && departments.length > 0 ? (
-              <div className="flex-1 overflow-auto">
+              <>
+              <div className="space-y-2 p-4 md:hidden">
+                {departments.slice(0, 6).map((emp, i) => (
+                  <motion.button
+                    type="button"
+                    key={emp.employee_code}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 + i * 0.04 }}
+                    onClick={() => navigate('/employees')}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-neutral-100 p-3 text-left transition-colors hover:bg-neutral-50"
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-[10px] font-bold text-neutral-500">
+                        {emp.employee_name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-neutral-800">{emp.employee_name}</p>
+                        <p className="truncate text-[10px] text-neutral-400">{emp.employee_code} · {emp.department}</p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-xs font-bold text-neutral-800">₹{emp.basic_salary.toLocaleString()}</span>
+                  </motion.button>
+                ))}
+              </div>
+              <div className="hidden flex-1 overflow-auto md:block">
                 <table className="w-full min-w-[560px]">
                   <thead className="sticky top-0 bg-neutral-50/90 backdrop-blur-sm z-10">
                     <tr>
@@ -309,6 +334,7 @@ export function DashboardPage() {
                   </tbody>
                 </table>
               </div>
+              </>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center p-6">
                 <div className="w-12 h-12 rounded-2xl bg-neutral-100 flex items-center justify-center mb-3">

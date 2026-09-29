@@ -81,12 +81,12 @@ export function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-6">
+    <div className="flex min-h-screen items-start justify-center overflow-y-auto px-3 py-4 sm:items-center sm:px-4 sm:py-8">
       <MeshBackground />
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-md">
         <GlassCard className="p-5 sm:p-8">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Reset Password</h1>
+            <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Reset Password</h1>
             <p className="text-gray-500 mt-2">
               {step === 'email' && 'Enter your email to receive a reset code'}
               {step === 'code' && 'Enter the 6-digit code sent to your email'}
@@ -157,7 +157,7 @@ export function ForgotPasswordPage() {
               <GradientButton type="submit" isLoading={isLoading} className="w-full">
                 Reset Password
               </GradientButton>
-              <div className="flex justify-between text-sm">
+              <div className="flex flex-wrap justify-between gap-3 text-sm">
                 <button
                   type="button"
                   onClick={() => { setStep('email'); setError(''); setMessage(''); }}

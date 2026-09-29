@@ -10,7 +10,7 @@ function Field({ label, value }: { label: string; value: string | number | null 
   return (
     <div>
       <p className="text-sm text-gray-500">{label}</p>
-      <p className="font-medium text-gray-900">{value ?? '—'}</p>
+      <p className="break-words font-medium text-gray-900">{value ?? '—'}</p>
     </div>
   );
 }

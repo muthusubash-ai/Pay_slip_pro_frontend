@@ -38,7 +38,7 @@ export function ProfilePage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-2xl mx-auto">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Profile</h2>
+      <h2 className="mb-5 text-xl font-bold text-gray-900 sm:mb-6 sm:text-2xl">Profile</h2>
       <GlassCard>
         {message && (
           <div className={`mb-4 p-3 rounded-lg text-sm ${messageType === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
@@ -53,7 +53,7 @@ export function ProfilePage() {
             value={user?.role === 'admin' ? 'Administrator' : 'HR Manager'}
             disabled
           />
-          <GradientButton type="submit" isLoading={isLoading}>Save Changes</GradientButton>
+          <GradientButton type="submit" isLoading={isLoading} className="w-full sm:w-auto">Save Changes</GradientButton>
         </form>
       </GlassCard>
     </motion.div>

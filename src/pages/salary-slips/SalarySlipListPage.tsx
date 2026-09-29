@@ -28,7 +28,7 @@ export function SalarySlipListPage() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Salary Slips</h2>
+        <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">Salary Slips</h2>
         <Link to="/salary-slips/generate" className="w-full sm:w-auto">
           <GradientButton className="w-full sm:w-auto">
             <span className="inline-flex items-center justify-center gap-2">

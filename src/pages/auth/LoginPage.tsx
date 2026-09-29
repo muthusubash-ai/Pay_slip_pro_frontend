@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { paymentService } from '../../services/paymentService';
-import { getPlanHome } from '../../lib/plans';
+import { getPlanHome, PLAN_CATALOG } from '../../lib/plans';
 import type { User } from '../../types';
 
 const ENABLE_DECORATIVE_MOTION = false;
@@ -277,7 +277,7 @@ function LoginModal({ onClose, onSignedIn }: { onClose: () => void; onSignedIn?:
         animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
         exit={{ opacity: 0, scale: 0.9, y: 30, rotateX: -10 }}
         transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
         style={{ perspective: '1000px' }}
       >
         <motion.div className="relative max-h-[calc(100dvh-2rem)] w-full max-w-[420px] overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-8"
@@ -469,54 +469,7 @@ export function LoginPage() {
     { icon: Lock, title: 'Compliance Ready', desc: 'PF, ESI, TDS, and professional tax calculations built in. Stay compliant effortlessly.' },
   ];
 
-  const plans = [
-    {
-      name: 'Starter',
-      price: 'Free',
-      period: '',
-      desc: 'Essential payroll tools for small teams',
-      features: [
-        'Manage up to 3 employees',
-        'Dashboard overview',
-        'Employee salary profiles',
-        'Monthly salary slip generation',
-        'PDF salary slip downloads',
-        'Email delivery to employees',
-      ],
-      cta: 'Start Free',
-      popular: false,
-    },
-    {
-      name: 'Professional',
-      price: '₹499',
-      period: '/month',
-      desc: 'Complete payroll management for growing teams',
-      features: [
-        'Everything in Starter',
-        'Manage up to 10 employees',
-        'Company logo and brand colours',
-        'Attendance and leave tracking',
-        'Bulk salary slip generation',
-        'Payroll reports and summaries',
-      ],
-      cta: 'Choose Professional',
-      popular: true,
-    },
-    {
-      name: 'Enterprise',
-      price: '₹999',
-      period: '/month',
-      desc: 'Scalable payroll operations for larger teams',
-      features: [
-        'Everything in Professional',
-        'Unlimited employee records',
-        'Department-wise payroll insights',
-        'Advanced attendance summaries',
-      ],
-      cta: 'Choose Enterprise',
-      popular: false,
-    },
-  ];
+  const plans = PLAN_CATALOG;
 
   return (
     <div id="landing-scroll" className="h-dvh overflow-y-auto bg-white scroll-smooth">
@@ -615,7 +568,7 @@ export function LoginPage() {
                   transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }} />
               </motion.div>
 
-              <h1 className="text-4xl md:text-5xl xl:text-6xl font-bold leading-[1.1] tracking-tight mb-6">
+              <h1 className="mb-5 text-3xl font-bold leading-[1.1] tracking-tight min-[380px]:text-4xl md:mb-6 md:text-5xl xl:text-6xl">
                 <StaggerText text="Payroll," delay={0.3} />
                 <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-neutral-300 to-neutral-500">
@@ -623,7 +576,7 @@ export function LoginPage() {
                 </span>
               </h1>
 
-              <motion.p className="text-neutral-400 text-lg leading-relaxed max-w-lg mb-8"
+              <motion.p className="mb-7 max-w-lg text-base leading-relaxed text-neutral-400 sm:text-lg md:mb-8"
                 initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.6, duration: 0.6 }}>
                 Generate, manage, and distribute professional salary slips in minutes. Built for modern teams that value precision, speed, and security.
@@ -906,13 +859,13 @@ export function LoginPage() {
       </section>
 
       {/* ═══ SALARY SLIP SHOWCASE ═══ */}
-      <section className="py-24 bg-neutral-50 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6">
-          <Section className="text-center mb-16">
+      <section className="overflow-hidden bg-neutral-50 py-16 sm:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <Section className="mb-10 text-center sm:mb-16">
             <motion.p className="text-[11px] font-bold text-neutral-400 uppercase tracking-[0.2em] mb-3"
               initial={{ opacity: 0, letterSpacing: '0.5em' }} whileInView={{ opacity: 1, letterSpacing: '0.2em' }}
               viewport={{ once: true }} transition={{ duration: 0.8 }}>Live Preview</motion.p>
-            <h2 className="text-3xl md:text-4xl font-bold text-neutral-900 tracking-tight mb-4">Professional salary slips, auto-generated</h2>
+            <h2 className="mb-4 text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl md:text-4xl">Professional salary slips, auto-generated</h2>
             <p className="text-neutral-500 max-w-xl mx-auto">See exactly what your employees receive — clean, detailed, and fully compliant.</p>
           </Section>
 
@@ -1139,13 +1092,13 @@ export function LoginPage() {
       </section>
 
       {/* ═══ FEATURES ═══ */}
-      <section id="features" className="py-24 bg-white overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6">
-          <Section className="text-center mb-16">
+      <section id="features" className="overflow-hidden bg-white py-16 sm:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <Section className="mb-10 text-center sm:mb-16">
             <motion.p className="text-[11px] font-bold text-neutral-400 uppercase tracking-[0.2em] mb-3"
               initial={{ opacity: 0, letterSpacing: '0.5em' }} whileInView={{ opacity: 1, letterSpacing: '0.2em' }}
               viewport={{ once: true }} transition={{ duration: 0.8 }}>Features</motion.p>
-            <h2 className="text-3xl md:text-4xl font-bold text-neutral-900 tracking-tight mb-4">Everything you need for payroll</h2>
+            <h2 className="mb-4 text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl md:text-4xl">Everything you need for payroll</h2>
             <p className="text-neutral-500 max-w-xl mx-auto">From employee management to compliance — all the tools your HR team needs in one platform.</p>
           </Section>
 
@@ -1178,13 +1131,13 @@ export function LoginPage() {
       </section>
 
       {/* ═══ PROCESS FLOW ═══ */}
-      <section id="process" className="py-24 bg-neutral-50 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6">
-          <Section className="text-center mb-16">
+      <section id="process" className="overflow-hidden bg-neutral-50 py-16 sm:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <Section className="mb-10 text-center sm:mb-16">
             <motion.p className="text-[11px] font-bold text-neutral-400 uppercase tracking-[0.2em] mb-3"
               initial={{ opacity: 0, letterSpacing: '0.5em' }} whileInView={{ opacity: 1, letterSpacing: '0.2em' }}
               viewport={{ once: true }} transition={{ duration: 0.8 }}>How It Works</motion.p>
-            <h2 className="text-3xl md:text-4xl font-bold text-neutral-900 tracking-tight mb-4">Four simple steps to payroll bliss</h2>
+            <h2 className="mb-4 text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl md:text-4xl">Four simple steps to payroll bliss</h2>
             <p className="text-neutral-500 max-w-xl mx-auto">Get up and running in under 10 minutes. No training required.</p>
           </Section>
 
@@ -1227,11 +1180,11 @@ export function LoginPage() {
       {/* ═══ PRICING ═══ */}
       <section id="pricing" className="py-16 bg-white overflow-hidden sm:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <Section className="text-center mb-16">
+          <Section className="mb-10 text-center sm:mb-16">
             <motion.p className="text-[11px] font-bold text-neutral-400 uppercase tracking-[0.2em] mb-3"
               initial={{ opacity: 0, letterSpacing: '0.5em' }} whileInView={{ opacity: 1, letterSpacing: '0.2em' }}
               viewport={{ once: true }} transition={{ duration: 0.8 }}>Pricing</motion.p>
-            <h2 className="text-3xl md:text-4xl font-bold text-neutral-900 tracking-tight mb-4">Simple, transparent pricing</h2>
+            <h2 className="mb-4 text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl md:text-4xl">Simple, transparent pricing</h2>
             <p className="text-neutral-500 max-w-xl mx-auto">Choose the plan that fits your team today, with room to grow as your payroll needs evolve.</p>
           </Section>
 
@@ -1250,18 +1203,18 @@ export function LoginPage() {
             </motion.div>
           )}
 
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto" style={{ perspective: '1200px' }}>
+          <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-3 md:gap-6" style={{ perspective: '1200px' }}>
             {plans.map((plan, i) => (
-              <Section key={plan.name} delay={i * 0.1}>
-                <Tilt3DCard intensity={plan.popular ? 8 : 10}>
+              <Section key={plan.name} delay={i * 0.1} className="h-full">
+                <Tilt3DCard intensity={plan.popular ? 8 : 10} className="h-full">
                   <motion.div
                     whileHover={{ y: -10, boxShadow: plan.popular ? '0 30px 80px rgba(0,0,0,0.2)' : '0 20px 50px rgba(0,0,0,0.08)', rotateY: i === 0 ? 3 : i === 2 ? -3 : 0 }}
-                    className={`p-7 rounded-2xl border-2 transition-all relative overflow-hidden ${
+                    className={`relative flex h-full flex-col overflow-hidden rounded-2xl border-2 p-5 transition-all sm:p-7 ${
                       plan.popular ? 'border-neutral-900 bg-neutral-950 text-white md:scale-105' : 'border-neutral-100 bg-white'
                     }`}
                     style={{ transformStyle: 'preserve-3d' }}>
                     {plan.popular && (
-                      <div className="absolute top-4 right-4" style={{ transform: 'translateZ(15px)' }}>
+                      <div className="mb-3 flex justify-start md:absolute md:right-4 md:top-4 md:mb-0" style={{ transform: 'translateZ(15px)' }}>
                         <motion.span className="text-[10px] font-bold uppercase tracking-wider bg-white text-black px-2.5 py-1 rounded-full flex items-center gap-1"
                           animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 2, repeat: Infinity }}>
                           <Star className="h-3 w-3" /> Most Popular
@@ -1287,7 +1240,7 @@ export function LoginPage() {
                       {plan.period && <span className={`text-sm ${plan.popular ? 'text-neutral-400' : 'text-neutral-500'}`}>{plan.period}</span>}
                     </motion.div>
 
-                    <ul className="space-y-2.5 mb-7" style={{ transform: 'translateZ(5px)' }}>
+                    <ul className="mb-7 flex-1 space-y-2.5" style={{ transform: 'translateZ(5px)' }}>
                       {plan.features.map((feat, fi) => (
                         <motion.li key={feat} className="flex items-center gap-2.5 text-[13px]"
                           initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }}
@@ -1301,17 +1254,17 @@ export function LoginPage() {
                     <motion.button whileHover={{ scale: 1.03, boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} whileTap={{ scale: 0.97 }}
                       onClick={() => handlePlanClick(plan.name)}
                       style={{ transform: 'translateZ(15px)' }}
-                      className={`w-full py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                      className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all ${
                         plan.popular
                           ? 'bg-white text-black hover:bg-neutral-100'
                           : 'bg-neutral-900 text-white hover:bg-neutral-800'
                       }`}>
-                      {user && user.plan === plan.name.toLowerCase()
+                      {user && user.plan === plan.id
                         ? <Check className="h-4 w-4" />
                         : plan.name === 'Starter'
                           ? <ArrowRight className="h-4 w-4" />
                           : <CreditCard className="h-4 w-4" />}
-                      {user && user.plan === plan.name.toLowerCase() ? 'Current Plan' : plan.cta}
+                      {user && user.plan === plan.id ? 'Current Plan' : plan.cta}
                     </motion.button>
                   </motion.div>
                 </Tilt3DCard>
@@ -1393,7 +1346,7 @@ export function LoginPage() {
       </section>
 
       {/* ═══ CTA ═══ */}
-      <section className="bg-black text-white py-24 relative overflow-hidden">
+      <section className="relative overflow-hidden bg-black py-16 text-white sm:py-24">
         <InteractiveDotGrid />
         <AnimatedGrid />
         <MorphBlob className="w-[400px] h-[400px] -top-20 -right-20 bg-white/[0.02] blur-3xl" delay={2} />
@@ -1411,7 +1364,7 @@ export function LoginPage() {
           ))}
         </div>
 
-        <Section className="relative z-10 text-center max-w-2xl mx-auto px-6">
+        <Section className="relative z-10 mx-auto max-w-2xl px-4 text-center sm:px-6">
           <motion.div initial={{ scale: 0 }} whileInView={{ scale: 1 }}
             viewport={{ once: true }} transition={{ type: 'spring', stiffness: 200 }}
             className="w-16 h-16 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center mx-auto mb-6">
@@ -1419,7 +1372,7 @@ export function LoginPage() {
               <Zap className="h-7 w-7 text-white/70" />
             </motion.div>
           </motion.div>
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
+          <h2 className="mb-4 text-2xl font-bold tracking-tight sm:text-3xl md:text-4xl">
             <StaggerText text="Ready to simplify your payroll?" delay={0.2} />
           </h2>
           <motion.p className="text-neutral-400 mb-8 text-lg"
@@ -1463,10 +1416,10 @@ export function LoginPage() {
       </section>
 
       {/* ═══ FOOTER ═══ */}
-      <footer className="bg-neutral-950 text-white py-14 border-t border-white/[0.05] relative overflow-hidden">
+      <footer className="relative overflow-hidden border-t border-white/[0.05] bg-neutral-950 py-10 text-white sm:py-14">
         {/* Subtle gradient */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
-        <div className="max-w-7xl mx-auto px-6 relative z-10">
+        <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <motion.div className="flex items-center gap-2.5"
               whileHover={{ scale: 1.04 }} transition={{ type: 'spring', stiffness: 300 }}>

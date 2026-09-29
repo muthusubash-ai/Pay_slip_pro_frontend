@@ -39,7 +39,7 @@ export function AdminUsersPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
+      <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">User Management</h2>
       <GlassCard>
         {isLoading ? (
           <LoadingSpinner />
@@ -54,11 +54,11 @@ export function AdminUsersPage() {
                     <p className="font-semibold text-gray-900">{user.full_name}</p>
                     <p className="break-all text-sm text-gray-500">{user.email}</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 sm:justify-end sm:gap-3">
+                  <div className="grid grid-cols-2 items-center gap-2 min-[420px]:flex min-[420px]:flex-wrap sm:justify-end sm:gap-3">
                     <select
                       value={user.role}
                       onChange={(e) => updateRole.mutate({ userId: user.id, role: e.target.value })}
-                      className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:border-black"
+                      className="col-span-2 w-full rounded-lg border border-gray-200 bg-white px-2 py-2 text-sm focus:border-black focus:outline-none min-[420px]:col-auto min-[420px]:w-auto"
                     >
                       <option value="hr_manager">HR Manager</option>
                       <option value="admin">Admin</option>
@@ -69,7 +69,7 @@ export function AdminUsersPage() {
                     <GradientButton
                       variant={user.is_active ? 'danger' : 'primary'}
                       onClick={() => toggleUser.mutate({ userId: user.id, is_active: !user.is_active })}
-                      className="!px-3 !py-1.5 text-sm"
+                      className="w-full !px-3 !py-1.5 text-sm min-[420px]:w-auto"
                     >
                       {user.is_active ? 'Deactivate' : 'Activate'}
                     </GradientButton>
