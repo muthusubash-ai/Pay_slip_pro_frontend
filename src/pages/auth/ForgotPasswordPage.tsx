@@ -141,6 +141,7 @@ export function ForgotPasswordPage() {
               <AnimatedInput
                 label="New Password"
                 type="password"
+                showPasswordToggle
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
@@ -149,6 +150,7 @@ export function ForgotPasswordPage() {
               <AnimatedInput
                 label="Confirm Password"
                 type="password"
+                showPasswordToggle
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
