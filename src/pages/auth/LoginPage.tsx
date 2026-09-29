@@ -494,13 +494,13 @@ export function LoginPage() {
         className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-md border-b border-neutral-100 shadow-sm' : 'bg-transparent'}`}
       >
         <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between">
-          <motion.div className="flex items-center gap-2.5"
+          <motion.div className="flex min-w-0 items-center gap-2.5"
             whileHover={{ scale: 1.03 }} transition={{ type: 'spring', stiffness: 300 }}>
-            <motion.div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${scrolled ? 'bg-black' : 'bg-white'}`}
+            <motion.div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${scrolled ? 'bg-black' : 'bg-white'}`}
               whileHover={{ rotate: [0, -10, 10, 0] }} transition={{ duration: 0.5 }}>
               <FileText className={`h-4 w-4 ${scrolled ? 'text-white' : 'text-black'}`} />
             </motion.div>
-            <span className={`text-lg font-bold tracking-tight transition-colors ${scrolled ? 'text-neutral-900' : 'text-white'}`}>
+            <span className={`hidden text-lg font-bold tracking-tight transition-colors min-[430px]:inline sm:inline ${scrolled ? 'text-neutral-900' : 'text-white'}`}>
               <GlitchText>{scrolled ? 'PaySlip Pro' : 'PaySlip Pro'}</GlitchText>
             </span>
           </motion.div>
@@ -520,14 +520,19 @@ export function LoginPage() {
             ))}
           </div>
 
-          <div className="flex items-center gap-3">
-            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => setShowLogin(true)}
-              className={`hidden px-4 py-2 rounded-lg text-[13px] font-semibold transition-all sm:block ${scrolled ? 'text-neutral-700 hover:bg-neutral-100' : 'text-white/90 hover:text-white'}`}>
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+            <motion.button
+              type="button"
+              aria-label="Log in to your account"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowLogin(true)}
+              className={`shrink-0 whitespace-nowrap rounded-lg border px-3 py-2 text-[12px] font-semibold transition-all sm:border-transparent sm:px-4 sm:text-[13px] ${scrolled ? 'border-neutral-300 text-neutral-700 hover:bg-neutral-100' : 'border-white/30 text-white hover:border-white/60 hover:bg-white/10'}`}>
               Log In
             </motion.button>
             <motion.button whileHover={{ scale: 1.03, boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }} whileTap={{ scale: 0.97 }}
               onClick={handleSignUpFree}
-              className={`px-3 py-2 rounded-lg text-[12px] font-semibold transition-all sm:px-5 sm:text-[13px] ${scrolled ? 'bg-black text-white hover:bg-neutral-800' : 'bg-white text-black hover:bg-neutral-100'}`}>
+              className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-[12px] font-semibold transition-all sm:px-5 sm:text-[13px] ${scrolled ? 'bg-black text-white hover:bg-neutral-800' : 'bg-white text-black hover:bg-neutral-100'}`}>
               Sign Up Free
             </motion.button>
           </div>
