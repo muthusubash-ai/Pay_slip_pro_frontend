@@ -1,7 +1,7 @@
 import { useState, useMemo, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Check, X } from 'lucide-react';
+import { Eye, EyeOff, Check, X, CreditCard } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { MeshBackground } from '../../components/layout/MeshBackground';
 import { GlassCard } from '../../components/ui/GlassCard';
@@ -20,10 +20,24 @@ export function RegisterPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<'starter' | 'professional' | 'enterprise'>(() => {
+    const stored = sessionStorage.getItem('selected_plan');
+    if (stored === 'professional' || stored === 'enterprise') return stored;
+    return 'starter';
+  });
   const { register, updateUser } = useAuth();
   const navigate = useNavigate();
 
   const strength = useMemo(() => getPasswordStrength(password), [password]);
+
+  const handlePlanChange = (plan: 'starter' | 'professional' | 'enterprise') => {
+    setSelectedPlan(plan);
+    if (plan === 'starter') {
+      sessionStorage.removeItem('selected_plan');
+    } else {
+      sessionStorage.setItem('selected_plan', plan);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -40,7 +54,6 @@ export function RegisterPage() {
     setIsLoading(true);
     try {
       const registeredUser = await register(email, password, fullName);
-      const selectedPlan = sessionStorage.getItem('selected_plan');
       if (selectedPlan === 'professional' || selectedPlan === 'enterprise') {
         paymentService.startPaymentFlow(
           selectedPlan,
@@ -51,13 +64,21 @@ export function RegisterPage() {
             sessionStorage.removeItem('selected_plan');
             navigate(getPlanHome(upgradedUser));
           },
-          (message) => setError(message),
+          (message) => {
+            setError(`Account created with Free Starter plan! (Payment: ${message})`);
+            sessionStorage.removeItem('selected_plan');
+            setTimeout(() => {
+              navigate(getPlanHome(registeredUser));
+            }, 2500);
+          },
         );
       } else {
+        sessionStorage.removeItem('selected_plan');
         navigate(getPlanHome(registeredUser));
       }
-    } catch {
-      setError('Registration failed. Email may already be in use.');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Registration failed. Email may already be in use.';
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -79,6 +100,57 @@ export function RegisterPage() {
             <p className="text-gray-500 mt-2">Get started with PaySlip Pro</p>
           </div>
           {error && <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-600 text-sm">{error}</div>}
+
+          {/* Plan Selector */}
+          <div className="mb-5">
+            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              Selected Plan
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: 'starter' as const, name: 'Starter', price: 'Free', sub: '3 Employees' },
+                { id: 'professional' as const, name: 'Pro', price: '₹999/mo', sub: '25 Employees' },
+                { id: 'enterprise' as const, name: 'Enterprise', price: '₹2,499/mo', sub: 'Unlimited' },
+              ].map((p) => {
+                const isSelected = selectedPlan === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handlePlanChange(p.id)}
+                    className={`relative p-2.5 rounded-xl border text-left transition-all ${
+                      isSelected
+                        ? 'border-black bg-neutral-900 text-white shadow-md'
+                        : 'border-gray-200 bg-white hover:border-gray-300 text-gray-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-xs font-bold">{p.name}</span>
+                      {isSelected && <Check className="h-3 w-3 text-white" />}
+                    </div>
+                    <div className={`text-xs font-semibold ${isSelected ? 'text-white' : 'text-gray-900'}`}>{p.price}</div>
+                    <div className={`text-[10px] truncate ${isSelected ? 'text-neutral-300' : 'text-gray-500'}`}>{p.sub}</div>
+                  </button>
+                );
+              })}
+            </div>
+            
+            {/* Informational badge */}
+            <div className="mt-2.5 px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-between text-xs">
+              {selectedPlan === 'starter' ? (
+                <span className="text-green-700 font-medium flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                  Starter: 100% Free Forever. No payment required.
+                </span>
+              ) : (
+                <span className="text-neutral-800 font-medium flex items-center gap-1.5">
+                  <CreditCard className="h-3.5 w-3.5 text-neutral-600 shrink-0" />
+                  {selectedPlan === 'professional' ? 'Pro Plan (₹999)' : 'Enterprise Plan (₹2,499)'} — Razorpay gateway opens after registration.
+                </span>
+              )}
+            </div>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <AnimatedInput label="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="John Doe" />
             <AnimatedInput label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@company.com" />
@@ -122,7 +194,13 @@ export function RegisterPage() {
                 {showConfirm ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
-            <GradientButton type="submit" isLoading={isLoading} className="w-full">Create Account</GradientButton>
+            <GradientButton type="submit" isLoading={isLoading} className="w-full">
+              {selectedPlan === 'starter'
+                ? 'Create Free Account'
+                : selectedPlan === 'professional'
+                ? 'Create Account & Pay ₹999'
+                : 'Create Account & Pay ₹2,499'}
+            </GradientButton>
           </form>
 
           {/* Divider */}

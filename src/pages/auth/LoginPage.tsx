@@ -363,7 +363,16 @@ function LoginModal({ onClose, onSignedIn }: { onClose: () => void; onSignedIn?:
 
           <p className="mt-5 text-center text-sm text-neutral-400">
             Don&apos;t have an account?{' '}
-            <Link to="/register" onClick={onClose} className="text-black font-semibold hover:underline underline-offset-4">Create one</Link>
+            <Link
+              to="/register"
+              onClick={() => {
+                sessionStorage.removeItem('selected_plan');
+                onClose();
+              }}
+              className="text-black font-semibold hover:underline underline-offset-4"
+            >
+              Create one
+            </Link>
           </p>
         </motion.div>
       </motion.div>
@@ -409,12 +418,18 @@ export function LoginPage() {
     );
   };
 
+  const handleSignUpFree = () => {
+    setSelectedPlan(null);
+    sessionStorage.removeItem('selected_plan');
+    navigate('/register');
+  };
+
   const handlePlanClick = (planName: string) => {
     setPaymentNotice(null);
     if (planName.toLowerCase() === 'starter') {
       setSelectedPlan(null);
       sessionStorage.removeItem('selected_plan');
-      if (!user) setShowLogin(true);
+      if (!user) navigate('/register');
       else navigate(getPlanHome(user));
       return;
     }
@@ -423,7 +438,7 @@ export function LoginPage() {
     if (!user) {
       setSelectedPlan(targetPlan);
       sessionStorage.setItem('selected_plan', targetPlan);
-      setShowLogin(true);
+      navigate('/register');
       return;
     }
 
@@ -558,7 +573,7 @@ export function LoginPage() {
               Log In
             </motion.button>
             <motion.button whileHover={{ scale: 1.03, boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }} whileTap={{ scale: 0.97 }}
-              onClick={() => setShowLogin(true)}
+              onClick={handleSignUpFree}
               className={`px-3 py-2 rounded-lg text-[12px] font-semibold transition-all sm:px-5 sm:text-[13px] ${scrolled ? 'bg-black text-white hover:bg-neutral-800' : 'bg-white text-black hover:bg-neutral-100'}`}>
               Sign Up Free
             </motion.button>
@@ -619,7 +634,7 @@ export function LoginPage() {
                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}
                   whileHover={{ scale: 1.04, boxShadow: '0 8px 35px rgba(255,255,255,0.15)', y: -2 }}
                   whileTap={{ scale: 0.96 }}
-                  onClick={() => setShowLogin(true)}
+                  onClick={handleSignUpFree}
                   className="px-7 py-3.5 bg-white text-black rounded-xl font-semibold text-sm hover:bg-neutral-100 transition-colors flex items-center gap-2 shadow-lg shadow-white/5 relative overflow-hidden group">
                   <span className="relative z-10 flex items-center gap-2">
                     Get Started Free
@@ -1415,7 +1430,7 @@ export function LoginPage() {
           <motion.button
             whileHover={{ scale: 1.05, boxShadow: '0 10px 40px rgba(255,255,255,0.15)', y: -3 }}
             whileTap={{ scale: 0.96 }}
-            onClick={() => setShowLogin(true)}
+            onClick={handleSignUpFree}
             className="px-8 py-4 bg-white text-black rounded-xl font-bold text-sm hover:bg-neutral-100 transition-colors inline-flex items-center gap-2 shadow-lg shadow-white/5 relative overflow-hidden group">
             <span className="relative z-10 flex items-center gap-2">
               Get Started Free
