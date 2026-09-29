@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Users, UserCheck, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, ChevronRight, Wallet, Activity } from 'lucide-react';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { useDashboardStats, useDepartmentBreakdown, usePayrollSummary } from '../../hooks/useDashboard';
+import { useServerTime } from '../../hooks/useServerTime';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { hasMinimumPlan } from '../../lib/plans';
@@ -41,11 +42,6 @@ function AnimatedValue({ value }: { value: number }) {
   return <>{display.toLocaleString()}</>;
 }
 
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const fadeUp = {
@@ -54,14 +50,7 @@ const fadeUp = {
 };
 
 export function DashboardPage() {
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const { currentTime, greeting, formattedDate, formattedTime } = useServerTime();
 
   const [selectedMonth, setSelectedMonth] = useState(currentTime.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentTime.getFullYear());
@@ -87,12 +76,7 @@ export function DashboardPage() {
     yearOptions.push(y);
   }
 
-  const hour = currentTime.getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const fullName = user?.full_name || 'Admin';
-
-  const formattedDate = `${MONTH_NAMES[currentTime.getMonth()]} ${currentTime.getDate()}, ${currentTime.getFullYear()}`;
-  const formattedTime = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
 
   const cards = [
     { label: 'Total Employees', value: stats?.total_employees ?? 0, icon: Users, trend: '+12%', trendUp: true },
