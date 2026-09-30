@@ -1592,7 +1592,20 @@ export function LoginPage() {
                 </motion.a>
               ))}
             </div>
-            <p className="text-[11px] text-neutral-600">&copy; {new Date().getFullYear()} PaySlip Pro. All rights reserved.</p>
+            <div className="flex flex-col items-center text-center gap-1">
+              <p className="text-[11px] text-neutral-500">&copy; {new Date().getFullYear()} PaySlip Pro. All rights reserved.</p>
+              <p className="text-[11px] text-neutral-500">
+                Developed by{' '}
+                <a
+                  href="https://www.zigmaatech.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="zigmaa-tech-brand inline-block ml-0.5 hover:underline"
+                >
+                  Zigmaa Tech
+                </a>
+              </p>
+            </div>
           </div>
         </div>
       </footer>

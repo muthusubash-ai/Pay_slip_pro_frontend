@@ -285,25 +285,6 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
             </p>
           </div>
         </button>
-
-        {/* Developed by Zigmaa Tech */}
-        <div className={cn(
-          "mt-3 pt-2 border-t text-center",
-          isDark ? "border-white/[0.04]" : "border-neutral-200/60",
-          isCollapsed && "lg:hidden"
-        )}>
-          <p className={cn("text-[10px]", isDark ? "text-neutral-500" : "text-neutral-400")}>
-            Developed by{' '}
-            <a
-              href="https://www.zigmaatech.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="zigmaa-tech-brand inline-block ml-0.5"
-            >
-              Zigmaa tech
-            </a>
-          </p>
-        </div>
       </div>
     </aside>
     </>
