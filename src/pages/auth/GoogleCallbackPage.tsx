@@ -19,7 +19,7 @@ export function GoogleCallbackPage() {
           if (selectedPlan === 'professional' || selectedPlan === 'enterprise') {
             paymentService.startPaymentFlow(
               selectedPlan,
-              { name: signedInUser.full_name, email: signedInUser.email },
+              { name: signedInUser.full_name, email: signedInUser.email, contact: signedInUser.phone || undefined },
               (newPlan) => {
                 const upgradedUser = { ...signedInUser, plan: newPlan as 'professional' | 'enterprise' };
                 updateUser(upgradedUser);

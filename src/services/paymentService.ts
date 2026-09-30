@@ -63,7 +63,7 @@ export const paymentService = {
 
   async startPaymentFlow(
     planName: 'professional' | 'enterprise',
-    userInfo?: { name?: string; email?: string },
+    userInfo?: { name?: string; email?: string; contact?: string; phone?: string },
     onSuccess?: (plan: string, updatedUser?: any) => void,
     onError?: (error: string) => void
   ) {
@@ -77,6 +77,18 @@ export const paymentService = {
       const orderRes = await this.createOrder(planName);
       const { razorpay_key_id, order_id, amount, currency } = orderRes.data;
 
+      const rawPhone = (userInfo?.contact || userInfo?.phone || '').trim().replace(/[\s-]/g, '');
+      let formattedContact = rawPhone;
+      if (rawPhone) {
+        if (!rawPhone.startsWith('+')) {
+          if (rawPhone.length === 10) {
+            formattedContact = `+91${rawPhone}`;
+          } else if (rawPhone.length === 12 && rawPhone.startsWith('91')) {
+            formattedContact = `+${rawPhone}`;
+          }
+        }
+      }
+
       const options = {
         key: razorpay_key_id,
         amount: amount,
@@ -87,6 +99,7 @@ export const paymentService = {
         prefill: {
           name: userInfo?.name || '',
           email: userInfo?.email || '',
+          contact: formattedContact || undefined,
         },
         theme: {
           color: '#171717',

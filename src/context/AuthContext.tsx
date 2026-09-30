@@ -6,7 +6,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<User>;
-  register: (email: string, password: string, fullName: string) => Promise<User>;
+  register: (email: string, password: string, fullName: string, phone?: string) => Promise<User>;
   googleLogin: () => Promise<User>;
   logout: () => Promise<void>;
   updateUser: (user: User) => void;
@@ -42,8 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return userRes.data;
   }, []);
 
-  const register = useCallback(async (email: string, password: string, fullName: string) => {
-    await api.post('/auth/register', { email, password, full_name: fullName });
+  const register = useCallback(async (email: string, password: string, fullName: string, phone?: string) => {
+    await api.post('/auth/register', { email, password, full_name: fullName, phone });
     return login(email, password);
   }, [login]);
 

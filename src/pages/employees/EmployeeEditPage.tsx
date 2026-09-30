@@ -9,6 +9,8 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { useEmployee, useUpdateEmployee } from '../../hooks/useEmployees';
 import { DEPARTMENT_OPTIONS, DESIGNATION_OPTIONS } from '../../lib/employeeOptions';
 import { ThemedSelect } from '../../components/ui/ThemedSelect';
+import { BankNamePicker } from '../../components/ui/BankNamePicker';
+import { IfscLookupField } from '../../components/ui/IfscLookupField';
 
 export function EmployeeEditPage() {
   const { id } = useParams();
@@ -179,9 +181,9 @@ export function EmployeeEditPage() {
       <GlassCard>
         <h3 className="text-lg font-semibold mb-4">Bank Details</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AnimatedInput label="Bank Name" value={form.bank_name} onChange={handleChange('bank_name', 'alphabets')} />
+          <BankNamePicker value={form.bank_name} onChange={(bank_name) => setForm((prev) => ({ ...prev, bank_name }))} />
           <AnimatedInput label="Account Number" value={form.bank_account_number} onChange={handleChange('bank_account_number', 'digits')} />
-          <AnimatedInput label="IFSC Code" value={form.ifsc_code} onChange={handleChange('ifsc_code', 'alphanumeric')} />
+          <IfscLookupField value={form.ifsc_code} bankName={form.bank_name} onChange={(ifsc_code) => setForm((prev) => ({ ...prev, ifsc_code }))} onBankSelect={(bank_name) => setForm((prev) => ({ ...prev, bank_name }))} />
           <AnimatedInput label="PAN Number" value={form.pan_number} onChange={handleChange('pan_number', 'alphanumeric')} />
         </div>
       </GlassCard>

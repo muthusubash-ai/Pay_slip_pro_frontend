@@ -5,9 +5,17 @@ import { useAuth } from '../context/AuthContext';
 export function useSalarySlips(page = 1, month?: number, year?: number) {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ['salary-slips', page, month, year],
-    queryFn: () => salarySlipService.list({ page, month, year }).then((r) => r.data),
+    queryKey: ['salary-slips', page, month || 0, year || 0],
+    queryFn: () =>
+      salarySlipService
+        .list({
+          page,
+          ...(month && month > 0 ? { month } : {}),
+          ...(year && year > 0 ? { year } : {}),
+        })
+        .then((r) => r.data),
     enabled: !!user,
+    staleTime: 0,
   });
 }
 
@@ -25,7 +33,33 @@ export function useGenerateSlips() {
   return useMutation({
     mutationFn: ({ month, year }: { month: number; year: number }) =>
       salarySlipService.generateBulk(month, year),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['salary-slips'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['salary-slips'] });
+      qc.invalidateQueries({ queryKey: ['salary-slips-for-period'] });
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      qc.invalidateQueries({ queryKey: ['payroll-summary'] });
+    },
+  });
+}
+
+export function useGenerateSingleSlip() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      employeeId,
+      month,
+      year,
+    }: {
+      employeeId: number;
+      month: number;
+      year: number;
+    }) => salarySlipService.generateSingle(employeeId, month, year),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['salary-slips'] });
+      qc.invalidateQueries({ queryKey: ['salary-slips-for-period'] });
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      qc.invalidateQueries({ queryKey: ['payroll-summary'] });
+    },
   });
 }
 

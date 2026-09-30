@@ -54,9 +54,9 @@ export default function App() {
   return (
     <MotionConfig reducedMotion="never" transition={{ duration: 0.18 }}>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <AuthProvider>
-            <BrowserRouter>
+        <BrowserRouter>
+          <ThemeProvider>
+            <AuthProvider>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                 {/* Public routes */}
@@ -75,7 +75,7 @@ export default function App() {
                   <Route path="employees/new" element={<EmployeeCreatePage />} />
                   <Route path="employees/:id" element={<EmployeeDetailPage />} />
                   <Route path="employees/:id/edit" element={<EmployeeEditPage />} />
-                  <Route path="attendance" element={<PlanRoute minimumPlan="professional"><AttendancePage /></PlanRoute>} />
+                  <Route path="attendance" element={<PlanRoute minimumPlan="starter"><AttendancePage /></PlanRoute>} />
                   <Route path="salary-slips" element={<SalarySlipListPage />} />
                   <Route path="salary-slips/generate" element={<GenerateSlipsPage />} />
                   <Route path="salary-slips/:id" element={<SalarySlipDetailPage />} />
@@ -85,9 +85,9 @@ export default function App() {
                 </Route>
                 </Routes>
               </Suspense>
-            </BrowserRouter>
-          </AuthProvider>
-        </ThemeProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </BrowserRouter>
       </QueryClientProvider>
     </MotionConfig>
   );

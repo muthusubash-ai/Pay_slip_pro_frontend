@@ -15,6 +15,7 @@ import { getPasswordPolicyError, getPasswordStrength } from '../../lib/passwordP
 export function RegisterPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -50,6 +51,15 @@ export function RegisterPage() {
       setError('Full name must contain only letters and spaces (numbers are not allowed).');
       return;
     }
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      setError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      setError('Please enter a valid Indian mobile number starting with 6, 7, 8, or 9.');
+      return;
+    }
     const passwordError = getPasswordPolicyError(password);
     if (passwordError) {
       setError(passwordError);
@@ -61,13 +71,17 @@ export function RegisterPage() {
     }
     setIsLoading(true);
     try {
-      const registeredUser = await register(email, password, trimmedName);
+      const registeredUser = await register(email, password, trimmedName, cleanPhone);
       if (selectedPlan === 'professional' || selectedPlan === 'enterprise') {
         paymentService.startPaymentFlow(
           selectedPlan,
-          { name: registeredUser.full_name, email: registeredUser.email },
+          {
+            name: registeredUser.full_name,
+            email: registeredUser.email,
+            contact: cleanPhone,
+          },
           (newPlan) => {
-            const upgradedUser = { ...registeredUser, plan: newPlan as 'professional' | 'enterprise' };
+            const upgradedUser = { ...registeredUser, plan: newPlan as 'professional' | 'enterprise', phone: cleanPhone };
             updateUser(upgradedUser);
             sessionStorage.removeItem('selected_plan');
             navigate(getPlanHome(upgradedUser));
@@ -155,7 +169,7 @@ export function RegisterPage() {
               {selectedPlan === 'starter' ? (
                 <span className="text-green-700 font-medium flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                  Starter is free and supports up to 3 employees. No payment required.
+                  Starter is free for up to 3 employees, with basic monthly attendance save before salary slip generation. No payment required.
                 </span>
               ) : (
                 <span className="text-neutral-800 font-medium flex items-center gap-1.5">
@@ -197,6 +211,30 @@ export function RegisterPage() {
               placeholder="John Doe"
             />
             <AnimatedInput label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@company.com" />
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
+                Mobile Number
+              </label>
+              <div className="relative flex items-center">
+                <div className="absolute left-3.5 flex items-center gap-1.5 pointer-events-none select-none text-neutral-600 dark:text-neutral-400 font-semibold text-sm">
+                  <span>🇮🇳</span>
+                  <span>+91</span>
+                  <span className="text-gray-300 dark:text-neutral-700">|</span>
+                </div>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={phone}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setPhone(digits);
+                  }}
+                  required
+                  placeholder="98765 43210"
+                  className="w-full rounded-xl border-2 border-gray-200 bg-white pl-20 pr-4 py-3 outline-none transition-colors text-neutral-900 dark:text-white dark:bg-neutral-900 dark:border-neutral-800 focus:border-black dark:focus:border-white font-medium tracking-wide placeholder:font-normal placeholder:tracking-normal placeholder:text-gray-400 text-sm"
+                />
+              </div>
+            </div>
             <div className="relative">
               <AnimatedInput label="Password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Minimum 12 characters" />
               <button

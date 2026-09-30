@@ -1,13 +1,17 @@
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Upload, Trash2, Check } from 'lucide-react';
+import { Upload, Trash2, Check, AlertTriangle, X, CheckCircle } from 'lucide-react';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { AnimatedInput } from '../../components/ui/AnimatedInput';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { companyService } from '../../services/companyService';
 import { useAuth } from '../../context/AuthContext';
+import { AddressSuggestionField } from '../../components/ui/AddressSuggestionField';
+import { PinCodeLookupField } from '../../components/ui/PinCodeLookupField';
+import { CityPicker } from '../../components/ui/CityPicker';
+import { CITIES_BY_STATE, INDIAN_STATES, normalizeIndianState } from '../../lib/indianLocations';
 
 export function CompanySettingsPage() {
   const { user } = useAuth();
@@ -30,6 +34,11 @@ export function CompanySettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company'] });
       setLogoSuccess('Logo uploaded & color extracted!');
+      setLogoError('');
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || 'Failed to upload logo. Please upload a valid PNG or JPG under 5MB.';
+      setLogoError(msg);
     },
   });
 
@@ -38,12 +47,18 @@ export function CompanySettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company'] });
       setLogoSuccess('Logo removed.');
+      setLogoError('');
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || 'Failed to remove logo.';
+      setLogoError(msg);
     },
   });
 
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [logoSuccess, setLogoSuccess] = useState('');
+  const [logoError, setLogoError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [form, setForm] = useState({
@@ -71,12 +86,55 @@ export function CompanySettingsPage() {
         tan_number: company.tan_number || '',
         financial_year_start: String(company.financial_year_start || 4),
       });
-      // If company has no name set, enable edit mode by default
-      setIsEditing(!company.company_name);
+
+      // If company has no name or default "My Company" or no address/city filled,
+      // enable edit mode by default so new user can immediately edit without searching for edit button
+      const isNewOrIncomplete =
+        !company.company_name ||
+        company.company_name === 'My Company' ||
+        (!company.address && !company.city);
+
+      setIsEditing(isNewOrIncomplete);
     } else {
       setIsEditing(true);
     }
   }, [company]);
+
+  // Auto-dismiss success notification after 2 seconds
+  useEffect(() => {
+    if (!success) return;
+    const timer = setTimeout(() => {
+      setSuccess('');
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [success]);
+
+  // Auto-dismiss logo success notification after 2 seconds
+  useEffect(() => {
+    if (!logoSuccess) return;
+    const timer = setTimeout(() => {
+      setLogoSuccess('');
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [logoSuccess]);
+
+  // Auto-dismiss logo error notification after 4 seconds
+  useEffect(() => {
+    if (!logoError) return;
+    const timer = setTimeout(() => {
+      setLogoError('');
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [logoError]);
+
+  // Auto-dismiss general error notification after 4 seconds
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => {
+      setError('');
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [error]);
 
   const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -85,6 +143,10 @@ export function CompanySettingsPage() {
   const handleSubmit = () => {
     setError('');
     setSuccess('');
+    if (form.zip_code && !/^\d{6}$/.test(form.zip_code)) {
+      setError('Enter a valid 6-digit Indian PIN code.');
+      return;
+    }
     updateCompany.mutate(
       {
         company_name: form.company_name || undefined,
@@ -105,7 +167,7 @@ export function CompanySettingsPage() {
           window.scrollTo({ top: 0, behavior: 'smooth' });
           setTimeout(() => {
             setIsSaved(false);
-          }, 3000);
+          }, 2000);
         },
         onError: () => {
           setError('Failed to save settings.');
@@ -118,51 +180,167 @@ export function CompanySettingsPage() {
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      setError('Logo must be a PNG, JPEG, or WebP image.');
-      e.target.value = '';
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Logo must be under 5MB.');
-      e.target.value = '';
-      return;
-    }
+
+    setLogoError('');
     setLogoSuccess('');
-    setError('');
+
+    // Check file format strictly: PNG or JPG/JPEG only
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const validExtensions = ['png', 'jpg', 'jpeg'];
+    const validMimes = ['image/png', 'image/jpeg', 'image/pjpeg'];
+
+    const isValidType = validExtensions.includes(ext) || validMimes.includes(file.type.toLowerCase());
+
+    if (!isValidType) {
+      const errMsg = 'Invalid format! Please upload only PNG or JPG image. (Max 5MB)';
+      setLogoError(errMsg);
+      e.target.value = '';
+      return;
+    }
+
+    // Check file size: Max 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      const errMsg = 'File size exceeds 5MB! Please upload an image under 5MB.';
+      setLogoError(errMsg);
+      e.target.value = '';
+      return;
+    }
+
     uploadLogo.mutate(file);
+    e.target.value = '';
   };
 
   if (isLoading) return <LoadingSpinner />;
 
   const extractedColor = company?.primary_color || '#000000';
+  const stateOptions: string[] = [...INDIAN_STATES];
+  if (form.state && !stateOptions.includes(form.state)) stateOptions.push(form.state);
+  const cityOptions = [...(CITIES_BY_STATE[form.state] || [])];
+  if (form.city && !cityOptions.includes(form.city)) cityOptions.unshift(form.city);
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6">
-      <h2 className="text-xl font-bold text-neutral-900 dark:text-white sm:text-2xl">Company Settings</h2>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6 pb-12">
+      {/* Header with Top Edit Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-neutral-900 dark:text-white sm:text-2xl">Company Settings</h2>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+            Configure your company profile, branding logo, and statutory details for salary slips
+          </p>
+        </div>
+        {!isEditing && (
+          <GradientButton
+            variant="secondary"
+            onClick={() => setIsEditing(true)}
+            className="w-full sm:w-auto"
+          >
+            Edit Settings
+          </GradientButton>
+        )}
+      </div>
 
-      {success && (
-        <div className="bg-green-50 dark:bg-emerald-950/40 border border-green-200 dark:border-emerald-800 text-green-700 dark:text-emerald-300 px-4 py-3 rounded-xl text-sm">
-          {success}
-        </div>
-      )}
-      {error && (
-        <div className="bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800 text-red-700 dark:text-rose-300 px-4 py-3 rounded-xl text-sm">
-          {error}
-        </div>
-      )}
+      {/* Top Status Alerts with Auto-Dismiss and Animations */}
+      <AnimatePresence mode="wait">
+        {success && (
+          <motion.div
+            key="success-banner"
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className="flex items-center justify-between gap-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 px-4 py-3 rounded-xl text-sm shadow-sm"
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>{success}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSuccess('')}
+              className="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-200 p-0.5 rounded-lg transition-colors cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+        {error && (
+          <motion.div
+            key="error-banner"
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className="flex items-center justify-between gap-3 bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800 text-red-700 dark:text-rose-300 px-4 py-3 rounded-xl text-sm shadow-sm"
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-500 dark:text-rose-400 shrink-0" />
+              <span>{error}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setError('')}
+              className="text-red-500 hover:text-red-700 dark:text-rose-400 dark:hover:text-rose-200 p-0.5 rounded-lg transition-colors cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Logo Section */}
       <GlassCard>
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-neutral-900 dark:text-white">
           <Upload className="h-5 w-5" /> Company Logo
         </h3>
-        {logoSuccess && (
-          <div className="bg-green-50 dark:bg-emerald-950/40 border border-green-200 dark:border-emerald-800 text-green-700 dark:text-emerald-300 px-4 py-3 rounded-xl mb-4 text-sm">
-            {logoSuccess}
-          </div>
-        )}
+
+        {/* In-Card Logo Notifications */}
+        <AnimatePresence mode="wait">
+          {logoSuccess && (
+            <motion.div
+              key="logo-success-banner"
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+              className="flex items-center justify-between gap-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 px-4 py-3 rounded-xl mb-4 text-sm shadow-sm"
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>{logoSuccess}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLogoSuccess('')}
+                className="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-200 p-0.5 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </motion.div>
+          )}
+          {logoError && (
+            <motion.div
+              key="logo-error-banner"
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+              className="flex items-center justify-between gap-3 bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800 text-red-700 dark:text-rose-300 px-4 py-3 rounded-xl mb-4 text-sm shadow-sm"
+            >
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-500 dark:text-rose-400 shrink-0" />
+                <span>{logoError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLogoError('')}
+                className="text-red-500 hover:text-red-700 dark:text-rose-400 dark:hover:text-rose-200 p-0.5 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">
           {/* Logo preview */}
           <div className="flex h-28 w-full items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800/80 p-2 sm:w-[200px] sm:shrink-0">
@@ -176,7 +354,7 @@ export function CompanySettingsPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/png,image/jpeg,image/jpg,.png,.jpg,.jpeg"
               onChange={handleLogoUpload}
               className="hidden"
             />
@@ -197,7 +375,9 @@ export function CompanySettingsPage() {
                 <Trash2 className="h-3.5 w-3.5" /> Remove logo
               </button>
             )}
-            <p className="text-xs text-neutral-400 dark:text-neutral-500">PNG or JPG. Auto-cropped to 1080x1080. Max 5MB.</p>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">
+              PNG or JPG. Auto-cropped to 1080x1080. Max 5MB.
+            </p>
 
             {/* Extracted color display */}
             {company?.logo_data && (
@@ -221,10 +401,38 @@ export function CompanySettingsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <AnimatedInput label="Company Name" placeholder="Acme Corp" value={form.company_name} onChange={handleChange('company_name')} disabled={!isEditing} />
           <AnimatedInput label="Pay Day (1-28)" type="number" placeholder="1" value={form.pay_day} onChange={handleChange('pay_day')} disabled={!isEditing} />
-          <AnimatedInput label="Address" placeholder="123 Business Ave" value={form.address} onChange={handleChange('address')} disabled={!isEditing} />
-          <AnimatedInput label="City" placeholder="Mumbai" value={form.city} onChange={handleChange('city')} disabled={!isEditing} />
-          <AnimatedInput label="State" placeholder="Maharashtra" value={form.state} onChange={handleChange('state')} disabled={!isEditing} />
-          <AnimatedInput label="ZIP Code" placeholder="400001" value={form.zip_code} onChange={handleChange('zip_code')} disabled={!isEditing} />
+          <AddressSuggestionField
+            value={form.address}
+            disabled={!isEditing}
+            onChange={(address) => setForm((prev) => ({ ...prev, address }))}
+            onSelect={(suggestion) => setForm((prev) => ({
+              ...prev,
+              address: suggestion.address,
+              city: suggestion.city || prev.city,
+              state: suggestion.state ? normalizeIndianState(suggestion.state) : prev.state,
+              zip_code: /^\d{6}$/.test(suggestion.zip_code) ? suggestion.zip_code : prev.zip_code,
+            }))}
+          />
+          <div className="min-w-0 space-y-1">
+            <label htmlFor="company-state" className="block text-sm font-medium text-gray-700 dark:text-neutral-300">State / Union Territory</label>
+            <select
+              id="company-state"
+              value={form.state}
+              disabled={!isEditing}
+              onChange={(event) => setForm((prev) => ({ ...prev, state: event.target.value, city: '', zip_code: '' }))}
+              className="w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-neutral-900 outline-none focus:border-black disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:focus:border-white"
+            >
+              <option value="">Select state</option>
+              {stateOptions.map((state) => <option key={state} value={state}>{state}</option>)}
+            </select>
+          </div>
+          <CityPicker value={form.city} state={form.state} options={cityOptions} disabled={!isEditing || !form.state} onChange={(city) => setForm((prev) => ({ ...prev, city }))} />
+          <PinCodeLookupField
+            value={form.zip_code}
+            disabled={!isEditing}
+            onChange={(zip_code) => setForm((prev) => ({ ...prev, zip_code }))}
+            onSelectArea={(city, state) => setForm((prev) => ({ ...prev, city, state: normalizeIndianState(state) }))}
+          />
         </div>
       </GlassCard>
 

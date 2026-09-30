@@ -48,7 +48,7 @@ export function PlanUpgradeModal({ isOpen, plan, onConfirm, onClose }: PlanUpgra
   const professionalPerks = [
     { icon: Users, label: 'Up to 10 Employees', desc: 'Expand your workforce limit' },
     { icon: Building2, label: 'Company Branding', desc: 'Custom logo and primary brand colors' },
-    { icon: CalendarDays, label: 'Attendance Tracking', desc: 'Full monthly attendance and leave summaries' },
+    { icon: CalendarDays, label: 'Detailed Attendance Reports', desc: 'Attendance and leave summaries beyond Starter monthly attendance save' },
     { icon: Zap, label: 'Bulk Salary Slips', desc: 'Generate slips for all employees in one click' },
     { icon: BarChart3, label: 'Payroll Summaries', desc: 'Detailed financial trends & reports' },
   ];

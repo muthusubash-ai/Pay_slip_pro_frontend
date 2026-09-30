@@ -28,6 +28,7 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [fullName, setFullName] = useState(user?.full_name || '');
+  const [phone, setPhone] = useState(user?.phone || '');
   const [companyName, setCompanyName] = useState('');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -45,6 +46,7 @@ export function SettingsPage() {
   useEffect(() => {
     if (user) {
       setFullName(user.full_name || '');
+      setPhone(user.phone || '');
       if (user.company_name && user.company_name !== '-') {
         setCompanyName(user.company_name);
       }
@@ -57,6 +59,15 @@ export function SettingsPage() {
     }
   }, [company]);
 
+  // Auto-dismiss profile message after 2.5 seconds
+  useEffect(() => {
+    if (!profileMessage) return;
+    const timer = setTimeout(() => {
+      setProfileMessage(null);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [profileMessage]);
+
   const handleProfileSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsSavingProfile(true);
@@ -64,10 +75,18 @@ export function SettingsPage() {
     try {
       const trimmedName = fullName.trim();
       const trimmedCompany = companyName.trim();
+      const cleanPhone = phone.replace(/\D/g, '');
 
-      // 1. Update user profile via /auth/me (updates full_name and company_name)
+      if (cleanPhone && cleanPhone.length !== 10) {
+        setProfileMessage({ type: 'error', text: 'Please enter a valid 10-digit mobile number.' });
+        setIsSavingProfile(false);
+        return;
+      }
+
+      // 1. Update user profile via /auth/me (updates full_name, phone, and company_name)
       const { data: updatedUserData } = await api.put('/auth/me', {
         full_name: trimmedName,
+        phone: cleanPhone || undefined,
         company_name: trimmedCompany,
       });
 
@@ -94,6 +113,7 @@ export function SettingsPage() {
       const errMsg =
         err?.response?.data?.full_name?.[0] ||
         err?.response?.data?.company_name?.[0] ||
+        err?.response?.data?.phone?.[0] ||
         err?.response?.data?.detail ||
         'Failed to update profile details.';
       setProfileMessage({ type: 'error', text: errMsg });
@@ -109,7 +129,7 @@ export function SettingsPage() {
 
     paymentService.startPaymentFlow(
       targetPlan,
-      { name: user.full_name, email: user.email },
+      { name: user.full_name, email: user.email, contact: user.phone || undefined },
       (newPlan, updatedUserData) => {
         const upgraded = updatedUserData || { ...user, plan: newPlan as 'professional' | 'enterprise' };
         updateUser(upgraded);
@@ -197,6 +217,30 @@ export function SettingsPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
+                Mobile Number
+              </label>
+              <div className="relative flex items-center">
+                <div className="absolute left-3.5 flex items-center gap-1.5 pointer-events-none select-none text-neutral-600 dark:text-neutral-400 font-semibold text-sm">
+                  <span>🇮🇳</span>
+                  <span>+91</span>
+                  <span className="text-gray-300 dark:text-neutral-700">|</span>
+                </div>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={phone}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setPhone(digits);
+                  }}
+                  disabled={!isEditingProfile}
+                  placeholder="98765 43210"
+                  className="w-full rounded-xl border-2 border-gray-200 bg-white pl-20 pr-4 py-3 outline-none transition-colors text-neutral-900 dark:text-white dark:bg-neutral-900 dark:border-neutral-800 focus:border-black dark:focus:border-white font-medium tracking-wide disabled:bg-neutral-100 disabled:text-neutral-500 disabled:border-neutral-200 disabled:cursor-not-allowed dark:disabled:bg-neutral-800/50 dark:disabled:text-neutral-400 dark:disabled:border-neutral-800 text-sm"
+                />
+              </div>
+            </div>
             <AnimatedInput
               label="Registered Company"
               placeholder="Enter company name"
@@ -205,6 +249,9 @@ export function SettingsPage() {
               disabled={!isEditingProfile}
               required
             />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <AnimatedInput
               label="Account Role"
               value={user?.role === 'admin' ? 'Administrator' : 'HR Manager'}

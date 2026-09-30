@@ -13,12 +13,21 @@ export function useMonthlyAttendance(employeeId: number, month: number, year: nu
   });
 }
 
+export function useAttendanceReadiness(month: number, year: number) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['attendance-readiness', month, year],
+    queryFn: () => attendanceService.getReadiness(month, year).then((r) => r.data),
+    enabled: !!user,
+  });
+}
+
 export function useLeaveSummary(month: number, year: number) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ['leave-summary', month, year],
     queryFn: () => attendanceService.getLeaveSummary(month, year).then((r) => r.data),
-    enabled: hasMinimumPlan(user, 'enterprise'),
+    enabled: hasMinimumPlan(user, 'professional'),
   });
 }
 
@@ -29,6 +38,7 @@ export function useMarkAttendance() {
       attendanceService.markAttendance(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendance'] });
+      qc.invalidateQueries({ queryKey: ['attendance-readiness'] });
       qc.invalidateQueries({ queryKey: ['leave-summary'] });
     },
   });
@@ -42,11 +52,18 @@ export function useBulkMarkLeaves() {
       month: number;
       year: number;
       leave_dates: string[];
+      half_day_dates?: string[];
+      permission_dates?: string[];
       weekoff_dates: string[];
     }) => attendanceService.bulkMarkLeaves(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendance'] });
+      qc.invalidateQueries({ queryKey: ['attendance-readiness'] });
       qc.invalidateQueries({ queryKey: ['leave-summary'] });
+      qc.invalidateQueries({ queryKey: ['salary-slips'] });
+      qc.invalidateQueries({ queryKey: ['salary-slips-for-period'] });
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      qc.invalidateQueries({ queryKey: ['payroll-summary'] });
     },
   });
 }

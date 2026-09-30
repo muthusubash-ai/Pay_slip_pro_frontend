@@ -516,7 +516,7 @@ export function LoginPage() {
   const startPaidPlan = (targetPlan: 'professional' | 'enterprise', account: User) => {
     paymentService.startPaymentFlow(
       targetPlan,
-      { name: account.full_name, email: account.email },
+      { name: account.full_name, email: account.email, contact: account.phone || undefined },
       (newPlan, updatedUserData) => {
         const upgradedUser = updatedUserData || { ...account, plan: newPlan as 'professional' | 'enterprise' };
         updateUser(upgradedUser);

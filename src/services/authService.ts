@@ -2,8 +2,8 @@ import api from './api';
 import type { User } from '../types';
 
 export const authService = {
-  register: (email: string, password: string, full_name: string) =>
-    api.post<User>('/auth/register', { email, password, full_name }),
+  register: (email: string, password: string, full_name: string, phone?: string) =>
+    api.post<User>('/auth/register', { email, password, full_name, phone }),
 
   login: (email: string, password: string) => {
     const form = new FormData();
@@ -18,7 +18,7 @@ export const authService = {
 
   getMe: () => api.get<User>('/auth/me'),
 
-  updateProfile: (data: { full_name?: string }) =>
+  updateProfile: (data: { full_name?: string; phone?: string; company_name?: string }) =>
     api.put<User>('/auth/me', data),
 
   forgotPassword: (email: string) =>

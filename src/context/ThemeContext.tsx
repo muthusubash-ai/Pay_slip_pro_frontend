@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 
 type Theme = 'light' | 'dark';
 
@@ -10,28 +11,38 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/auth/google/callback'];
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const isPublicPage = PUBLIC_PATHS.some((path) => location.pathname === path || location.pathname.startsWith('/auth/'));
+
   const [theme, setThemeState] = useState<Theme>(() => {
     const saved = localStorage.getItem('theme');
     if (saved === 'dark' || saved === 'light') return saved;
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return 'light';
   });
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === 'dark') {
+    // On public pages (Login, Register, Landing), always keep normal light view without class="dark"
+    if (theme === 'dark' && !isPublicPage) {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
     }
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+  }, [theme, isPublicPage]);
 
   const toggleTheme = useCallback(() => {
-    setThemeState((prev) => (prev === 'dark' ? 'light' : 'dark'));
+    setThemeState((prev) => {
+      const nextTheme = prev === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('theme', nextTheme);
+      return nextTheme;
+    });
   }, []);
 
   const setTheme = useCallback((newTheme: Theme) => {
+    localStorage.setItem('theme', newTheme);
     setThemeState(newTheme);
   }, []);
 

@@ -31,6 +31,15 @@ interface EmployeeCreateData {
   esi?: number;
 }
 
+export interface IfscDetails {
+  ifsc: string;
+  bank: string;
+  branch: string;
+  city: string;
+  state: string;
+  address: string;
+}
+
 export const employeeService = {
   // Trailing slash on collection endpoints to avoid FastAPI 307 redirects
   list: (filters: EmployeeFilters = {}) =>
@@ -47,4 +56,7 @@ export const employeeService = {
 
   delete: (id: number) =>
     api.delete(`/employees/${id}`),
+
+  lookupIfsc: (code: string) =>
+    api.get<IfscDetails>('/banks/ifsc', { params: { code } }),
 };

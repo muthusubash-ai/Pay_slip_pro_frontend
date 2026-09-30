@@ -10,12 +10,19 @@ export const attendanceService = {
     month: number;
     year: number;
     leave_dates: string[];
+    half_day_dates?: string[];
+    permission_dates?: string[];
     weekoff_dates: string[];
   }) => api.post('/attendance/bulk', data),
 
   getMonthlyAttendance: (employeeId: number, month: number, year: number) =>
     api.get<AttendanceRecord[]>('/attendance/monthly', {
       params: { employee_id: employeeId, month, year },
+    }),
+
+  getReadiness: (month: number, year: number) =>
+    api.get<{ employee_id: number; recorded_days: number; total_days: number; complete: boolean }[]>('/attendance/readiness', {
+      params: { month, year },
     }),
 
   getLeaveSummary: (month: number, year: number) =>

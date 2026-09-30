@@ -6,11 +6,12 @@ import { useQuery } from '@tanstack/react-query';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
-import { useGenerateSlips } from '../../hooks/useSalarySlips';
+import { useGenerateSlips, useGenerateSingleSlip } from '../../hooks/useSalarySlips';
 import { useEmployees } from '../../hooks/useEmployees';
 import { salarySlipService } from '../../services/salarySlipService';
 import type { Employee } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { useAttendanceReadiness } from '../../hooks/useAttendance';
 
 export function GenerateSlipsPage() {
   const navigate = useNavigate();
@@ -21,9 +22,10 @@ export function GenerateSlipsPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [generating, setGenerating] = useState(false);
   const generateSlips = useGenerateSlips();
+  const generateSingleSlip = useGenerateSingleSlip();
   const { data: empData, isLoading: empLoading } = useEmployees(1, undefined, undefined);
+  const { data: readiness, isLoading: readinessLoading, isError: readinessError } = useAttendanceReadiness(month, year);
 
   // Fetch existing slips for selected month & year to enforce one-slip-per-month rule
   const { data: existingSlipsRes } = useQuery({
@@ -36,6 +38,7 @@ export function GenerateSlipsPage() {
   const employees: Employee[] = empData?.items || [];
   const isAllSelected = selectedEmployee === 'all' || selectedEmployee === '';
   const selectedEmp = isAllSelected ? undefined : employees.find((e) => e.id === Number(selectedEmployee));
+  const selectedAttendanceComplete = Boolean(selectedEmp && readiness?.find((item) => item.employee_id === selectedEmp.id)?.complete);
 
   const monthName = new Date(2000, month - 1).toLocaleString('default', { month: 'long' });
 
@@ -83,10 +86,20 @@ export function GenerateSlipsPage() {
   const allAlreadyGenerated = eligibleEmployees.length > 0 && employeesWithExistingSlips.length === eligibleEmployees.length;
   const someAlreadyGenerated = employeesWithExistingSlips.length > 0 && !allAlreadyGenerated;
   const remainingToGenerate = eligibleEmployees.length - employeesWithExistingSlips.length;
+  const pendingAttendance = eligibleEmployees.filter((emp) =>
+    !existingSlips.some((slip) => slip.employee_id === emp.id || slip.employee?.id === emp.id)
+    && !readiness?.find((item) => item.employee_id === emp.id)?.complete
+  );
+  const readyToGenerate = remainingToGenerate - pendingAttendance.length;
 
   const handleGenerate = async () => {
     setError('');
     setSuccess('');
+
+    if (readinessLoading || readinessError || !readiness) {
+      setError('Attendance status could not be verified. Please retry before generating salary slips.');
+      return;
+    }
 
     if (isAllSelected) {
       // Validate all already generated
@@ -94,6 +107,10 @@ export function GenerateSlipsPage() {
         setError(
           `Salary slips for all eligible employees have already been generated for ${monthName} ${year}. A salary slip can only be generated once per month. If you want to re-generate, you must delete the existing salary slip(s) first.`
         );
+        return;
+      }
+      if (readyToGenerate === 0) {
+        setError(`Save complete attendance for ${monthName} ${year} before generating salary slips.`);
         return;
       }
 
@@ -104,11 +121,12 @@ export function GenerateSlipsPage() {
           onSuccess: (res) => {
             const count = res.data?.generated ?? 0;
             if (count > 0) {
-              setSuccess(`Generated ${count} salary slip${count !== 1 ? 's' : ''} for ${monthName} ${year}.`);
-              setTimeout(() => navigate('/salary-slips'), 1500);
+              const pending = (res.data as { attendance_pending_employee_ids?: number[] }).attendance_pending_employee_ids?.length || 0;
+              setSuccess(`Generated ${count} salary slip${count !== 1 ? 's' : ''} for ${monthName} ${year}.${pending ? ` ${pending} employee(s) skipped until attendance is saved.` : ''}`);
+              setTimeout(() => navigate('/salary-slips', { state: { month, year } }), 1000);
             } else {
               setError(
-                `All employees already have salary slips for ${monthName} ${year}. If you want to re-generate, you must delete the existing salary slip(s) first.`
+                res.data?.message || `No salary slips could be generated for ${monthName} ${year}.`
               );
             }
           },
@@ -137,28 +155,34 @@ export function GenerateSlipsPage() {
         );
         return;
       }
+      if (!selectedAttendanceComplete) {
+        setError(`Save complete attendance for ${selectedEmp.full_name} for ${monthName} ${year} before generating the salary slip.`);
+        return;
+      }
 
       // Generate for single employee
-      setGenerating(true);
-      try {
-        await salarySlipService.generateSingle(selectedEmp.id, month, year);
-        setSuccess(`Generated salary slip for ${selectedEmp.full_name} — ${monthName} ${year}.`);
-        setTimeout(() => navigate('/salary-slips'), 1500);
-      } catch (err: unknown) {
-        const msg =
-          err && typeof err === 'object' && 'response' in err
-            ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-            : undefined;
-        setError(msg || 'Failed to generate salary slip.');
-      } finally {
-        setGenerating(false);
-      }
+      generateSingleSlip.mutate(
+        { employeeId: selectedEmp.id, month, year },
+        {
+          onSuccess: () => {
+            setSuccess(`Generated salary slip for ${selectedEmp.full_name} — ${monthName} ${year}.`);
+            setTimeout(() => navigate('/salary-slips', { state: { month, year } }), 1000);
+          },
+          onError: (err: unknown) => {
+            const msg =
+              err && typeof err === 'object' && 'response' in err
+                ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+                : undefined;
+            setError(msg || 'Failed to generate salary slip.');
+          },
+        }
+      );
     }
   };
 
   const isBlocked = isAllSelected
-    ? allAlreadyGenerated || eligibleEmployees.length === 0
-    : isBeforeJoining || isSelectedAlreadyGenerated;
+    ? allAlreadyGenerated || eligibleEmployees.length === 0 || readyToGenerate === 0 || readinessLoading || readinessError
+    : isBeforeJoining || isSelectedAlreadyGenerated || !selectedAttendanceComplete || readinessLoading || readinessError;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6">
@@ -381,11 +405,29 @@ export function GenerateSlipsPage() {
               <p className="text-xs text-blue-900/90 dark:text-blue-300/90 mt-1 leading-relaxed">
                 <strong>{employeesWithExistingSlips.length}</strong> employee(s) already have salary slips for{' '}
                 <strong>{monthName} {year}</strong>. Generating now will create slips for the remaining{' '}
-                <strong>{remainingToGenerate}</strong> employee(s). To re-generate for employees who already have slips, delete their existing slips first.
+                <strong>{readyToGenerate}</strong> employee(s) with saved attendance. To re-generate for employees who already have slips, delete their existing slips first.
               </p>
             </div>
           </div>
         )}
+
+        {!readinessLoading && !readinessError && !isBeforeJoining && !isSelectedAlreadyGenerated &&
+          (isAllSelected ? pendingAttendance.length > 0 : selectedEmp && !selectedAttendanceComplete) && (
+          <div className="mb-5 flex items-start gap-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+            <div className="text-sm">
+              <p className="font-bold">Attendance must be saved first</p>
+              <p className="mt-1 text-xs">
+                {isAllSelected
+                  ? `${pendingAttendance.length} employee(s) need complete attendance for ${monthName} ${year}. Only employees with saved attendance can get slips.`
+                  : `Save ${selectedEmp?.full_name}'s complete attendance for ${monthName} ${year} before generating the slip.`}
+              </p>
+              <Link to="/attendance" className="mt-2 inline-block text-xs font-bold underline">Go to Attendance</Link>
+            </div>
+          </div>
+        )}
+
+        {readinessError && <p className="mb-5 text-sm text-red-700">Attendance status could not be loaded. Refresh and try again.</p>}
 
         <p className="text-neutral-500 dark:text-neutral-400 mb-5 text-xs">
           {isAllSelected
@@ -404,14 +446,14 @@ export function GenerateSlipsPage() {
           <GradientButton
             className="w-full sm:w-auto"
             onClick={handleGenerate}
-            disabled={isBlocked || generateSlips.isPending || generating}
-            isLoading={generateSlips.isPending || generating}
+            disabled={isBlocked || generateSlips.isPending || generateSingleSlip.isPending}
+            isLoading={generateSlips.isPending || generateSingleSlip.isPending}
           >
             {isAllSelected
               ? allAlreadyGenerated
                 ? 'All Slips Generated (Delete to Re-generate)'
-                : someAlreadyGenerated
-                ? `Generate for Remaining Employees (${remainingToGenerate})`
+                : pendingAttendance.length > 0 || someAlreadyGenerated
+                ? `Generate for Attendance-Ready Employees (${readyToGenerate})`
                 : 'Generate All Salary Slips'
               : isBeforeJoining
               ? `Cannot Generate Before Joining Date (${dojFormatted})`

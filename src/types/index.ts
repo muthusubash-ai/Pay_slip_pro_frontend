@@ -2,6 +2,7 @@ export interface User {
   id: number;
   email: string;
   full_name: string;
+  phone?: string | null;
   company_name?: string;
   role: 'admin' | 'hr_manager';
   is_active: boolean;
@@ -118,7 +119,7 @@ export interface AttendanceRecord {
   id: number;
   employee_id: number;
   date: string;
-  status: 'present' | 'leave';
+  status: 'present' | 'leave' | 'half_day' | 'permission' | 'weekoff';
 }
 
 export interface EmployeeLeaveSummary {
@@ -129,7 +130,12 @@ export interface EmployeeLeaveSummary {
   year: number;
   total_days: number;
   leave_days: number;
+  half_day_days: number;
+  permission_days: number;
+  effective_leave_days: number;
   weekoff_days: number;
   present_days: number;
   leave_deduction: number;
+  gross_salary?: number;
+  net_payable: number;
 }

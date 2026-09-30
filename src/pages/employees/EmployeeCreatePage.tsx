@@ -9,6 +9,8 @@ import { useCreateEmployee } from '../../hooks/useEmployees';
 import { DEPARTMENT_OPTIONS, DESIGNATION_OPTIONS } from '../../lib/employeeOptions';
 import { ThemedSelect } from '../../components/ui/ThemedSelect';
 import { ThemedDatePicker } from '../../components/ui/ThemedDatePicker';
+import { BankNamePicker } from '../../components/ui/BankNamePicker';
+import { IfscLookupField } from '../../components/ui/IfscLookupField';
 
 export function EmployeeCreatePage() {
   const navigate = useNavigate();
@@ -173,9 +175,9 @@ export function EmployeeCreatePage() {
         </button>
         {showBankDetails && (
           <div className="mt-5 grid grid-cols-1 gap-4 border-t border-gray-100 dark:border-neutral-800 pt-5 md:grid-cols-2">
-            <AnimatedInput label="Bank Name" placeholder="State Bank of India" value={form.bank_name} onChange={handleChange('bank_name', 'alphabets')} />
+            <BankNamePicker value={form.bank_name} onChange={(bank_name) => setForm((prev) => ({ ...prev, bank_name }))} />
             <AnimatedInput label="Account Number" placeholder="1234567890" value={form.bank_account_number} onChange={handleChange('bank_account_number', 'digits')} />
-            <AnimatedInput label="IFSC Code" placeholder="SBIN0001234" value={form.ifsc_code} onChange={handleChange('ifsc_code', 'alphanumeric')} />
+            <IfscLookupField value={form.ifsc_code} bankName={form.bank_name} onChange={(ifsc_code) => setForm((prev) => ({ ...prev, ifsc_code }))} onBankSelect={(bank_name) => setForm((prev) => ({ ...prev, bank_name }))} />
             <AnimatedInput label="PAN Number" placeholder="ABCDE1234F" value={form.pan_number} onChange={handleChange('pan_number', 'alphanumeric')} />
           </div>
         )}
