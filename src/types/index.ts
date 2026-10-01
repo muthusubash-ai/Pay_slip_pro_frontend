@@ -6,6 +6,7 @@ export interface User {
   company_name?: string;
   role: 'admin' | 'hr_manager';
   is_active: boolean;
+  is_platform_admin: boolean;
   plan: 'starter' | 'professional' | 'enterprise';
   created_at: string;
 }

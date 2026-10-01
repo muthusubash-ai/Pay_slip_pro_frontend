@@ -12,6 +12,7 @@ import { salarySlipService } from '../../services/salarySlipService';
 import type { Employee } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useAttendanceReadiness } from '../../hooks/useAttendance';
+import { hasMinimumPlan } from '../../lib/plans';
 
 export function GenerateSlipsPage() {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ export function GenerateSlipsPage() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
-  const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
+  const [selectedEmployee, setSelectedEmployee] = useState<string>('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const generateSlips = useGenerateSlips();
@@ -36,7 +37,8 @@ export function GenerateSlipsPage() {
 
   const existingSlips = existingSlipsRes?.items || [];
   const employees: Employee[] = empData?.items || [];
-  const isAllSelected = selectedEmployee === 'all' || selectedEmployee === '';
+  const canGenerateBulk = hasMinimumPlan(user, 'professional');
+  const isAllSelected = canGenerateBulk && (selectedEmployee === 'all' || selectedEmployee === '');
   const selectedEmp = isAllSelected ? undefined : employees.find((e) => e.id === Number(selectedEmployee));
   const selectedAttendanceComplete = Boolean(selectedEmp && readiness?.find((item) => item.employee_id === selectedEmp.id)?.complete);
 
@@ -177,12 +179,14 @@ export function GenerateSlipsPage() {
           },
         }
       );
+    } else {
+      setError('Select an employee before generating a salary slip.');
     }
   };
 
   const isBlocked = isAllSelected
     ? allAlreadyGenerated || eligibleEmployees.length === 0 || readyToGenerate === 0 || readinessLoading || readinessError
-    : isBeforeJoining || isSelectedAlreadyGenerated || !selectedAttendanceComplete || readinessLoading || readinessError;
+    : !selectedEmp || isBeforeJoining || isSelectedAlreadyGenerated || !selectedAttendanceComplete || readinessLoading || readinessError;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6">
@@ -215,16 +219,22 @@ export function GenerateSlipsPage() {
               <LoadingSpinner />
             ) : (
               <select
-                value={selectedEmployee}
+                value={canGenerateBulk ? selectedEmployee || 'all' : selectedEmployee === 'all' ? '' : selectedEmployee}
                 onChange={(e) => {
                   setSelectedEmployee(e.target.value);
                   setError('');
                 }}
                 className="w-full px-4 py-3 rounded-xl border-2 border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white transition-colors text-sm font-medium"
               >
-                <option value="all" className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
-                  All Employees ({employees.length})
-                </option>
+                {canGenerateBulk ? (
+                  <option value="all" className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
+                    All Employees ({employees.length})
+                  </option>
+                ) : (
+                  <option value="" className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
+                    Select an employee
+                  </option>
+                )}
                 {employees.map((emp) => (
                   <option key={emp.id} value={String(emp.id)} className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
                     {emp.full_name} ({emp.employee_code})

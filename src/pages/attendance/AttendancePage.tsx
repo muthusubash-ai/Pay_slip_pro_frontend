@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CalendarDays, Save, Trash2, ChevronDown, ChevronUp, Filter, CheckCircle, X } from 'lucide-react';
+import { CalendarDays, ArrowLeft, Save, Trash2, ChevronDown, ChevronUp, Filter, CheckCircle, X } from 'lucide-react';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { useEmployees } from '../../hooks/useEmployees';
-import { useMonthlyAttendance, useBulkMarkLeaves, useLeaveSummary } from '../../hooks/useAttendance';
+import { useMonthlyAttendance, useBulkMarkLeaves, useLeaveSummary, useAttendanceReadiness } from '../../hooks/useAttendance';
 import { useAuth } from '../../context/AuthContext';
 import { hasMinimumPlan } from '../../lib/plans';
 
@@ -26,6 +27,7 @@ function formatDate(year: number, month: number, day: number): string {
 
 export function AttendancePage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const canViewReports = hasMinimumPlan(user, 'professional');
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -39,11 +41,20 @@ export function AttendancePage() {
 
   const { data: empData, isLoading: empLoading } = useEmployees(1, undefined, undefined);
   const employees = empData?.items || [];
+  const selectedEmp = employees.find((employee) => employee.id === selectedEmployee);
+  const joiningDate = selectedEmp?.date_of_joining || '';
+  const totalDays = getDaysInMonth(month, year);
+  const beforeJoiningMonth = Boolean(joiningDate && formatDate(year, month, totalDays) < joiningDate);
+  const firstActiveDay = joiningDate && joiningDate.slice(0, 7) === formatDate(year, month, 1).slice(0, 7)
+    ? Number(joiningDate.slice(8, 10)) : 1;
+  const activeDays = beforeJoiningMonth ? 0 : totalDays - firstActiveDay + 1;
 
   const { data: attendance, isLoading: attLoading } = useMonthlyAttendance(
-    selectedEmployee, month, year
+    selectedEmployee, month, year, !beforeJoiningMonth
   );
   const { data: leaveSummary, isLoading: summaryLoading } = useLeaveSummary(month, year);
+  const { data: readiness } = useAttendanceReadiness(month, year);
+  const notJoinedCount = readiness?.filter((item) => !item.eligible).length || 0;
   const bulkMark = useBulkMarkLeaves();
 
   // Sync attendance data from server to local state whenever attendance query completes or filters change
@@ -77,10 +88,9 @@ export function AttendancePage() {
     return () => clearTimeout(timer);
   }, [error]);
 
-  const totalDays = getDaysInMonth(month, year);
-
   // Cycle: present → leave (1.0) → half_day (0.5) → permission (0.25) → weekoff (0) → present
   const cycleStatus = (dateStr: string) => {
+    if (joiningDate && dateStr < joiningDate) return;
     setDayStatuses((prev) => {
       const next = new Map(prev);
       const current = next.get(dateStr) || 'present';
@@ -100,6 +110,10 @@ export function AttendancePage() {
       setError('Please select an employee.');
       return;
     }
+    if (beforeJoiningMonth) {
+      setError(`${selectedEmp?.full_name} joined on ${joiningDate}. Attendance cannot be saved for ${MONTH_NAMES[month - 1]} ${year}.`);
+      return;
+    }
     setError('');
     setSuccess('');
 
@@ -108,6 +122,7 @@ export function AttendancePage() {
     const permissionDatesList: string[] = [];
     const weekoffDatesList: string[] = [];
     dayStatuses.forEach((status, dateStr) => {
+      if (joiningDate && dateStr < joiningDate) return;
       if (status === 'leave') leaveDatesList.push(dateStr);
       else if (status === 'half_day') halfDayDatesList.push(dateStr);
       else if (status === 'permission') permissionDatesList.push(dateStr);
@@ -154,13 +169,14 @@ export function AttendancePage() {
   let halfDayCount = 0;
   let permissionCount = 0;
   let weekoffCount = 0;
-  dayStatuses.forEach((status) => {
+  dayStatuses.forEach((status, dateStr) => {
+    if (joiningDate && dateStr < joiningDate) return;
     if (status === 'leave') leaveCount++;
     else if (status === 'half_day') halfDayCount++;
     else if (status === 'permission') permissionCount++;
     else if (status === 'weekoff') weekoffCount++;
   });
-  const presentCount = totalDays - leaveCount - halfDayCount - permissionCount - weekoffCount;
+  const presentCount = activeDays - leaveCount - halfDayCount - permissionCount - weekoffCount;
 
   // Filtered leave summary
   const filteredSummary = (leaveSummary || []).filter((s) => {
@@ -181,9 +197,26 @@ export function AttendancePage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 max-w-6xl mx-auto pb-10">
-      <h2 className="flex items-start gap-2.5 text-xl font-bold text-neutral-900 dark:text-white sm:items-center sm:text-2xl">
-        <CalendarDays className="mt-0.5 h-6 w-6 shrink-0 sm:mt-0" /> {canViewReports ? 'Attendance & Leave Management' : 'Monthly Attendance'}
-      </h2>
+      <div className="flex min-w-0 items-center gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate('/dashboard');
+            }
+          }}
+          className="text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-white transition-colors p-1 -ml-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          title="Back"
+          aria-label="Back"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <h2 className="flex items-center gap-2.5 text-xl font-bold text-neutral-900 dark:text-white sm:text-2xl">
+          <CalendarDays className="h-6 w-6 shrink-0" /> {canViewReports ? 'Attendance & Leave Management' : 'Monthly Attendance'}
+        </h2>
+      </div>
 
       <AnimatePresence mode="wait">
         {error && (
@@ -305,8 +338,15 @@ export function AttendancePage() {
         </div>
       </GlassCard>
 
-      {/* Calendar Grid (Shown when an Employee is selected) */}
-      {selectedEmployee > 0 && (
+      {selectedEmp && beforeJoiningMonth && (
+        <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+          <strong>Attendance unavailable for {MONTH_NAMES[month - 1]} {year}.</strong>{' '}
+          {selectedEmp.full_name} joined on {joiningDate}. Select the joining month or a later month to view and save attendance.
+        </div>
+      )}
+
+      {/* Calendar Grid (Shown only from the employee's joining month) */}
+      {selectedEmployee > 0 && !beforeJoiningMonth && (
         <GlassCard className="dark:bg-neutral-900/90 dark:border-neutral-800">
           <div className="flex flex-col gap-4 mb-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -316,6 +356,7 @@ export function AttendancePage() {
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                 Full Leave deducts 1 day, Half Day deducts 0.5 day, Permission deducts 0.25 day. Weekoffs are paid (no deduction).
               </p>
+              {firstActiveDay > 1 && <p className="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">Joined on {joiningDate}. Days before joining are locked and excluded.</p>}
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
               <button
@@ -354,6 +395,7 @@ export function AttendancePage() {
                 {Array.from({ length: totalDays }, (_, i) => {
                   const day = i + 1;
                   const dateStr = formatDate(year, month, day);
+                  const beforeJoiningDay = Boolean(joiningDate && dateStr < joiningDate);
                   const status = dayStatuses.get(dateStr) || 'present';
 
                   let bgClass = 'bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white border-neutral-200 dark:border-neutral-700 hover:border-black dark:hover:border-white';
@@ -376,11 +418,13 @@ export function AttendancePage() {
                     <button
                       key={day}
                       type="button"
+                      disabled={beforeJoiningDay}
+                      aria-label={beforeJoiningDay ? `${dateStr}: before joining date` : `${dateStr}: ${label}`}
                       onClick={() => cycleStatus(dateStr)}
-                      className={`min-w-0 rounded-xl border p-1 text-center text-xs font-medium transition-all sm:border-2 sm:p-2.5 sm:text-sm ${bgClass}`}
+                      className={`min-w-0 rounded-xl border p-1 text-center text-xs font-medium transition-all sm:border-2 sm:p-2.5 sm:text-sm ${beforeJoiningDay ? 'cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-600' : bgClass}`}
                     >
                       <span className="block text-sm font-bold sm:text-lg">{day}</span>
-                      <span className="hidden text-[9px] mt-0.5 sm:block font-bold tracking-tight uppercase">{label}</span>
+                      <span className="hidden text-[9px] mt-0.5 sm:block font-bold tracking-tight uppercase">{beforeJoiningDay ? 'Not joined' : label}</span>
                     </button>
                   );
                 })}
@@ -409,7 +453,7 @@ export function AttendancePage() {
                   <span className="text-neutral-600 dark:text-neutral-300">Weekoff ({weekoffCount})</span>
                 </div>
                 <div className="w-full font-bold text-neutral-900 dark:text-white sm:ml-auto sm:w-auto text-xs sm:text-sm">
-                  Working: {presentCount + weekoffCount} | Leaves: {leaveCount + (halfDayCount * 0.5) + (permissionCount * 0.25)}d | Total: {totalDays}d
+                  Working: {presentCount + weekoffCount} | Leaves: {leaveCount + (halfDayCount * 0.5) + (permissionCount * 0.25)}d | Eligible: {activeDays}d
                 </div>
               </div>
             </>
@@ -419,6 +463,11 @@ export function AttendancePage() {
 
       {/* Month-wise Leave & Salary Summary Report */}
       {canViewReports && <GlassCard className="dark:bg-neutral-900/90 dark:border-neutral-800">
+        {notJoinedCount > 0 && (
+          <div role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            {notJoinedCount} employee(s) joined after {MONTH_NAMES[month - 1]} {year} and are excluded from this month's attendance and salary summary.
+          </div>
+        )}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-neutral-100 dark:border-neutral-800">
           <div>
             <div className="flex items-center gap-2">
@@ -498,7 +547,7 @@ export function AttendancePage() {
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                           <div className="rounded-lg bg-white dark:bg-neutral-800 p-2 border border-neutral-100 dark:border-neutral-700/60">
-                            <span className="block text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-semibold">Total Days</span>
+                            <span className="block text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-semibold">Eligible Days</span>
                             <span className="font-bold text-neutral-800 dark:text-neutral-200">{s.total_days}</span>
                           </div>
                           <div className="rounded-lg bg-white dark:bg-neutral-800 p-2 border border-neutral-100 dark:border-neutral-700/60">
@@ -540,7 +589,7 @@ export function AttendancePage() {
                         <tr className="text-xs font-bold uppercase tracking-wider border-b border-neutral-200 dark:border-neutral-700">
                           <th className="py-3.5 px-4 text-left text-neutral-700 dark:text-neutral-200">Employee</th>
                           <th className="py-3.5 px-4 text-left text-neutral-700 dark:text-neutral-200">Code</th>
-                          <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Total Days</th>
+                          <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Eligible Days</th>
                           <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Present</th>
                           <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Weekoff</th>
                           <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Leave</th>

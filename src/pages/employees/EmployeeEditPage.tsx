@@ -11,6 +11,7 @@ import { DEPARTMENT_OPTIONS, DESIGNATION_OPTIONS } from '../../lib/employeeOptio
 import { ThemedSelect } from '../../components/ui/ThemedSelect';
 import { BankNamePicker } from '../../components/ui/BankNamePicker';
 import { IfscLookupField } from '../../components/ui/IfscLookupField';
+import { ThemedDatePicker } from '../../components/ui/ThemedDatePicker';
 
 export function EmployeeEditPage() {
   const { id } = useParams();
@@ -25,6 +26,7 @@ export function EmployeeEditPage() {
     phone: '',
     department: '',
     designation: '',
+    date_of_joining: '',
     bank_name: '',
     bank_account_number: '',
     ifsc_code: '',
@@ -48,6 +50,7 @@ export function EmployeeEditPage() {
         phone: emp.phone || '',
         department: emp.department || '',
         designation: emp.designation || '',
+        date_of_joining: emp.date_of_joining || '',
         bank_name: emp.bank_name || '',
         bank_account_number: emp.bank_account_number || '',
         ifsc_code: emp.ifsc_code || '',
@@ -87,8 +90,8 @@ export function EmployeeEditPage() {
   const handleSubmit = () => {
     setError('');
     const trimmedFullName = form.full_name.trim();
-    if (!trimmedFullName || !form.email) {
-      setError('Full name and email are required.');
+    if (!trimmedFullName || !form.email || !form.date_of_joining) {
+      setError('Full name, email, and Date of Joining are required.');
       return;
     }
     if (!/^[a-zA-Z\s.'-]+$/.test(trimmedFullName)) {
@@ -113,6 +116,7 @@ export function EmployeeEditPage() {
           phone: form.phone || undefined,
           department: form.department || undefined,
           designation: form.designation || undefined,
+          date_of_joining: form.date_of_joining,
           bank_name: form.bank_name || undefined,
           bank_account_number: form.bank_account_number || undefined,
           ifsc_code: form.ifsc_code || undefined,
@@ -175,7 +179,19 @@ export function EmployeeEditPage() {
             placeholder="Select designation"
             customPlaceholder="Type custom designation..."
           />
+          <ThemedDatePicker
+            label="Date of Joining *"
+            value={form.date_of_joining}
+            onChange={(date_of_joining) => setForm((prev) => ({ ...prev, date_of_joining }))}
+            required
+            placeholder="Select joining date..."
+          />
         </div>
+        {form.date_of_joining && form.date_of_joining !== emp.date_of_joining && (
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            Changing the joining date updates attendance eligibility and monthly summaries. Earlier attendance stays stored but will be excluded. If affected salary slips already exist, delete those slips before saving this correction.
+          </p>
+        )}
       </GlassCard>
 
       <GlassCard>

@@ -33,7 +33,17 @@ export function useUpdateEmployee() {
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: Parameters<typeof employeeService.update>[1] }) =>
       employeeService.update(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+    onSuccess: (_response, variables) => {
+      qc.invalidateQueries({ queryKey: ['employees'] });
+      qc.invalidateQueries({ queryKey: ['employee', variables.id] });
+      qc.invalidateQueries({ queryKey: ['attendance'] });
+      qc.invalidateQueries({ queryKey: ['attendance-readiness'] });
+      qc.invalidateQueries({ queryKey: ['leave-summary'] });
+      qc.invalidateQueries({ queryKey: ['salary-slips'] });
+      qc.invalidateQueries({ queryKey: ['salary-slips-for-period'] });
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      qc.invalidateQueries({ queryKey: ['payroll-summary'] });
+    },
   });
 }
 

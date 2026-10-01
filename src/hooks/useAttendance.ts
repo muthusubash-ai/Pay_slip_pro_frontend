@@ -3,13 +3,13 @@ import { attendanceService } from '../services/attendanceService';
 import { useAuth } from '../context/AuthContext';
 import { hasMinimumPlan } from '../lib/plans';
 
-export function useMonthlyAttendance(employeeId: number, month: number, year: number) {
+export function useMonthlyAttendance(employeeId: number, month: number, year: number, isEligible = true) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ['attendance', employeeId, month, year],
     queryFn: () =>
       attendanceService.getMonthlyAttendance(employeeId, month, year).then((r) => r.data),
-    enabled: !!user && employeeId > 0,
+    enabled: !!user && employeeId > 0 && isEligible,
   });
 }
 

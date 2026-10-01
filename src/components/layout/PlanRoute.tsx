@@ -11,7 +11,7 @@ interface PlanRouteProps {
 export function PlanRoute({ minimumPlan, children, adminOnly = false }: PlanRouteProps) {
   const { user } = useAuth();
 
-  if (!hasMinimumPlan(user, minimumPlan) || (adminOnly && user?.role !== 'admin')) {
+  if (!hasMinimumPlan(user, minimumPlan) || (adminOnly && !user?.is_platform_admin)) {
     return <Navigate to={getPlanHome(user)} replace />;
   }
 

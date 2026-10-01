@@ -39,10 +39,11 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const isAddEmployeePage = location.pathname === '/employees/new';
   const isEmployeeDetailPage = /^\/employees\/\d+(\/edit)?$/.test(location.pathname);
   const isGenerateSlipsPage = location.pathname === '/salary-slips/generate';
-  const isNavigationLocked = isAddEmployeePage || isEmployeeDetailPage || isGenerateSlipsPage;
+  const isAttendancePage = location.pathname === '/attendance';
+  const isNavigationLocked = isAddEmployeePage || isEmployeeDetailPage || isGenerateSlipsPage || isAttendancePage;
 
   const visibleItems = navItems.filter((item) => hasMinimumPlan(user, item.minimumPlan));
-  if (plan === 'enterprise' && user?.role === 'admin') {
+  if (plan === 'enterprise' && user?.is_platform_admin) {
     visibleItems.push(
       { to: '/admin', label: 'Admin Overview', icon: ShieldCheck, minimumPlan: 'enterprise' },
       { to: '/admin/users', label: 'User Management', icon: Users, minimumPlan: 'enterprise' },
@@ -169,7 +170,8 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
 
           const isCurrentSection =
             ((isAddEmployeePage || isEmployeeDetailPage) && item.to === '/employees') ||
-            (isGenerateSlipsPage && item.to === '/salary-slips');
+            (isGenerateSlipsPage && item.to === '/salary-slips') ||
+            (isAttendancePage && item.to === '/attendance');
 
           const isThisItemBlocked = isNavigationLocked && !isCurrentSection;
 
@@ -246,15 +248,17 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
         <button
           type="button"
           onClick={() => {
+            if (isNavigationLocked) return;
             navigate('/settings');
             onMobileClose();
           }}
+          disabled={isNavigationLocked}
           className={cn(
             "w-full flex items-center rounded-xl p-2 transition-all duration-200 group text-left",
-            isDark ? "hover:bg-white/[0.08]" : "hover:bg-neutral-100",
+            isNavigationLocked ? "opacity-35 cursor-not-allowed select-none" : isDark ? "hover:bg-white/[0.08]" : "hover:bg-neutral-100",
             isCollapsed ? "justify-center p-2" : "gap-3"
           )}
-          title={isCollapsed ? `${user?.full_name || user?.email} (${plan})` : undefined}
+          title={isNavigationLocked ? 'Disabled on this page' : isCollapsed ? `${user?.full_name || user?.email} (${plan})` : undefined}
         >
           <div className={cn(
             "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[11px] font-extrabold shadow-md transition-transform group-hover:scale-105",

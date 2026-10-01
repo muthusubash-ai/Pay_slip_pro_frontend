@@ -21,7 +21,7 @@ export const attendanceService = {
     }),
 
   getReadiness: (month: number, year: number) =>
-    api.get<{ employee_id: number; recorded_days: number; total_days: number; complete: boolean }[]>('/attendance/readiness', {
+    api.get<{ employee_id: number; recorded_days: number; total_days: number; complete: boolean; eligible: boolean }[]>('/attendance/readiness', {
       params: { month, year },
     }),
 
