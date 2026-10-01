@@ -7,6 +7,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { employeeService } from '../../services/employeeService';
 import { salarySlipService } from '../../services/salarySlipService';
 import type { Employee, SalarySlip } from '../../types';
+import { AllActivityModal } from './AllActivityModal';
+import {
+  getNotificationOverrides,
+  formatTimeAgo,
+  setNotificationsRead,
+  hasUnreadItems,
+} from '../../utils/notificationStorage';
 
 const pageTitles: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -256,24 +263,38 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
 }
 
 /* ─── Notification Dropdown ─── */
-function NotificationDropdown({ onClose }: { onClose: () => void }) {
+interface NotificationDropdownProps {
+  onClose: () => void;
+  onViewAllActivity: () => void;
+}
+
+function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdownProps) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [slips, setSlips] = useState<SalarySlip[]>([]);
   const [loading, setLoading] = useState(true);
+  const [overrides, setOverrides] = useState(() => getNotificationOverrides());
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   useEffect(() => {
+    const handleUpdate = () => {
+      setOverrides(getNotificationOverrides());
+    };
+    window.addEventListener('notifications_updated', handleUpdate);
+    return () => window.removeEventListener('notifications_updated', handleUpdate);
+  }, []);
+
+  useEffect(() => {
     async function load() {
       try {
         const [empRes, slipRes] = await Promise.all([
-          employeeService.list({ per_page: 3 }),
-          salarySlipService.list({ per_page: 5 }),
+          employeeService.list({ per_page: 6 }),
+          salarySlipService.list({ per_page: 6 }),
         ]);
-        setEmployees(empRes.data.items);
-        setSlips(slipRes.data.items);
+        setEmployees(empRes.data.items || []);
+        setSlips(slipRes.data.items || []);
       } catch {
         // ignore
       } finally {
@@ -290,7 +311,6 @@ function NotificationDropdown({ onClose }: { onClose: () => void }) {
         onClose();
       }
     };
-    // Delay to prevent the click that opened it from immediately closing
     const timeout = setTimeout(() => document.addEventListener('mousedown', handler), 10);
     return () => {
       clearTimeout(timeout);
@@ -309,6 +329,7 @@ function NotificationDropdown({ onClose }: { onClose: () => void }) {
     title: string;
     desc: string;
     time: string;
+    timestamp: number;
     color: string;
     path: string;
   }
@@ -317,44 +338,52 @@ function NotificationDropdown({ onClose }: { onClose: () => void }) {
 
   // Generate notifications from recent slips
   slips.forEach((slip) => {
-    if (slip.status === 'generated') {
-      notifications.push({
-        id: `slip-${slip.id}`,
-        icon: FileText,
-        title: 'Salary slip generated',
-        desc: `${slip.employee?.full_name || 'Employee'} — ${MONTH_SHORT[slip.month - 1]} ${slip.year}`,
-        time: formatTimeAgo(slip.generated_at),
-        color: 'bg-sky-100 text-sky-600',
-        path: `/salary-slips/${slip.id}`,
-      });
-    } else if (slip.status === 'sent') {
-      notifications.push({
-        id: `slip-sent-${slip.id}`,
-        icon: FileText,
-        title: 'Salary slip emailed',
-        desc: `${slip.employee?.full_name || 'Employee'} — ${MONTH_SHORT[slip.month - 1]} ${slip.year}`,
-        time: formatTimeAgo(slip.emailed_at || slip.generated_at),
-        color: 'bg-emerald-100 text-emerald-600',
-        path: `/salary-slips/${slip.id}`,
-      });
-    }
+    const id = `slip-${slip.id}`;
+    const ov = overrides[id];
+    if (ov?.dismissed) return;
+
+    const slipDate = slip.emailed_at || slip.generated_at;
+    const timestamp = slipDate ? new Date(slipDate).getTime() : 0;
+    const defaultTitle = slip.status === 'sent' ? 'Salary slip emailed' : 'Salary slip generated';
+    const defaultDesc = `${slip.employee?.full_name || 'Employee'} — ${MONTH_SHORT[(slip.month || 1) - 1]} ${slip.year}`;
+
+    notifications.push({
+      id,
+      icon: FileText,
+      title: ov?.title || defaultTitle,
+      desc: ov?.desc || defaultDesc,
+      time: formatTimeAgo(slipDate),
+      timestamp,
+      color: slip.status === 'sent' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-sky-100 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400',
+      path: `/salary-slips/${slip.id}`,
+    });
   });
 
   // Generate notifications from recent employees
   employees.forEach((emp) => {
+    const id = `emp-${emp.id}`;
+    const ov = overrides[id];
+    if (ov?.dismissed) return;
+
+    const empDate = emp.created_at || emp.date_of_joining;
+    const timestamp = empDate ? new Date(empDate).getTime() : 0;
+    const defaultTitle = 'Employee added';
+    const defaultDesc = `${emp.full_name} — ${emp.department || emp.designation || 'Staff'}`;
+
     notifications.push({
-      id: `emp-${emp.id}`,
+      id,
       icon: Users,
-      title: 'Employee added',
-      desc: `${emp.full_name} — ${emp.department || 'No dept'}`,
-      time: formatTimeAgo(emp.created_at),
-      color: 'bg-violet-100 text-violet-600',
+      title: ov?.title || defaultTitle,
+      desc: ov?.desc || defaultDesc,
+      time: formatTimeAgo(empDate),
+      timestamp,
+      color: 'bg-violet-100 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400',
       path: `/employees/${emp.id}`,
     });
   });
 
   // Sort by most recent
-  notifications.sort((a, b) => b.time.localeCompare(a.time));
+  notifications.sort((a, b) => b.timestamp - a.timestamp);
   const displayNotifications = notifications.slice(0, 6);
 
   return (
@@ -364,12 +393,12 @@ function NotificationDropdown({ onClose }: { onClose: () => void }) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -8, scale: 0.97 }}
       transition={{ duration: 0.15 }}
-      className="fixed left-3 right-3 top-16 z-50 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl shadow-black/8 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80"
+      className="fixed left-3 right-3 top-16 z-50 overflow-hidden rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-xl shadow-black/10 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
-        <h3 className="text-[13px] font-bold text-neutral-900">Notifications</h3>
-        <span className="text-[10px] font-semibold text-neutral-400 bg-neutral-100 px-1.5 py-0.5 rounded-full">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100 dark:border-neutral-800">
+        <h3 className="text-[13px] font-bold text-neutral-900 dark:text-white">Notifications</h3>
+        <span className="text-[10px] font-semibold text-neutral-500 bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded-full">
           {displayNotifications.length}
         </span>
       </div>
@@ -378,11 +407,11 @@ function NotificationDropdown({ onClose }: { onClose: () => void }) {
       <div className="max-h-[340px] overflow-y-auto">
         {loading ? (
           <div className="px-4 py-8 text-center">
-            <div className="w-5 h-5 border-2 border-neutral-200 border-t-neutral-600 rounded-full mx-auto animate-spin" />
+            <div className="w-5 h-5 border-2 border-neutral-200 border-t-neutral-600 dark:border-neutral-700 dark:border-t-neutral-200 rounded-full mx-auto animate-spin" />
           </div>
         ) : displayNotifications.length === 0 ? (
           <div className="px-4 py-8 text-center">
-            <Bell className="h-5 w-5 text-neutral-300 mx-auto mb-2" />
+            <Bell className="h-5 w-5 text-neutral-300 dark:text-neutral-600 mx-auto mb-2" />
             <p className="text-xs text-neutral-400">No notifications yet</p>
           </div>
         ) : (
@@ -393,16 +422,16 @@ function NotificationDropdown({ onClose }: { onClose: () => void }) {
               animate={{ opacity: 1 }}
               transition={{ delay: i * 0.04 }}
               onClick={() => goTo(notif.path)}
-              className="w-full flex items-start gap-3 px-4 py-3 hover:bg-neutral-50 transition-colors text-left border-b border-neutral-50 last:border-0"
+              className="w-full flex items-start gap-3 px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/60 transition-colors text-left border-b border-neutral-50 dark:border-neutral-800/60 last:border-0"
             >
               <div className={`p-1.5 rounded-lg ${notif.color} shrink-0 mt-0.5`}>
                 <notif.icon className="h-3.5 w-3.5" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-semibold text-neutral-800">{notif.title}</p>
-                <p className="text-[11px] text-neutral-400 truncate">{notif.desc}</p>
+                <p className="text-[12px] font-semibold text-neutral-800 dark:text-neutral-100">{notif.title}</p>
+                <p className="text-[11px] text-neutral-400 dark:text-neutral-400 truncate">{notif.desc}</p>
               </div>
-              <span className="text-[10px] text-neutral-300 shrink-0 mt-0.5">{notif.time}</span>
+              <span className="text-[10px] text-neutral-400 shrink-0 mt-0.5">{notif.time}</span>
             </motion.button>
           ))
         )}
@@ -410,10 +439,10 @@ function NotificationDropdown({ onClose }: { onClose: () => void }) {
 
       {/* Footer */}
       {displayNotifications.length > 0 && (
-        <div className="border-t border-neutral-100 px-4 py-2.5">
+        <div className="border-t border-neutral-100 dark:border-neutral-800 px-4 py-2.5">
           <button
-            onClick={() => goTo('/salary-slips')}
-            className="text-[11px] font-semibold text-neutral-500 hover:text-black transition-colors flex items-center gap-1 mx-auto"
+            onClick={onViewAllActivity}
+            className="text-[11px] font-semibold text-neutral-600 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors flex items-center gap-1 mx-auto"
           >
             View all activity <ChevronRight className="h-3 w-3" />
           </button>
@@ -421,21 +450,6 @@ function NotificationDropdown({ onClose }: { onClose: () => void }) {
       )}
     </motion.div>
   );
-}
-
-function formatTimeAgo(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return 'now';
-  if (diffMins < 60) return `${diffMins}m`;
-  if (diffHours < 24) return `${diffHours}h`;
-  if (diffDays < 7) return `${diffDays}d`;
-  return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
 }
 
 /* ═══════════ HEADER ═══════════ */
@@ -446,6 +460,40 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const location = useLocation();
   const [showSearch, setShowSearch] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
+
+  const checkUnread = useCallback(async () => {
+    try {
+      const [empRes, slipRes] = await Promise.all([
+        employeeService.list({ per_page: 1 }),
+        salarySlipService.list({ per_page: 1 }),
+      ]);
+      const latestEmp = empRes.data.items?.[0];
+      const latestSlip = slipRes.data.items?.[0];
+
+      const empTime = latestEmp ? new Date(latestEmp.created_at || latestEmp.date_of_joining).getTime() : 0;
+      const slipTime = latestSlip ? new Date(latestSlip.emailed_at || latestSlip.generated_at).getTime() : 0;
+      const maxTime = Math.max(empTime, slipTime);
+
+      setHasUnread(hasUnreadItems(maxTime));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    checkUnread();
+    const handleReadUpdate = () => {
+      checkUnread();
+    };
+    window.addEventListener('notifications_read_updated', handleReadUpdate);
+    window.addEventListener('focus', checkUnread);
+    return () => {
+      window.removeEventListener('notifications_read_updated', handleReadUpdate);
+      window.removeEventListener('focus', checkUnread);
+    };
+  }, [checkUnread]);
 
   const handleLogout = () => {
     logout();
@@ -492,37 +540,54 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
 
         {/* Right — Actions */}
         <div className="flex shrink-0 items-center sm:gap-2">
-          {/* Search */}
+          {/* Search Bar */}
           <button
             onClick={() => setShowSearch(true)}
-            className="hidden items-center gap-2 rounded-lg p-2 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 min-[360px]:flex sm:px-3 sm:py-1.5"
+            className="hidden min-[360px]:flex items-center gap-2.5 rounded-xl border border-neutral-200/90 dark:border-neutral-800 bg-neutral-50/90 dark:bg-neutral-900/90 px-3.5 py-1.5 text-neutral-400 hover:border-neutral-300 dark:hover:border-neutral-700 hover:text-neutral-600 dark:hover:text-neutral-200 transition-all w-48 sm:w-64 md:w-80 shadow-sm"
+            title="Search employees, salary slips, etc."
           >
-            <Search className="h-4 w-4" />
-            <span className="text-[11px] text-neutral-300 hidden sm:inline">Search...</span>
-            <kbd className="hidden sm:inline text-[10px] font-medium text-neutral-300 bg-neutral-100 px-1.5 py-0.5 rounded ml-1">
-              ⌘K
-            </kbd>
+            <Search className="h-4 w-4 shrink-0 text-neutral-400 dark:text-neutral-500" />
+            <span className="text-xs text-neutral-400 dark:text-neutral-400 font-normal truncate">
+              Search employees, slips...
+            </span>
           </button>
 
           {/* Notifications */}
           <div className="relative">
             <button
               onClick={() => {
-                setShowNotifications((v) => !v);
+                setShowNotifications((v) => {
+                  const next = !v;
+                  if (next) {
+                    setNotificationsRead();
+                    setHasUnread(false);
+                  }
+                  return next;
+                });
               }}
               className="p-2 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors relative"
+              title="Notifications"
             >
               <Bell className="h-4 w-4" />
-              <motion.span
-                animate={{ scale: [1, 1.3, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-emerald-500 rounded-full"
-              />
+              {hasUnread && (
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: [1, 1.3, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                  className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-emerald-500 rounded-full"
+                />
+              )}
             </button>
 
             <AnimatePresence>
               {showNotifications && (
-                <NotificationDropdown onClose={closeNotifications} />
+                <NotificationDropdown
+                  onClose={closeNotifications}
+                  onViewAllActivity={() => {
+                    setShowNotifications(false);
+                    setShowActivityModal(true);
+                  }}
+                />
               )}
             </AnimatePresence>
           </div>
@@ -562,6 +627,13 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
       {/* Search Overlay (portal-like, rendered outside header) */}
       <AnimatePresence>
         {showSearch && <SearchOverlay onClose={closeSearch} />}
+      </AnimatePresence>
+
+      {/* Centered Activity & Notifications Modal */}
+      <AnimatePresence>
+        {showActivityModal && (
+          <AllActivityModal onClose={() => setShowActivityModal(false)} />
+        )}
       </AnimatePresence>
     </>
   );

@@ -11,7 +11,8 @@ import {
   ExternalLink,
   Star,
   Landmark,
-  Edit3
+  Edit3,
+  Clock
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { GlassCard } from '../../components/ui/GlassCard';
@@ -319,11 +320,24 @@ export function SettingsPage() {
         {/* Current Plan Overview Card */}
         <div className="p-4 sm:p-5 rounded-2xl bg-neutral-50 border border-neutral-200 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h4 className="text-sm font-bold text-neutral-900">{planDetails.name} Tier</h4>
               <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-medium">Active</span>
+              {currentPlan !== 'starter' && user?.plan_expires_at && (
+                <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold flex items-center gap-1 shadow-xs">
+                  <Clock className="h-3 w-3" />
+                  Expires: {new Date(user.plan_expires_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              )}
             </div>
-            <p className="text-xs text-neutral-500 mt-1">{planDetails.desc}</p>
+            <p className="text-xs text-neutral-500 mt-1">
+              {planDetails.desc}
+              {currentPlan !== 'starter' && user?.plan_expires_at && (
+                <span className="ml-1 text-neutral-800 font-semibold">
+                  ({Math.max(0, Math.ceil((new Date(user.plan_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days remaining)
+                </span>
+              )}
+            </p>
           </div>
 
           {currentPlan !== 'starter' && (
@@ -421,10 +435,30 @@ export function SettingsPage() {
                   {/* Action Button */}
                   <div className="pt-2">
                     {isCurrent ? (
-                      <div className="w-full py-2.5 px-4 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800 text-xs font-semibold flex items-center justify-center gap-2">
-                        <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                        Current Active Plan
-                      </div>
+                      currentPlan !== 'starter' ? (
+                        <div className="space-y-2">
+                          <div className="w-full py-2 px-3 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800 text-xs font-semibold flex items-center justify-center gap-2">
+                            <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            Current Active Plan
+                          </div>
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            type="button"
+                            disabled={upgradingPlan !== null}
+                            onClick={() => handleUpgrade(plan.id as 'professional' | 'enterprise')}
+                            className="w-full py-2 px-3 rounded-xl bg-neutral-900 text-white hover:bg-black dark:bg-white dark:text-black dark:hover:bg-neutral-100 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                          >
+                            <CreditCard className="h-3.5 w-3.5" />
+                            {upgradingPlan === plan.id ? 'Processing...' : 'Extend Plan (+30 Days)'}
+                          </motion.button>
+                        </div>
+                      ) : (
+                        <div className="w-full py-2.5 px-4 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800 text-xs font-semibold flex items-center justify-center gap-2">
+                          <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          Current Active Plan
+                        </div>
+                      )
                     ) : canUpgrade ? (
                       <motion.button
                         whileHover={{ scale: 1.02 }}

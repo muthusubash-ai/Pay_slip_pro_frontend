@@ -8,6 +8,7 @@ export interface User {
   is_active: boolean;
   is_platform_admin: boolean;
   plan: 'starter' | 'professional' | 'enterprise';
+  plan_expires_at?: string | null;
   created_at: string;
 }
 
