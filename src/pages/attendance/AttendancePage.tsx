@@ -178,6 +178,37 @@ export function AttendancePage() {
   });
   const presentCount = activeDays - leaveCount - halfDayCount - permissionCount - weekoffCount;
 
+  const isSelectedEmpJoiningMonth = Boolean(
+    joiningDate &&
+    joiningDate.slice(0, 7) === formatDate(year, month, 1).slice(0, 7) &&
+    firstActiveDay > 1
+  );
+
+  const estimatedSalary = (() => {
+    if (!selectedEmp) return 0;
+    const fullGross = Number(selectedEmp.basic_salary || 0) +
+      Number(selectedEmp.hra || 0) +
+      Number(selectedEmp.conveyance_allowance || 0) +
+      Number(selectedEmp.medical_allowance || 0) +
+      Number(selectedEmp.special_allowance || 0);
+
+    const fullDeductions = Number(selectedEmp.pf_deduction || 0) +
+      Number(selectedEmp.professional_tax || 0) +
+      Number(selectedEmp.tds || 0) +
+      Number(selectedEmp.esi || 0);
+
+    const proration = isSelectedEmpJoiningMonth ? (activeDays / totalDays) : 1.0;
+
+    const proratedGross = Math.round(fullGross * proration * 100) / 100;
+    const proratedDeductions = Math.round(fullDeductions * proration * 100) / 100;
+
+    const effectiveLeaves = leaveCount + (halfDayCount * 0.5) + (permissionCount * 0.25);
+    const perDayRate = totalDays > 0 ? fullGross / totalDays : 0;
+    const leaveDeduction = Math.round(effectiveLeaves * perDayRate * 100) / 100;
+
+    return Math.max(0, Math.round((proratedGross - proratedDeductions - leaveDeduction) * 100) / 100);
+  })();
+
   // Filtered leave summary
   const filteredSummary = (leaveSummary || []).filter((s) => {
     if (reportFilter === 'leaves') {
@@ -452,8 +483,21 @@ export function AttendancePage() {
                   <div className="w-3.5 h-3.5 bg-blue-600 rounded" />
                   <span className="text-neutral-600 dark:text-neutral-300">Weekoff ({weekoffCount})</span>
                 </div>
-                <div className="w-full font-bold text-neutral-900 dark:text-white sm:ml-auto sm:w-auto text-xs sm:text-sm">
-                  Working: {presentCount + weekoffCount} | Leaves: {leaveCount + (halfDayCount * 0.5) + (permissionCount * 0.25)}d | Eligible: {activeDays}d
+                <div className="w-full flex items-center justify-between sm:justify-end gap-2.5 font-bold text-neutral-900 dark:text-white sm:ml-auto sm:w-auto text-xs sm:text-sm flex-wrap">
+                  <span>Working: {presentCount + weekoffCount}</span>
+                  <span className="text-neutral-300 dark:text-neutral-700">|</span>
+                  <span>Leaves: {leaveCount + (halfDayCount * 0.5) + (permissionCount * 0.25)}d</span>
+                  <span className="text-neutral-300 dark:text-neutral-700">|</span>
+                  <span>Eligible: {activeDays}d{isSelectedEmpJoiningMonth ? ` (from ${joiningDate})` : ''}</span>
+                  {selectedEmp && (
+                    <>
+                      <span className="text-neutral-300 dark:text-neutral-700">|</span>
+                      <span className="text-emerald-600 dark:text-emerald-400">
+                        Est. Net Pay: ₹{estimatedSalary.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {isSelectedEmpJoiningMonth && <span className="ml-1 text-[11px] font-normal text-amber-600 dark:text-amber-400">(joining prorated)</span>}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </>
@@ -534,7 +578,14 @@ export function AttendancePage() {
                       <div key={s.employee_id} className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 bg-neutral-50 dark:bg-neutral-900/60">
                         <div className="mb-3 flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="break-words font-bold text-neutral-900 dark:text-white text-sm">{s.employee_name}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="break-words font-bold text-neutral-900 dark:text-white text-sm">{s.employee_name}</p>
+                              {s.is_joining_month && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+                                  Joined {s.date_of_joining}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-neutral-500 dark:text-neutral-400">{s.employee_code}</p>
                           </div>
                           <div className="text-right">
@@ -542,13 +593,20 @@ export function AttendancePage() {
                             <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
                               ₹{s.net_payable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
+                            {s.is_joining_month && (
+                              <span className="block text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                                Prorated ({s.total_days}/{totalDays}d)
+                              </span>
+                            )}
                           </div>
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                           <div className="rounded-lg bg-white dark:bg-neutral-800 p-2 border border-neutral-100 dark:border-neutral-700/60">
                             <span className="block text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-semibold">Eligible Days</span>
-                            <span className="font-bold text-neutral-800 dark:text-neutral-200">{s.total_days}</span>
+                            <span className="font-bold text-neutral-800 dark:text-neutral-200">
+                              {s.total_days} {s.is_joining_month ? `/${totalDays}d` : ''}
+                            </span>
                           </div>
                           <div className="rounded-lg bg-white dark:bg-neutral-800 p-2 border border-neutral-100 dark:border-neutral-700/60">
                             <span className="block text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-semibold">Present</span>
@@ -606,13 +664,23 @@ export function AttendancePage() {
                             className={`transition-colors hover:bg-neutral-100/60 dark:hover:bg-neutral-800/50 ${selectedEmployee === s.employee_id ? 'bg-neutral-100/80 dark:bg-neutral-800/70 font-medium' : ''}`}
                           >
                             <td className="py-3.5 px-4 font-semibold text-neutral-900 dark:text-white">
-                              {s.employee_name}
+                              <div className="flex items-center gap-2">
+                                <span>{s.employee_name}</span>
+                                {s.is_joining_month && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" title={`Joined on ${s.date_of_joining}`}>
+                                    Joined {s.date_of_joining}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-3.5 px-4 text-neutral-500 dark:text-neutral-300 font-mono text-xs">
                               {s.employee_code}
                             </td>
                             <td className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200 font-medium">
-                              {s.total_days}
+                              <div>{s.total_days}</div>
+                              {s.is_joining_month && (
+                                <span className="block text-[10px] text-neutral-500 dark:text-neutral-400">of {totalDays}d</span>
+                              )}
                             </td>
                             <td className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200 font-medium">
                               {s.present_days}
@@ -633,7 +701,14 @@ export function AttendancePage() {
                               {s.leave_deduction > 0 ? `₹${s.leave_deduction.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
                             </td>
                             <td className="py-3.5 px-4 text-right font-bold text-emerald-600 dark:text-emerald-400">
-                              ₹{s.net_payable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              <div>
+                                ₹{s.net_payable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                              {s.is_joining_month && (
+                                <span className="block text-[10px] font-normal text-amber-600 dark:text-amber-400">
+                                  Prorated ({s.total_days}/{totalDays}d)
+                                </span>
+                              )}
                             </td>
                           </tr>
                         ))}

@@ -140,4 +140,6 @@ export interface EmployeeLeaveSummary {
   leave_deduction: number;
   gross_salary?: number;
   net_payable: number;
+  is_joining_month?: boolean;
+  date_of_joining?: string | null;
 }
