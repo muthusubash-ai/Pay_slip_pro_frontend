@@ -12,7 +12,8 @@ import {
   Star,
   Landmark,
   Edit3,
-  Clock
+  Clock,
+  Crown
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { GlassCard } from '../../components/ui/GlassCard';
@@ -22,7 +23,7 @@ import { PlanUpgradeModal } from '../../components/ui/PlanUpgradeModal';
 import { companyService } from '../../services/companyService';
 import { paymentService } from '../../services/paymentService';
 import api from '../../services/api';
-import { getPlanDetails, getPlanHome, PLAN_CATALOG } from '../../lib/plans';
+import { getPlanDetails, getPlanHome, PLAN_CATALOG, getUserPlanRemainingText } from '../../lib/plans';
 
 export function SettingsPage() {
   const { user, updateUser } = useAuth();
@@ -318,23 +319,31 @@ export function SettingsPage() {
         </div>
 
         {/* Current Plan Overview Card */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-neutral-50 border border-neutral-200 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="p-4 sm:p-5 rounded-2xl bg-neutral-50 border border-neutral-200 dark:bg-[#18181b] dark:border-neutral-800 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h4 className="text-sm font-bold text-neutral-900">{planDetails.name} Tier</h4>
-              <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-medium">Active</span>
+              <h4 className="text-sm font-bold text-neutral-900 dark:text-white">{planDetails.name} Tier</h4>
+              <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1.5 shadow-xs border ${
+                currentPlan === 'starter'
+                  ? 'bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'
+                  : currentPlan === 'professional'
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800'
+                  : 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/70 dark:text-indigo-300 dark:border-indigo-800'
+              }`}>
+                Active
+              </span>
               {currentPlan !== 'starter' && user?.plan_expires_at && (
-                <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold flex items-center gap-1 shadow-xs">
-                  <Clock className="h-3 w-3" />
-                  Expires: {new Date(user.plan_expires_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800 font-semibold flex items-center gap-1 shadow-xs">
+                  <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                  Expires: {new Date(user.plan_expires_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} at {new Date(user.plan_expires_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
                 </span>
               )}
             </div>
-            <p className="text-xs text-neutral-500 mt-1">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
               {planDetails.desc}
               {currentPlan !== 'starter' && user?.plan_expires_at && (
-                <span className="ml-1 text-neutral-800 font-semibold">
-                  ({Math.max(0, Math.ceil((new Date(user.plan_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days remaining)
+                <span className="ml-1 text-neutral-800 dark:text-neutral-200 font-semibold">
+                  ({getUserPlanRemainingText(user)})
                 </span>
               )}
             </p>
@@ -343,7 +352,7 @@ export function SettingsPage() {
           {currentPlan !== 'starter' && (
             <Link
               to="/settings/company"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-800 hover:text-black underline underline-offset-4"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-800 hover:text-black dark:text-neutral-200 dark:hover:text-white underline underline-offset-4 transition-colors"
             >
               <Building2 className="h-3.5 w-3.5" />
               Customize Company Branding & Details
@@ -355,8 +364,8 @@ export function SettingsPage() {
         {/* Plan Cards Catalog matching Login / Landing Page */}
         <div>
           <div className="mb-6">
-            <h4 className="text-base font-bold text-neutral-900">Available Plans & Features</h4>
-            <p className="text-xs text-neutral-500 mt-1">Upgrade or manage your subscription tier with instant Razorpay activation.</p>
+            <h4 className="text-base font-bold text-neutral-900 dark:text-white">Available Plans & Features</h4>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">Upgrade or manage your subscription tier with instant Razorpay activation.</p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
@@ -369,34 +378,47 @@ export function SettingsPage() {
                 (currentPlan === 'enterprise' && (plan.id === 'starter' || plan.id === 'professional')) ||
                 (currentPlan === 'professional' && plan.id === 'starter');
 
+              let cardStyles = 'border-2 border-neutral-200 bg-white text-neutral-900 dark:bg-[#18181b] dark:border-neutral-800 dark:text-white shadow-xs';
+              if (plan.id === 'starter') {
+                cardStyles = 'border-2 border-slate-200/90 bg-white text-neutral-900 dark:bg-[#18181b] dark:border-slate-800 dark:text-white hover:border-slate-300 dark:hover:border-slate-700 shadow-xs';
+              } else if (plan.id === 'professional') {
+                cardStyles = 'border-2 border-neutral-900 bg-neutral-950 text-white shadow-xl dark-card-white lg:scale-[1.02]';
+              } else if (plan.id === 'enterprise') {
+                cardStyles = 'border-2 border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/20 text-neutral-900 dark:from-[#18181b] dark:to-indigo-950/20 dark:border-indigo-900/60 dark:text-white hover:border-indigo-400 dark:hover:border-indigo-600 shadow-sm';
+              }
+
               return (
                 <div
                   key={plan.id}
-                  className={`relative flex flex-col justify-between rounded-2xl border-2 p-5 sm:p-6 transition-all ${
-                    plan.popular
-                      ? 'border-neutral-900 bg-neutral-950 text-white shadow-xl dark-card-white lg:scale-[1.02]'
-                      : 'border-neutral-200 bg-white text-neutral-900 dark:bg-[#18181b] dark:border-neutral-800 dark:text-white'
-                  }`}
+                  className={`relative flex flex-col justify-between rounded-2xl p-5 sm:p-6 transition-all ${cardStyles}`}
                 >
-                  {plan.popular && (
+                  {/* Tier Badges */}
+                  {plan.id === 'starter' && (
+                    <div className="mb-3 flex justify-start sm:absolute sm:right-4 sm:top-4 sm:mb-0">
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 rounded-full flex items-center gap-1 shadow-xs border border-slate-200 dark:border-slate-700">
+                        Free Tier
+                      </span>
+                    </div>
+                  )}
+                  {plan.id === 'professional' && (
                     <div className="mb-3 flex justify-start sm:absolute sm:right-4 sm:top-4 sm:mb-0">
                       <span className="text-[10px] font-bold uppercase tracking-wider bg-white text-black dark:bg-black dark:text-white px-2.5 py-1 rounded-full flex items-center gap-1 card-badge shadow-sm">
                         <Star className="h-3 w-3 fill-current text-amber-400 dark:text-amber-300" /> Most Popular
                       </span>
                     </div>
                   )}
+                  {plan.id === 'enterprise' && (
+                    <div className="mb-3 flex justify-start sm:absolute sm:right-4 sm:top-4 sm:mb-0">
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1 rounded-full flex items-center gap-1 shadow-xs">
+                        <Crown className="h-3 w-3 text-indigo-500 fill-current" /> Unlimited
+                      </span>
+                    </div>
+                  )}
 
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className={`text-base font-bold ${plan.popular ? 'text-white card-title' : 'text-neutral-900 dark:text-white'}`}>
-                        {plan.name}
-                      </h4>
-                      {isCurrent && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                          Active
-                        </span>
-                      )}
-                    </div>
+                    <h4 className={`text-base font-bold mb-1 ${plan.popular ? 'text-white card-title' : 'text-neutral-900 dark:text-white'}`}>
+                      {plan.name}
+                    </h4>
                     <p className={`text-xs mb-4 min-h-[32px] ${plan.popular ? 'text-neutral-400 card-subtext' : 'text-neutral-500 dark:text-neutral-400'}`}>
                       {plan.desc}
                     </p>
@@ -421,7 +443,11 @@ export function SettingsPage() {
                         <li key={feat} className="flex items-start gap-2.5 text-xs">
                           <CheckCircle2
                             className={`h-4 w-4 shrink-0 mt-0.5 ${
-                              plan.popular ? 'text-emerald-400 card-icon' : 'text-emerald-600 dark:text-emerald-400'
+                              plan.id === 'starter'
+                                ? 'text-slate-500 dark:text-slate-400'
+                                : plan.id === 'professional'
+                                ? 'text-emerald-500 dark:text-emerald-400 card-icon'
+                                : 'text-indigo-500 dark:text-indigo-400'
                             }`}
                           />
                           <span className={plan.popular ? 'text-neutral-300 card-feature' : 'text-neutral-600 dark:text-neutral-300'}>
@@ -436,10 +462,16 @@ export function SettingsPage() {
                   <div className="pt-2">
                     {isCurrent ? (
                       currentPlan !== 'starter' ? (
-                        <div className="space-y-2">
-                          <div className="w-full py-2 px-3 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800 text-xs font-semibold flex items-center justify-center gap-2">
-                            <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                            Current Active Plan
+                        <div className="space-y-2.5">
+                          <div
+                            className={`w-full py-2.5 px-3.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-all active-plan-badge ${
+                              plan.id === 'professional'
+                                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                                : 'bg-indigo-50 text-indigo-800 border-indigo-300 dark:bg-indigo-950/70 dark:text-indigo-300 dark:border-indigo-800'
+                            }`}
+                          >
+                            <Check className="h-4 w-4 shrink-0 active-plan-icon text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
+                            <span>Current Active Plan</span>
                           </div>
                           <motion.button
                             whileHover={{ scale: 1.02 }}
@@ -447,16 +479,20 @@ export function SettingsPage() {
                             type="button"
                             disabled={upgradingPlan !== null}
                             onClick={() => handleUpgrade(plan.id as 'professional' | 'enterprise')}
-                            className="w-full py-2 px-3 rounded-xl bg-neutral-900 text-white hover:bg-black dark:bg-white dark:text-black dark:hover:bg-neutral-100 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                            className={`w-full py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md extend-plan-btn ${
+                              plan.id === 'professional'
+                                ? 'bg-white text-neutral-900 hover:bg-neutral-100'
+                                : 'bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-indigo-500 dark:hover:bg-indigo-600'
+                            }`}
                           >
-                            <CreditCard className="h-3.5 w-3.5" />
-                            {upgradingPlan === plan.id ? 'Processing...' : 'Extend Plan (+30 Days)'}
+                            <CreditCard className="h-4 w-4 shrink-0" />
+                            <span>{upgradingPlan === plan.id ? 'Processing...' : 'Extend Plan (+30 Days)'}</span>
                           </motion.button>
                         </div>
                       ) : (
-                        <div className="w-full py-2.5 px-4 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800 text-xs font-semibold flex items-center justify-center gap-2">
-                          <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                          Current Active Plan
+                        <div className="w-full py-2.5 px-4 rounded-xl bg-slate-100 text-slate-800 border border-slate-300 dark:bg-slate-800/80 dark:text-slate-200 dark:border-slate-700 text-xs font-bold flex items-center justify-center gap-2">
+                          <Check className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
+                          <span>Current Active Plan</span>
                         </div>
                       )
                     ) : canUpgrade ? (
@@ -466,7 +502,9 @@ export function SettingsPage() {
                         disabled={upgradingPlan !== null}
                         onClick={() => handleUpgrade(plan.id as 'professional' | 'enterprise')}
                         className={`w-full py-2.5 px-4 rounded-xl font-semibold text-xs transition-all flex items-center justify-center gap-2 disabled:opacity-60 shadow-sm ${
-                          plan.popular
+                          plan.id === 'enterprise'
+                            ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/20'
+                            : plan.popular
                             ? 'bg-white text-black hover:bg-neutral-100 keep-dark'
                             : 'bg-neutral-900 text-white hover:bg-neutral-800 keep-white'
                         }`}
@@ -475,7 +513,8 @@ export function SettingsPage() {
                         {upgradingPlan === plan.id ? 'Processing...' : `Upgrade to ${plan.name} (${plan.price})`}
                       </motion.button>
                     ) : isLower ? (
-                      <div className="w-full py-2.5 px-4 rounded-xl bg-neutral-100 text-neutral-500 dark:bg-neutral-800/60 dark:text-neutral-400 text-xs font-medium flex items-center justify-center gap-2">
+                      <div className="w-full py-2.5 px-4 rounded-xl bg-neutral-100 text-neutral-600 border border-neutral-200/80 dark:bg-neutral-800/60 dark:text-neutral-400 dark:border-neutral-700/60 text-xs font-semibold flex items-center justify-center gap-2">
+                        <Check className="h-3.5 w-3.5 text-neutral-400" />
                         Included in your current plan
                       </div>
                     ) : (

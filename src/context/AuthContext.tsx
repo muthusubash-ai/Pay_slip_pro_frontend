@@ -10,6 +10,7 @@ interface AuthContextType {
   googleLogin: () => Promise<User>;
   logout: () => Promise<void>;
   updateUser: (user: User) => void;
+  refetchUser: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18,6 +19,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const initialized = useRef(false);
+
+  const refetchUser = useCallback(async () => {
+    try {
+      const res = await api.get('/auth/me');
+      setUser(res.data);
+      return res.data;
+    } catch {
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -29,6 +40,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => setUser(null))
       .finally(() => setIsLoading(false));
   }, []);
+
+  // Sync user state on window focus (e.g. when admin changes plan in another tab)
+  useEffect(() => {
+    const handleFocus = () => {
+      refetchUser();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [refetchUser]);
+
+  // Periodic background sync every 10 seconds
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => {
+      refetchUser();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [user, refetchUser]);
 
   const login = useCallback(async (email: string, password: string) => {
     const form = new FormData();
@@ -67,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, googleLogin, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, googleLogin, logout, updateUser, refetchUser }}>
       {children}
     </AuthContext.Provider>
   );

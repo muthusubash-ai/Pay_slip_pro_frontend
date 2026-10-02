@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LogOut, Bell, Search, X, Users, FileText, ChevronRight, Calendar, Settings, Menu, Sun, Moon } from 'lucide-react';
+import { LogOut, Bell, Search, X, Users, FileText, CreditCard, ChevronRight, Calendar, Settings, Menu, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -269,6 +269,7 @@ interface NotificationDropdownProps {
 }
 
 function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdownProps) {
+  const { user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [slips, setSlips] = useState<SalarySlip[]>([]);
   const [loading, setLoading] = useState(true);
@@ -382,6 +383,94 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
     });
   });
 
+  // Generate notification for plan expiry / expiring soon
+  if (user && user.plan !== 'starter' && user.plan_expires_at) {
+    const expiryTime = new Date(user.plan_expires_at).getTime();
+    const diffMs = expiryTime - Date.now();
+    const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    const hoursLeft = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60)));
+    const expiryFormatted = new Date(user.plan_expires_at).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    const expiryTimeFormatted = new Date(user.plan_expires_at).toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+    if (diffMs <= 0) {
+      const id = `plan-expired-${user.plan}`;
+      const ov = overrides[id];
+      if (!ov?.dismissed) {
+        notifications.unshift({
+          id,
+          icon: CreditCard,
+          title: ov?.title || `${user.plan.toUpperCase()} Plan Expired`,
+          desc: ov?.desc || `Your plan expired on ${expiryFormatted} at ${expiryTimeFormatted}. Renew now to unfreeze all features.`,
+          time: 'Expired',
+          timestamp: Date.now() + 1000000,
+          color: 'bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400',
+          path: '/settings',
+        });
+      }
+    } else if (diffMs <= 24 * 60 * 60 * 1000) {
+      // Final day: Less than 24 hours left - show remaining hours
+      const id = `plan-expiring-${user.plan}`;
+      const ov = overrides[id];
+      if (!ov?.dismissed) {
+        const defaultTitle = `${user.plan.toUpperCase()} Plan Expiring in ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}!`;
+        const defaultDesc = `Your plan expires today at ${expiryTimeFormatted}. Renew now to avoid work interruption.`;
+        notifications.unshift({
+          id,
+          icon: CreditCard,
+          title: ov?.title || defaultTitle,
+          desc: ov?.desc || defaultDesc,
+          time: `${hoursLeft}h left`,
+          timestamp: Date.now() + 500000,
+          color: 'bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400',
+          path: '/settings',
+        });
+      }
+    } else if (diffMs <= 48 * 60 * 60 * 1000) {
+      // 1 day before expiry
+      const id = `plan-expiring-${user.plan}`;
+      const ov = overrides[id];
+      if (!ov?.dismissed) {
+        const defaultTitle = `${user.plan.toUpperCase()} Plan Expiring Tomorrow (1 day left)!`;
+        const defaultDesc = `Your plan expires tomorrow, ${expiryFormatted} at ${expiryTimeFormatted}. Renew early to avoid work interruption.`;
+        notifications.unshift({
+          id,
+          icon: CreditCard,
+          title: ov?.title || defaultTitle,
+          desc: ov?.desc || defaultDesc,
+          time: '1d left',
+          timestamp: Date.now() + 500000,
+          color: 'bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400',
+          path: '/settings',
+        });
+      }
+    } else if (daysLeft <= 7) {
+      const id = `plan-expiring-${user.plan}`;
+      const ov = overrides[id];
+      if (!ov?.dismissed) {
+        const defaultTitle = `${user.plan.toUpperCase()} Plan Expiring Soon (${daysLeft}d left)`;
+        const defaultDesc = `Your plan expires on ${expiryFormatted} at ${expiryTimeFormatted}. Renew early to avoid work interruption.`;
+        notifications.unshift({
+          id,
+          icon: CreditCard,
+          title: ov?.title || defaultTitle,
+          desc: ov?.desc || defaultDesc,
+          time: `${daysLeft}d left`,
+          timestamp: Date.now() + 500000,
+          color: 'bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400',
+          path: '/settings',
+        });
+      }
+    }
+  }
+
   // Sort by most recent
   notifications.sort((a, b) => b.timestamp - a.timestamp);
   const displayNotifications = notifications.slice(0, 6);
@@ -454,7 +543,7 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
 
 /* ═══════════ HEADER ═══════════ */
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -474,13 +563,23 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
 
       const empTime = latestEmp ? new Date(latestEmp.created_at || latestEmp.date_of_joining).getTime() : 0;
       const slipTime = latestSlip ? new Date(latestSlip.emailed_at || latestSlip.generated_at).getTime() : 0;
-      const maxTime = Math.max(empTime, slipTime);
+
+      let latestPlanAlertTime = 0;
+      if (user?.plan && user.plan !== 'starter' && user.plan_expires_at) {
+        const diffMs = new Date(user.plan_expires_at).getTime() - Date.now();
+        const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        if (diffMs <= 0 || daysLeft <= 7) {
+          latestPlanAlertTime = Date.now();
+        }
+      }
+
+      const maxTime = Math.max(empTime, slipTime, latestPlanAlertTime);
 
       setHasUnread(hasUnreadItems(maxTime));
     } catch {
       // ignore
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     checkUnread();

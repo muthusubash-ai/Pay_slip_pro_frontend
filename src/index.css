@@ -98,6 +98,35 @@ html.dark .dark\:bg-neutral-950 span {
   color: #ffffff !important;
 }
 
+/* Active Plan badge inside inverted white card in dark mode */
+html.dark .dark-card-white .active-plan-badge {
+  background-color: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+  color: #065f46 !important;
+}
+
+html.dark .dark-card-white .active-plan-badge .active-plan-icon {
+  color: #059669 !important;
+}
+
+/* Extend Plan button inside inverted white card in dark mode */
+html.dark .dark-card-white .extend-plan-btn {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  border: 1px solid #0f172a !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15) !important;
+}
+
+html.dark .dark-card-white .extend-plan-btn:hover {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+html.dark .dark-card-white .extend-plan-btn svg,
+html.dark .dark-card-white .extend-plan-btn span {
+  color: #ffffff !important;
+}
+
 html.dark .dark\:text-neutral-900 {
   color: #171717 !important;
 }

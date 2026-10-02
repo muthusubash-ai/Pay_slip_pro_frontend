@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, useInView } from 'framer-motion';
 import {
   Eye, EyeOff, Check, X, FileText, Shield, Clock, Send, ArrowRight,
@@ -355,12 +355,30 @@ function LoginModal({
     setError('');
     setIsLoading(true);
     try {
-      const signedInUser = await login(email, password);
+      const signedInUser = await login(email.trim(), password);
       if (onSignedIn) onSignedIn(signedInUser);
       else navigate(getPlanHome(signedInUser));
     }
-    catch { setError('Invalid email or password'); }
+    catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { detail?: string; message?: string } } }).response?.data?.detail ||
+            (err as { response?: { data?: { detail?: string; message?: string } } }).response?.data?.message
+          : undefined;
+      setError(msg || 'Invalid email or password');
+    }
     finally { setIsLoading(false); }
+  };
+
+  const handleForgotClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      setError('Please enter your email above first to reset password.');
+      setFocusedField('email');
+      return;
+    }
+    onClose();
+    navigate('/forgot-password', { state: { email: email.trim() } });
   };
 
   return (
@@ -431,7 +449,7 @@ function LoginModal({
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-[11px] font-semibold text-neutral-500 uppercase tracking-widest">Password</label>
-                <Link to="/forgot-password" onClick={onClose} className="text-[11px] text-neutral-400 hover:text-black transition-colors">Forgot?</Link>
+                <button type="button" onClick={handleForgotClick} className="text-[11px] text-neutral-400 hover:text-black transition-colors cursor-pointer">Forgot?</button>
               </div>
               <motion.div animate={{ boxShadow: focusedField === 'password' ? '0 0 0 3px rgba(0,0,0,0.06)' : '0 0 0 0px rgba(0,0,0,0)' }} className="rounded-xl relative">
                 <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
@@ -503,6 +521,14 @@ export function LoginPage() {
   const [celebrationPlan, setCelebrationPlan] = useState<'professional' | 'enterprise' | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const location = useLocation();
+
+  useEffect(() => {
+    if ((location.state as { openLogin?: boolean } | null)?.openLogin) {
+      setShowLogin(true);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

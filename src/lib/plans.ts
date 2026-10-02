@@ -86,11 +86,51 @@ export const EMPLOYEE_LIMITS: Record<Plan, number | null> = {
   enterprise: null,
 };
 
+export function isUserPlanExpired(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (user.is_plan_expired) return true;
+  if (user.plan_expires_at) {
+    return new Date(user.plan_expires_at).getTime() <= Date.now();
+  }
+  return false;
+}
+
+export function getUserPlanDaysRemaining(user: User | null | undefined): number | null {
+  if (!user || !user.plan_expires_at) return null;
+  const expiry = new Date(user.plan_expires_at).getTime();
+  const diff = expiry - Date.now();
+  if (diff <= 0) return 0;
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+export function getUserPlanHoursRemaining(user: User | null | undefined): number | null {
+  if (!user || !user.plan_expires_at) return null;
+  const expiry = new Date(user.plan_expires_at).getTime();
+  const diff = expiry - Date.now();
+  if (diff <= 0) return 0;
+  return Math.max(1, Math.ceil(diff / (1000 * 60 * 60)));
+}
+
+export function getUserPlanRemainingText(user: User | null | undefined): string | null {
+  if (!user || !user.plan_expires_at) return null;
+  const diff = new Date(user.plan_expires_at).getTime() - Date.now();
+  if (diff <= 0) return 'Expired';
+  if (diff <= 24 * 60 * 60 * 1000) {
+    const hours = Math.max(1, Math.ceil(diff / (1000 * 60 * 60)));
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'} remaining`;
+  }
+  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+  return `${days} ${days === 1 ? 'day' : 'days'} remaining`;
+}
+
 export function getPlan(user: User | null | undefined): Plan {
   return user?.plan ?? 'starter';
 }
 
 export function hasMinimumPlan(user: User | null | undefined, minimumPlan: Plan): boolean {
+  if (isUserPlanExpired(user)) {
+    return minimumPlan === 'starter';
+  }
   return PLAN_LEVELS[getPlan(user)] >= PLAN_LEVELS[minimumPlan];
 }
 

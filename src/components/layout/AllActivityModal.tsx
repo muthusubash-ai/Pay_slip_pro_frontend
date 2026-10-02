@@ -6,6 +6,7 @@ import {
   Search,
   Users,
   FileText,
+  CreditCard,
   Pencil,
   Trash2,
   Check,
@@ -15,6 +16,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { employeeService } from '../../services/employeeService';
 import { salarySlipService } from '../../services/salarySlipService';
 import type { Employee, SalarySlip } from '../../types';
@@ -30,7 +32,7 @@ import {
 
 export interface ActivityItem {
   id: string;
-  type: 'slip' | 'employee';
+  type: 'slip' | 'employee' | 'plan';
   rawId: number;
   title: string;
   defaultTitle: string;
@@ -53,6 +55,7 @@ interface AllActivityModalProps {
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export function AllActivityModal({ onClose }: AllActivityModalProps) {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -60,7 +63,7 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
   const [slips, setSlips] = useState<SalarySlip[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'slips' | 'employees'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'slips' | 'employees' | 'plans'>('all');
   const [overrides, setOverrides] = useState(() => getNotificationOverrides());
 
   // Editing state for an item
@@ -185,10 +188,128 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
       });
     });
 
+    // Plan Expiry Alerts
+    if (user && user.plan !== 'starter' && user.plan_expires_at) {
+      const expiryTime = new Date(user.plan_expires_at).getTime();
+      const diffMs = expiryTime - Date.now();
+      const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      const hoursLeft = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60)));
+      const expiryFormatted = new Date(user.plan_expires_at).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+      const expiryTimeFormatted = new Date(user.plan_expires_at).toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+
+      if (diffMs <= 0) {
+        const id = `plan-expired-${user.plan}`;
+        const ov = overrides[id];
+        if (!ov?.dismissed) {
+          const defaultTitle = `${user.plan.toUpperCase()} Plan Expired`;
+          const defaultDesc = `Your subscription expired on ${expiryFormatted} at ${expiryTimeFormatted}. Please renew or upgrade to unfreeze access.`;
+          items.push({
+            id,
+            type: 'plan',
+            rawId: 0,
+            title: ov?.title || defaultTitle,
+            defaultTitle,
+            desc: ov?.desc || defaultDesc,
+            defaultDesc,
+            note: ov?.note,
+            time: 'Expired',
+            timestamp: Date.now() + 1000000,
+            color: 'text-rose-600 dark:text-rose-400',
+            iconBg: 'bg-rose-50 dark:bg-rose-950/50',
+            path: '/settings',
+            editPath: '/settings',
+            isEdited: Boolean(ov?.title || ov?.desc || ov?.note),
+          });
+        }
+      } else if (diffMs <= 24 * 60 * 60 * 1000) {
+        // Final day: Less than 24 hours left - show hours remaining
+        const id = `plan-expiring-${user.plan}`;
+        const ov = overrides[id];
+        if (!ov?.dismissed) {
+          const defaultTitle = `${user.plan.toUpperCase()} Plan Expiring in ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}!`;
+          const defaultDesc = `Your plan expires today at ${expiryTimeFormatted}. Renew now to prevent service interruption.`;
+          items.push({
+            id,
+            type: 'plan',
+            rawId: 0,
+            title: ov?.title || defaultTitle,
+            defaultTitle,
+            desc: ov?.desc || defaultDesc,
+            defaultDesc,
+            note: ov?.note,
+            time: `Expiring in ${hoursLeft}h`,
+            timestamp: Date.now() + 500000,
+            color: 'text-rose-600 dark:text-rose-400',
+            iconBg: 'bg-rose-50 dark:bg-rose-950/50',
+            path: '/settings',
+            editPath: '/settings',
+            isEdited: Boolean(ov?.title || ov?.desc || ov?.note),
+          });
+        }
+      } else if (diffMs <= 48 * 60 * 60 * 1000) {
+        // 1 day before expiry
+        const id = `plan-expiring-${user.plan}`;
+        const ov = overrides[id];
+        if (!ov?.dismissed) {
+          const defaultTitle = `${user.plan.toUpperCase()} Plan Expiring Tomorrow (1 day left)!`;
+          const defaultDesc = `Your plan expires tomorrow, ${expiryFormatted} at ${expiryTimeFormatted}. Renew early to prevent service interruption.`;
+          items.push({
+            id,
+            type: 'plan',
+            rawId: 0,
+            title: ov?.title || defaultTitle,
+            defaultTitle,
+            desc: ov?.desc || defaultDesc,
+            defaultDesc,
+            note: ov?.note,
+            time: '1 day left',
+            timestamp: Date.now() + 500000,
+            color: 'text-amber-600 dark:text-amber-400',
+            iconBg: 'bg-amber-50 dark:bg-amber-950/50',
+            path: '/settings',
+            editPath: '/settings',
+            isEdited: Boolean(ov?.title || ov?.desc || ov?.note),
+          });
+        }
+      } else if (daysLeft <= 7) {
+        const id = `plan-expiring-${user.plan}`;
+        const ov = overrides[id];
+        if (!ov?.dismissed) {
+          const defaultTitle = `${user.plan.toUpperCase()} Plan Expiring Soon (${daysLeft}d left)`;
+          const defaultDesc = `Your plan expires on ${expiryFormatted} at ${expiryTimeFormatted}. Renew early to prevent service interruption.`;
+          items.push({
+            id,
+            type: 'plan',
+            rawId: 0,
+            title: ov?.title || defaultTitle,
+            defaultTitle,
+            desc: ov?.desc || defaultDesc,
+            defaultDesc,
+            note: ov?.note,
+            time: `${daysLeft} days left`,
+            timestamp: Date.now() + 500000,
+            color: 'text-amber-600 dark:text-amber-400',
+            iconBg: 'bg-amber-50 dark:bg-amber-950/50',
+            path: '/settings',
+            editPath: '/settings',
+            isEdited: Boolean(ov?.title || ov?.desc || ov?.note),
+          });
+        }
+      }
+    }
+
     // Sort newest first
     items.sort((a, b) => b.timestamp - a.timestamp);
     return items;
-  }, [slips, employees, overrides]);
+  }, [slips, employees, overrides, user]);
 
   // Filter & Search
   const filteredActivities = useMemo(() => {
@@ -389,7 +510,7 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                       <div className="flex items-start gap-3 min-w-0 flex-1">
                         <div className={`p-2 rounded-xl shrink-0 mt-0.5 ${item.iconBg} ${item.color}`}>
-                          {item.type === 'slip' ? <FileText className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+                          {item.type === 'plan' ? <CreditCard className="h-4 w-4" /> : item.type === 'slip' ? <FileText className="h-4 w-4" /> : <Users className="h-4 w-4" />}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">

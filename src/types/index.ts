@@ -9,6 +9,8 @@ export interface User {
   is_platform_admin: boolean;
   plan: 'starter' | 'professional' | 'enterprise';
   plan_expires_at?: string | null;
+  is_plan_expired?: boolean;
+  plan_days_left?: number | null;
   created_at: string;
 }
 
