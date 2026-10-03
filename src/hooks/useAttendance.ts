@@ -55,6 +55,7 @@ export function useBulkMarkLeaves() {
       half_day_dates?: string[];
       permission_dates?: string[];
       weekoff_dates: string[];
+      weekoff_halfday_dates?: string[];
     }) => attendanceService.bulkMarkLeaves(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendance'] });

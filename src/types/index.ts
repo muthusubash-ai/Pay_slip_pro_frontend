@@ -119,11 +119,13 @@ export interface DepartmentBreakdown {
   basic_salary: number;
 }
 
+export type DayStatus = 'present' | 'leave' | 'half_day' | 'permission' | 'weekoff' | 'weekoff_halfday';
+
 export interface AttendanceRecord {
   id: number;
   employee_id: number;
   date: string;
-  status: 'present' | 'leave' | 'half_day' | 'permission' | 'weekoff';
+  status: DayStatus;
 }
 
 export interface EmployeeLeaveSummary {
@@ -138,6 +140,7 @@ export interface EmployeeLeaveSummary {
   permission_days: number;
   effective_leave_days: number;
   weekoff_days: number;
+  weekoff_halfday_days?: number;
   present_days: number;
   leave_deduction: number;
   gross_salary?: number;

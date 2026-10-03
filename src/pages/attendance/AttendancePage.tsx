@@ -15,7 +15,7 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-type DayStatus = 'present' | 'leave' | 'half_day' | 'permission' | 'weekoff';
+type DayStatus = 'present' | 'leave' | 'half_day' | 'permission' | 'weekoff' | 'weekoff_halfday';
 
 function getDaysInMonth(month: number, year: number): number {
   return new Date(year, month, 0).getDate();
@@ -88,21 +88,42 @@ export function AttendancePage() {
     return () => clearTimeout(timer);
   }, [error]);
 
-  // Cycle: present → leave (1.0) → half_day (0.5) → permission (0.25) → weekoff (0) → present
+  // Cycle: present → leave (1.0) → half_day (0.5) → permission (0.25) → weekoff (0) → weekoff_halfday (0, max 2) → present
   const cycleStatus = (dateStr: string) => {
     if (joiningDate && dateStr < joiningDate) return;
+    setSuccess('');
+    setError('');
+
     setDayStatuses((prev) => {
       const next = new Map(prev);
       const current = next.get(dateStr) || 'present';
-      if (current === 'present') next.set(dateStr, 'leave');
-      else if (current === 'leave') next.set(dateStr, 'half_day');
-      else if (current === 'half_day') next.set(dateStr, 'permission');
-      else if (current === 'permission') next.set(dateStr, 'weekoff');
-      else next.set(dateStr, 'present');
+      if (current === 'present') {
+        next.set(dateStr, 'leave');
+      } else if (current === 'leave') {
+        next.set(dateStr, 'half_day');
+      } else if (current === 'half_day') {
+        next.set(dateStr, 'permission');
+      } else if (current === 'permission') {
+        next.set(dateStr, 'weekoff');
+      } else if (current === 'weekoff') {
+        // Enforce maximum 2 Weekoff Halfdays per month for an employee
+        let currentWeekoffHalfCount = 0;
+        prev.forEach((st, d) => {
+          if (d !== dateStr && st === 'weekoff_halfday') {
+            currentWeekoffHalfCount++;
+          }
+        });
+        if (currentWeekoffHalfCount >= 2) {
+          setError('Monthly limit reached: Maximum 2 Weekoff Halfdays allowed per month for an employee.');
+          next.set(dateStr, 'present');
+        } else {
+          next.set(dateStr, 'weekoff_halfday');
+        }
+      } else {
+        next.set(dateStr, 'present');
+      }
       return next;
     });
-    setSuccess('');
-    setError('');
   };
 
   const handleSave = () => {
@@ -121,13 +142,20 @@ export function AttendancePage() {
     const halfDayDatesList: string[] = [];
     const permissionDatesList: string[] = [];
     const weekoffDatesList: string[] = [];
+    const weekoffHalfdayDatesList: string[] = [];
     dayStatuses.forEach((status, dateStr) => {
       if (joiningDate && dateStr < joiningDate) return;
       if (status === 'leave') leaveDatesList.push(dateStr);
       else if (status === 'half_day') halfDayDatesList.push(dateStr);
       else if (status === 'permission') permissionDatesList.push(dateStr);
       else if (status === 'weekoff') weekoffDatesList.push(dateStr);
+      else if (status === 'weekoff_halfday') weekoffHalfdayDatesList.push(dateStr);
     });
+
+    if (weekoffHalfdayDatesList.length > 2) {
+      setError('Maximum 2 Weekoff Halfdays allowed per month.');
+      return;
+    }
 
     bulkMark.mutate(
       {
@@ -138,6 +166,7 @@ export function AttendancePage() {
         half_day_dates: halfDayDatesList,
         permission_dates: permissionDatesList,
         weekoff_dates: weekoffDatesList,
+        weekoff_halfday_dates: weekoffHalfdayDatesList,
       },
       {
         onSuccess: () => {
@@ -146,13 +175,28 @@ export function AttendancePage() {
           if (halfDayDatesList.length) parts.push(`${halfDayDatesList.length} half day`);
           if (permissionDatesList.length) parts.push(`${permissionDatesList.length} permission`);
           if (weekoffDatesList.length) parts.push(`${weekoffDatesList.length} weekoff`);
+          if (weekoffHalfdayDatesList.length) parts.push(`${weekoffHalfdayDatesList.length} weekoff halfday`);
           const summaryStr = parts.length ? parts.join(', ') : 'all present';
           setSuccess(
             `Attendance saved successfully (${summaryStr}) for ${MONTH_NAMES[month - 1]} ${year}.`
           );
         },
         onError: (err: any) => {
-          setError(err?.response?.data?.detail || 'Failed to save attendance.');
+          const data = err?.response?.data;
+          let msg = 'Failed to save attendance.';
+          if (typeof data?.detail === 'string') {
+            msg = data.detail;
+          } else if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length) {
+            msg = String(data.non_field_errors[0]);
+          } else if (typeof data === 'string') {
+            msg = data;
+          } else if (data && typeof data === 'object') {
+            const firstKey = Object.keys(data)[0];
+            const val = data[firstKey];
+            if (Array.isArray(val) && val.length) msg = `${firstKey}: ${val[0]}`;
+            else if (typeof val === 'string') msg = val;
+          }
+          setError(msg);
         },
       }
     );
@@ -169,14 +213,16 @@ export function AttendancePage() {
   let halfDayCount = 0;
   let permissionCount = 0;
   let weekoffCount = 0;
+  let weekoffHalfdayCount = 0;
   dayStatuses.forEach((status, dateStr) => {
     if (joiningDate && dateStr < joiningDate) return;
     if (status === 'leave') leaveCount++;
     else if (status === 'half_day') halfDayCount++;
     else if (status === 'permission') permissionCount++;
     else if (status === 'weekoff') weekoffCount++;
+    else if (status === 'weekoff_halfday') weekoffHalfdayCount++;
   });
-  const presentCount = activeDays - leaveCount - halfDayCount - permissionCount - weekoffCount;
+  const presentCount = activeDays - leaveCount - halfDayCount - permissionCount - weekoffCount - weekoffHalfdayCount;
 
   const isSelectedEmpJoiningMonth = Boolean(
     joiningDate &&
@@ -212,7 +258,12 @@ export function AttendancePage() {
   // Filtered leave summary
   const filteredSummary = (leaveSummary || []).filter((s) => {
     if (reportFilter === 'leaves') {
-      return s.leave_days > 0 || (s.half_day_days || 0) > 0 || (s.permission_days || 0) > 0;
+      return (
+        s.leave_days > 0 ||
+        (s.half_day_days || 0) > 0 ||
+        (s.permission_days || 0) > 0 ||
+        (s.weekoff_halfday_days || 0) > 0
+      );
     }
     if (reportFilter === 'deductions') return s.leave_deduction > 0;
     return true;
@@ -223,6 +274,7 @@ export function AttendancePage() {
   const totalLeavesSum = filteredSummary.reduce((acc, curr) => acc + curr.leave_days, 0);
   const totalHalfDaysSum = filteredSummary.reduce((acc, curr) => acc + (curr.half_day_days || 0), 0);
   const totalPermissionsSum = filteredSummary.reduce((acc, curr) => acc + (curr.permission_days || 0), 0);
+  const totalWeekoffHalfSum = filteredSummary.reduce((acc, curr) => acc + (curr.weekoff_halfday_days || 0), 0);
   const totalDeductionsSum = filteredSummary.reduce((acc, curr) => acc + curr.leave_deduction, 0);
   const totalNetPayableSum = filteredSummary.reduce((acc, curr) => acc + (curr.net_payable || 0), 0);
 
@@ -382,10 +434,10 @@ export function AttendancePage() {
           <div className="flex flex-col gap-4 mb-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 className="text-base font-bold text-neutral-900 dark:text-white">
-                {MONTH_NAMES[month - 1]} {year} — Click to cycle: Present → Leave → Half Day → Permission → Weekoff
+                {MONTH_NAMES[month - 1]} {year} — Click to cycle: Present → Leave → Half Day → Permission → Weekoff → Weekoff Half
               </h3>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                Full Leave deducts 1 day, Half Day deducts 0.5 day, Permission deducts 0.25 day. Weekoffs are paid (no deduction).
+                Full Leave deducts 1 day, Half Day deducts 0.5 day, Permission deducts 0.25 day. Weekoffs & Weekoff Halfday (max 2/month) are paid (no deduction).
               </p>
               {firstActiveDay > 1 && <p className="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">Joined on {joiningDate}. Days before joining are locked and excluded.</p>}
             </div>
@@ -443,6 +495,9 @@ export function AttendancePage() {
                   } else if (status === 'weekoff') {
                     bgClass = 'bg-blue-600 text-white border-blue-600 shadow-sm';
                     label = 'WEEKOFF';
+                  } else if (status === 'weekoff_halfday') {
+                    bgClass = 'bg-teal-600 text-white border-teal-600 shadow-sm';
+                    label = 'WKOFF HALF (½)';
                   }
 
                   return (
@@ -483,8 +538,12 @@ export function AttendancePage() {
                   <div className="w-3.5 h-3.5 bg-blue-600 rounded" />
                   <span className="text-neutral-600 dark:text-neutral-300">Weekoff ({weekoffCount})</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3.5 h-3.5 bg-teal-600 rounded" />
+                  <span className="text-neutral-600 dark:text-neutral-300">Wkoff Half ({weekoffHalfdayCount}/2)</span>
+                </div>
                 <div className="w-full flex items-center justify-between sm:justify-end gap-2.5 font-bold text-neutral-900 dark:text-white sm:ml-auto sm:w-auto text-xs sm:text-sm flex-wrap">
-                  <span>Working: {presentCount + weekoffCount}</span>
+                  <span>Working: {presentCount + weekoffCount + weekoffHalfdayCount}</span>
                   <span className="text-neutral-300 dark:text-neutral-700">|</span>
                   <span>Leaves: {leaveCount + (halfDayCount * 0.5) + (permissionCount * 0.25)}d</span>
                   <span className="text-neutral-300 dark:text-neutral-700">|</span>
@@ -616,6 +675,10 @@ export function AttendancePage() {
                             <span className="block text-[10px] text-blue-600 dark:text-blue-400 uppercase font-semibold">Weekoff</span>
                             <span className="font-bold text-blue-800 dark:text-blue-300">{s.weekoff_days}</span>
                           </div>
+                          <div className="rounded-lg bg-teal-50 dark:bg-teal-950/40 p-2 border border-teal-100 dark:border-teal-900/60">
+                            <span className="block text-[10px] text-teal-600 dark:text-teal-400 uppercase font-semibold">Weekoff Half</span>
+                            <span className="font-bold text-teal-800 dark:text-teal-300">{s.weekoff_halfday_days || 0}/2</span>
+                          </div>
                           <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 p-2 border border-rose-100 dark:border-rose-900/60">
                             <span className="block text-[10px] text-rose-600 dark:text-rose-400 uppercase font-semibold">Full Leave (1.0)</span>
                             <span className="font-bold text-rose-800 dark:text-rose-300">{s.leave_days}</span>
@@ -650,6 +713,7 @@ export function AttendancePage() {
                           <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Eligible Days</th>
                           <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Present</th>
                           <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Weekoff</th>
+                          <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Wkoff Half</th>
                           <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Leave</th>
                           <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Half Day</th>
                           <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Permission</th>
@@ -688,6 +752,9 @@ export function AttendancePage() {
                             <td className={`py-3.5 px-3 text-center font-bold ${s.weekoff_days > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-neutral-400 dark:text-neutral-500'}`}>
                               {s.weekoff_days}
                             </td>
+                            <td className={`py-3.5 px-3 text-center font-bold ${(s.weekoff_halfday_days || 0) > 0 ? 'text-teal-600 dark:text-teal-400' : 'text-neutral-400 dark:text-neutral-500'}`}>
+                              {s.weekoff_halfday_days || 0}
+                            </td>
                             <td className={`py-3.5 px-3 text-center font-bold ${s.leave_days > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-neutral-400 dark:text-neutral-500'}`}>
                               {s.leave_days}
                             </td>
@@ -722,6 +789,9 @@ export function AttendancePage() {
                           <td className="py-3.5 px-3 text-center text-neutral-400 dark:text-neutral-500">—</td>
                           <td className="py-3.5 px-3 text-center text-neutral-400 dark:text-neutral-500">—</td>
                           <td className="py-3.5 px-3 text-center text-neutral-400 dark:text-neutral-500">—</td>
+                          <td className="py-3.5 px-3 text-center text-sm font-extrabold text-teal-600 dark:text-teal-400">
+                            {totalWeekoffHalfSum}
+                          </td>
                           <td className="py-3.5 px-3 text-center text-sm font-extrabold text-rose-600 dark:text-rose-400">
                             {totalLeavesSum}
                           </td>
