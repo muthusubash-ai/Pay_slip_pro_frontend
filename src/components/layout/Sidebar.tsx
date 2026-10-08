@@ -1,7 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, CalendarDays, Settings, Building2, PanelLeftClose, PanelLeftOpen, ShieldCheck, X } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { LayoutDashboard, Users, FileText, CalendarDays, Settings, Building2, PanelLeftClose, ShieldCheck, X, User, LogOut, ChevronUp } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -25,7 +24,9 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { user } = useAuth();
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const { user, logout } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const plan = getPlan(user);
@@ -41,6 +42,41 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const isGenerateSlipsPage = location.pathname === '/salary-slips/generate';
   const isAttendancePage = location.pathname === '/attendance';
   const isNavigationLocked = isAddEmployeePage || isEmployeeDetailPage || isGenerateSlipsPage || isAttendancePage;
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    if (isProfileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isProfileMenuOpen]);
+
+  const handleViewProfile = () => {
+    if (isNavigationLocked) return;
+    setIsProfileMenuOpen(false);
+    navigate('/settings');
+    onMobileClose();
+  };
+
+  const handleLogout = () => {
+    setIsProfileMenuOpen(false);
+    onMobileClose();
+    logout();
+    navigate('/login');
+  };
 
   const visibleItems = navItems.filter((item) => hasMinimumPlan(user, item.minimumPlan));
   if (plan === 'enterprise' && user?.is_platform_admin) {
@@ -62,13 +98,14 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
         )}
       />
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r transition-transform duration-200 lg:static lg:z-auto lg:min-h-screen lg:translate-x-0 lg:transition-[width] lg:duration-300",
+        "fixed inset-y-0 left-0 z-50 flex flex-col border-r lg:static lg:z-auto lg:min-h-screen lg:translate-x-0 transition-[width,transform] duration-300 ease-in-out select-none overflow-x-hidden",
         isDark ? "bg-[#0d0d10] border-white/[0.08] text-white" : "bg-white border-neutral-200/90 text-neutral-800 shadow-sm",
         isMobileOpen ? "translate-x-0" : "-translate-x-full",
-        isCollapsed ? "lg:w-[72px]" : "lg:w-[260px]"
+        isCollapsed ? "w-[280px] lg:w-[72px]" : "w-[280px] lg:w-[260px]"
       )}>
       {/* Logo / Header */}
       <div className="pt-7 pb-8 px-4">
+        {/* Mobile Header */}
         <div className="flex items-center justify-between gap-3 lg:hidden">
           <div className="flex items-center gap-3 overflow-hidden">
             <div className={cn(
@@ -77,11 +114,11 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
             )}>
               <FileText className="h-4 w-4" />
             </div>
-            <div className="flex flex-col">
-              <h1 className={cn("text-[15px] font-bold tracking-tight whitespace-nowrap", isDark ? "text-white" : "text-neutral-900")}>
+            <div className="flex flex-col min-w-0">
+              <h1 className={cn("text-[15px] font-bold tracking-tight whitespace-nowrap truncate", isDark ? "text-white" : "text-neutral-900")}>
                 Pay Slip Pro
               </h1>
-              <p className={cn("text-[10px] tracking-wide whitespace-nowrap", isDark ? "text-neutral-400" : "text-neutral-500")}>
+              <p className={cn("text-[10px] tracking-wide whitespace-nowrap truncate", isDark ? "text-neutral-400" : "text-neutral-500")}>
                 Salary Management
               </p>
             </div>
@@ -99,66 +136,67 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
           </button>
         </div>
 
-        {!isCollapsed ? (
-          <div className="hidden items-center justify-between gap-3 lg:flex">
-            <div className="flex items-center gap-3 overflow-hidden">
-              <div className={cn(
-                "w-9 h-9 rounded-lg flex items-center justify-center shadow-md shrink-0",
-                isDark ? "bg-white text-black keep-white shadow-white/5" : "bg-black text-white shadow-black/10"
-              )}>
-                <FileText className="h-4 w-4" />
-              </div>
-              <div className="flex flex-col">
-                <h1 className={cn("text-[15px] font-bold tracking-tight whitespace-nowrap", isDark ? "text-white" : "text-neutral-900")}>
-                  Pay Slip Pro
-                </h1>
-                <p className={cn("text-[10px] tracking-wide whitespace-nowrap", isDark ? "text-neutral-400" : "text-neutral-500")}>
-                  Salary Management
-                </p>
-              </div>
-            </div>
+        {/* Desktop Header */}
+        <div className="hidden lg:flex items-center justify-between overflow-hidden">
+          <div className="flex items-center gap-3 min-w-0">
             <button
+              type="button"
+              onClick={() => {
+                if (isCollapsed) {
+                  setIsCollapsed(false);
+                }
+              }}
+              className={cn(
+                "w-9 h-9 rounded-lg flex items-center justify-center shadow-md shrink-0 transition-transform duration-200 cursor-pointer",
+                isCollapsed && "hover:scale-105 active:scale-95",
+                isDark ? "bg-white text-black keep-white shadow-white/5" : "bg-black text-white shadow-black/10"
+              )}
+              title={isCollapsed ? "Expand sidebar" : "Pay Slip Pro"}
+              aria-label={isCollapsed ? "Expand sidebar" : "Pay Slip Pro"}
+            >
+              <FileText className="h-4 w-4 shrink-0" />
+            </button>
+            <div className={cn(
+              "flex flex-col min-w-0 whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden",
+              isCollapsed ? "w-0 opacity-0 pointer-events-none" : "w-[125px] opacity-100"
+            )}>
+              <h1 className={cn("text-[15px] font-bold tracking-tight whitespace-nowrap truncate", isDark ? "text-white" : "text-neutral-900")}>
+                Pay Slip Pro
+              </h1>
+              <p className={cn("text-[10px] tracking-wide whitespace-nowrap truncate", isDark ? "text-neutral-400" : "text-neutral-500")}>
+                Salary Management
+              </p>
+            </div>
+          </div>
+          <div className={cn(
+            "transition-all duration-200 overflow-hidden shrink-0",
+            isCollapsed ? "w-0 opacity-0 pointer-events-none" : "w-auto opacity-100"
+          )}>
+            <button
+              type="button"
               onClick={() => setIsCollapsed(true)}
               className={cn(
-                "hidden p-1.5 rounded-lg transition-all duration-200 shrink-0 border border-transparent lg:block",
+                "p-1.5 rounded-lg transition-all duration-200 shrink-0 border border-transparent cursor-pointer",
                 isDark ? "text-neutral-400 hover:text-white hover:bg-white/[0.08] hover:border-white/10" : "text-neutral-400 hover:text-black hover:bg-neutral-100 hover:border-neutral-200"
               )}
-              title="Close sidebar"
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
             >
               <PanelLeftClose className="h-4.5 w-4.5" />
             </button>
           </div>
-        ) : (
-          <div className="hidden w-full flex-col items-center gap-4 lg:flex">
-            <div className={cn(
-              "w-9 h-9 rounded-lg flex items-center justify-center shadow-md shrink-0",
-              isDark ? "bg-white text-black keep-white shadow-white/5" : "bg-black text-white shadow-black/10"
-            )}>
-              <FileText className="h-4 w-4" />
-            </div>
-            <button
-              onClick={() => setIsCollapsed(false)}
-              className={cn(
-                "p-1.5 rounded-lg transition-all duration-200 shrink-0 border border-transparent",
-                isDark ? "text-neutral-400 hover:text-white hover:bg-white/[0.08] hover:border-white/10" : "text-neutral-400 hover:text-black hover:bg-neutral-100 hover:border-neutral-200"
-              )}
-              title="Open sidebar"
-            >
-              <PanelLeftOpen className="h-4.5 w-4.5" />
-            </button>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Divider */}
-      <div className={cn("h-px mb-4", isDark ? "bg-white/[0.08]" : "bg-neutral-200/80", isCollapsed ? "mx-3" : "mx-5")} />
+      <div className={cn("h-px mb-4 mx-4 transition-all duration-300", isDark ? "bg-white/[0.08]" : "bg-neutral-200/80")} />
 
       {/* Navigation */}
-      <nav className={cn("flex-1 space-y-0.5", isCollapsed ? "px-2" : "px-3")}>
+      <nav className="flex-1 space-y-0.5 px-3 overflow-hidden">
         <p className={cn(
-          'text-[10px] font-bold uppercase tracking-widest px-3 mb-2',
+          'text-[10px] font-bold uppercase tracking-widest px-3 mb-2 whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out',
           isDark ? 'text-neutral-500' : 'text-neutral-400',
-          isCollapsed && 'lg:hidden'
+          isCollapsed ? 'lg:h-0 lg:opacity-0 lg:mb-0' : 'lg:h-auto lg:opacity-100'
         )}>
           Menu
         </p>
@@ -199,12 +237,10 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                     : undefined
               }
             >
-              <motion.div
-                whileHover={{ x: isCollapsed ? 0 : 2 }}
-                transition={{ duration: 0.15 }}
+              <div
                 className={cn(
-                  'flex items-center rounded-lg text-[13px] font-medium transition-all duration-200 relative',
-                  isCollapsed ? 'gap-3 px-3 py-2.5 lg:justify-center lg:p-2.5' : 'gap-3 px-3 py-2.5',
+                  'flex items-center h-10 px-3 rounded-lg text-[13px] font-medium transition-all duration-200 relative overflow-hidden',
+                  !isCollapsed && 'hover:translate-x-0.5',
                   isActive
                     ? isDark
                       ? 'keep-white bg-white text-black shadow-md shadow-white/5 font-semibold'
@@ -220,45 +256,113 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                     ? isDark ? 'text-black' : 'text-white'
                     : isDark ? 'text-neutral-400' : 'text-neutral-500'
                 )} />
-                <span className={cn(isCollapsed && 'lg:hidden')}>{item.label}</span>
+                <span className={cn(
+                  'whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out ml-3 min-w-0',
+                  isCollapsed ? 'lg:w-0 lg:opacity-0 lg:ml-0' : 'lg:w-auto lg:opacity-100'
+                )}>
+                  {item.label}
+                </span>
                 {isActive && (
-                  <motion.div
-                    layoutId="sidebar-active"
+                  <div
                     className={cn(
-                      'absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full',
+                      'absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full transition-opacity duration-200',
                       isDark ? 'bg-black' : 'bg-white',
-                      isCollapsed && 'lg:hidden'
+                      isCollapsed && 'lg:opacity-0'
                     )}
-                    transition={{ type: 'spring', stiffness: 350, damping: 30 }}
                   />
                 )}
-              </motion.div>
+              </div>
             </NavLink>
           );
         })}
       </nav>
 
-      {/* Footer - Profile Badge & Developed by */}
-      <div className={cn(
-        "pb-5 pt-3 border-t mt-auto",
-        isDark ? "border-white/[0.08]" : "border-neutral-200/80",
-        isCollapsed ? "px-2" : "px-3"
-      )}>
-        {/* Profile Badge */}
+      {/* Footer - Profile Badge & Popover Menu */}
+      <div
+        ref={profileRef}
+        className={cn(
+          "relative pb-4 pt-3 border-t mt-auto px-3 transition-all duration-300",
+          isDark ? "border-white/[0.08]" : "border-neutral-200/80"
+        )}
+      >
+        {/* Profile Popover Menu */}
+        {isProfileMenuOpen && (
+          <div
+            className={cn(
+              "absolute z-50 rounded-2xl border p-1.5 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none",
+              isDark
+                ? "bg-[#141418] border-white/[0.12] text-white shadow-black/80"
+                : "bg-white border-neutral-200 text-neutral-800 shadow-neutral-900/15",
+              isCollapsed
+                ? "left-2 lg:left-14 bottom-14 lg:bottom-1 w-56"
+                : "left-3 right-3 bottom-full mb-2"
+            )}
+          >
+            {/* User Info Header inside Popover */}
+            <div className={cn(
+              "px-3 py-2 border-b mb-1",
+              isDark ? "border-white/[0.08]" : "border-neutral-100"
+            )}>
+              <p className={cn("text-[13px] font-bold truncate", isDark ? "text-white" : "text-neutral-900")}>
+                {user?.full_name || user?.email}
+              </p>
+              <p className={cn("text-[11px] truncate", isDark ? "text-neutral-400" : "text-neutral-500")}>
+                {user?.email}
+              </p>
+            </div>
+
+            {/* Field 1: View Profile */}
+            <button
+              type="button"
+              onClick={handleViewProfile}
+              disabled={isNavigationLocked}
+              className={cn(
+                "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-colors text-left cursor-pointer",
+                isNavigationLocked
+                  ? "opacity-40 cursor-not-allowed"
+                  : isDark
+                    ? "hover:bg-white/[0.08] text-neutral-200 hover:text-white"
+                    : "hover:bg-neutral-100 text-neutral-700 hover:text-neutral-900"
+              )}
+            >
+              <User className="h-4 w-4 shrink-0 text-neutral-400" />
+              <span>View Profile</span>
+            </button>
+
+            {/* Field 2: Logout */}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className={cn(
+                "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-colors text-left cursor-pointer",
+                isDark
+                  ? "text-rose-400 hover:bg-rose-500/15 hover:text-rose-300"
+                  : "text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+              )}
+            >
+              <LogOut className="h-4 w-4 shrink-0" />
+              <span>Logout</span>
+            </button>
+          </div>
+        )}
+
+        {/* Profile Badge Button */}
         <button
           type="button"
-          onClick={() => {
-            if (isNavigationLocked) return;
-            navigate('/settings');
-            onMobileClose();
-          }}
-          disabled={isNavigationLocked}
+          onClick={() => setIsProfileMenuOpen((prev) => !prev)}
           className={cn(
-            "w-full flex items-center rounded-xl p-2 transition-all duration-200 group text-left",
-            isNavigationLocked ? "opacity-35 cursor-not-allowed select-none" : isDark ? "hover:bg-white/[0.08]" : "hover:bg-neutral-100",
-            isCollapsed ? "justify-center p-2" : "gap-3"
+            "w-full flex items-center h-11 px-2 rounded-xl transition-all duration-200 group text-left cursor-pointer",
+            isProfileMenuOpen
+              ? isDark
+                ? "bg-white/[0.1] text-white"
+                : "bg-neutral-100 text-black"
+              : isDark
+                ? "hover:bg-white/[0.08]"
+                : "hover:bg-neutral-100"
           )}
-          title={isNavigationLocked ? 'Disabled on this page' : isCollapsed ? `${user?.full_name || user?.email} (${plan})` : undefined}
+          title={isCollapsed ? `${user?.full_name || user?.email} (${plan})` : undefined}
+          aria-haspopup="true"
+          aria-expanded={isProfileMenuOpen}
         >
           <div className={cn(
             "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[11px] font-extrabold shadow-md transition-transform group-hover:scale-105",
@@ -266,7 +370,10 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
           )}>
             {initials}
           </div>
-          <div className={cn("min-w-0 flex-1 overflow-hidden", isCollapsed && "lg:hidden")}>
+          <div className={cn(
+            "min-w-0 flex-1 whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out ml-3",
+            isCollapsed ? "lg:w-0 lg:opacity-0 lg:ml-0 lg:pointer-events-none" : "lg:w-auto lg:opacity-100"
+          )}>
             <div className="flex items-center justify-between gap-1.5">
               <p className={cn(
                 "truncate text-[13px] font-semibold transition-colors",
@@ -287,6 +394,13 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
             )}>
               {user?.role === 'admin' ? 'Administrator' : 'HR Manager'}
             </p>
+          </div>
+          <div className={cn(
+            "shrink-0 transition-transform duration-200",
+            isCollapsed ? "lg:hidden" : "ml-1.5",
+            isProfileMenuOpen ? "rotate-180 text-neutral-200" : "text-neutral-400"
+          )}>
+            <ChevronUp className="h-4 w-4" />
           </div>
         </button>
       </div>

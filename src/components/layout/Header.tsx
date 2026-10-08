@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LogOut, Bell, Search, X, Users, FileText, CreditCard, ChevronRight, Calendar, Settings, Menu, Sun, Moon } from 'lucide-react';
+import { Bell, Search, X, Users, FileText, CreditCard, ChevronRight, Calendar, Settings, Menu, Sun, Moon } from 'lucide-react';
+import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -268,13 +269,14 @@ interface NotificationDropdownProps {
   onViewAllActivity: () => void;
 }
 
+let cachedNotificationData: { employees: Employee[]; slips: SalarySlip[] } | null = null;
+
 function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdownProps) {
   const { user } = useAuth();
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [slips, setSlips] = useState<SalarySlip[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [employees, setEmployees] = useState<Employee[]>(() => cachedNotificationData?.employees || []);
+  const [slips, setSlips] = useState<SalarySlip[]>(() => cachedNotificationData?.slips || []);
+  const [loading, setLoading] = useState(() => !cachedNotificationData);
   const [overrides, setOverrides] = useState(() => getNotificationOverrides());
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -294,8 +296,11 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
           employeeService.list({ per_page: 6 }),
           salarySlipService.list({ per_page: 6 }),
         ]);
-        setEmployees(empRes.data.items || []);
-        setSlips(slipRes.data.items || []);
+        const newEmps = empRes.data.items || [];
+        const newSlips = slipRes.data.items || [];
+        cachedNotificationData = { employees: newEmps, slips: newSlips };
+        setEmployees(newEmps);
+        setSlips(newSlips);
       } catch {
         // ignore
       } finally {
@@ -304,20 +309,6 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
     }
     load();
   }, []);
-
-  // Close on click outside
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const timeout = setTimeout(() => document.addEventListener('mousedown', handler), 10);
-    return () => {
-      clearTimeout(timeout);
-      document.removeEventListener('mousedown', handler);
-    };
-  }, [onClose]);
 
   const goTo = (path: string) => {
     navigate(path);
@@ -477,11 +468,10 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
 
   return (
     <motion.div
-      ref={dropdownRef}
-      initial={{ opacity: 0, y: -8, scale: 0.97 }}
+      initial={{ opacity: 0, y: -6, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -8, scale: 0.97 }}
-      transition={{ duration: 0.15 }}
+      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+      transition={{ duration: 0.15, ease: 'easeOut' }}
       className="fixed left-3 right-3 top-16 z-50 overflow-hidden rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-xl shadow-black/10 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80"
     >
       {/* Header */}
@@ -504,14 +494,12 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
             <p className="text-xs text-neutral-400">No notifications yet</p>
           </div>
         ) : (
-          displayNotifications.map((notif, i) => (
-            <motion.button
+          displayNotifications.map((notif) => (
+            <button
               key={notif.id}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: i * 0.04 }}
+              type="button"
               onClick={() => goTo(notif.path)}
-              className="w-full flex items-start gap-3 px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/60 transition-colors text-left border-b border-neutral-50 dark:border-neutral-800/60 last:border-0"
+              className="w-full flex items-start gap-3 px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/60 transition-colors text-left border-b border-neutral-50 dark:border-neutral-800/60 last:border-0 cursor-pointer"
             >
               <div className={`p-1.5 rounded-lg ${notif.color} shrink-0 mt-0.5`}>
                 <notif.icon className="h-3.5 w-3.5" />
@@ -521,7 +509,7 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
                 <p className="text-[11px] text-neutral-400 dark:text-neutral-400 truncate">{notif.desc}</p>
               </div>
               <span className="text-[10px] text-neutral-400 shrink-0 mt-0.5">{notif.time}</span>
-            </motion.button>
+            </button>
           ))
         )}
       </div>
@@ -530,8 +518,9 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
       {displayNotifications.length > 0 && (
         <div className="border-t border-neutral-100 dark:border-neutral-800 px-4 py-2.5">
           <button
+            type="button"
             onClick={onViewAllActivity}
-            className="text-[11px] font-semibold text-neutral-600 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors flex items-center gap-1 mx-auto"
+            className="text-[11px] font-semibold text-neutral-600 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors flex items-center gap-1 mx-auto cursor-pointer"
           >
             View all activity <ChevronRight className="h-3 w-3" />
           </button>
@@ -543,23 +532,27 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
 
 /* ═══════════ HEADER ═══════════ */
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const navigate = useNavigate();
   const location = useLocation();
   const [showSearch, setShowSearch] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
+  const notificationWrapperRef = useRef<HTMLDivElement>(null);
 
   const checkUnread = useCallback(async () => {
     try {
       const [empRes, slipRes] = await Promise.all([
-        employeeService.list({ per_page: 1 }),
-        salarySlipService.list({ per_page: 1 }),
+        employeeService.list({ per_page: 6 }),
+        salarySlipService.list({ per_page: 6 }),
       ]);
-      const latestEmp = empRes.data.items?.[0];
-      const latestSlip = slipRes.data.items?.[0];
+      const empItems = empRes.data.items || [];
+      const slipItems = slipRes.data.items || [];
+      cachedNotificationData = { employees: empItems, slips: slipItems };
+
+      const latestEmp = empItems[0];
+      const latestSlip = slipItems[0];
 
       const empTime = latestEmp ? new Date(latestEmp.created_at || latestEmp.date_of_joining).getTime() : 0;
       const slipTime = latestSlip ? new Date(latestSlip.emailed_at || latestSlip.generated_at).getTime() : 0;
@@ -594,10 +587,27 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
     };
   }, [checkUnread]);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
+  // Click outside and Escape key to close notifications
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notificationWrapperRef.current && !notificationWrapperRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowNotifications(false);
+      }
+    };
+    if (showNotifications) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showNotifications]);
 
   // Keyboard shortcut: Ctrl+K or Cmd+K to open search
   useEffect(() => {
@@ -642,7 +652,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
           {/* Search Bar */}
           <button
             onClick={() => setShowSearch(true)}
-            className="hidden min-[360px]:flex items-center gap-2.5 rounded-xl border border-neutral-200/90 dark:border-neutral-800 bg-neutral-50/90 dark:bg-neutral-900/90 px-3.5 py-1.5 text-neutral-400 hover:border-neutral-300 dark:hover:border-neutral-700 hover:text-neutral-600 dark:hover:text-neutral-200 transition-all w-48 sm:w-64 md:w-80 shadow-sm"
+            className="hidden min-[360px]:flex items-center gap-2.5 rounded-xl border border-neutral-200/90 dark:border-neutral-800 bg-neutral-50/90 dark:bg-neutral-900/90 px-3.5 py-1.5 text-neutral-400 hover:border-neutral-300 dark:hover:border-neutral-700 hover:text-neutral-600 dark:hover:text-neutral-200 transition-all w-48 sm:w-64 md:w-80 shadow-sm cursor-pointer"
             title="Search employees, salary slips, etc."
           >
             <Search className="h-4 w-4 shrink-0 text-neutral-400 dark:text-neutral-500" />
@@ -652,11 +662,12 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
           </button>
 
           {/* Notifications */}
-          <div className="relative">
+          <div ref={notificationWrapperRef} className="relative">
             <button
+              type="button"
               onClick={() => {
-                setShowNotifications((v) => {
-                  const next = !v;
+                setShowNotifications((prev) => {
+                  const next = !prev;
                   if (next) {
                     setNotificationsRead();
                     setHasUnread(false);
@@ -664,8 +675,15 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
                   return next;
                 });
               }}
-              className="p-2 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors relative"
+              className={cn(
+                "p-2 rounded-lg transition-colors relative cursor-pointer",
+                showNotifications
+                  ? "text-neutral-900 bg-neutral-100 dark:text-white dark:bg-neutral-800"
+                  : "text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 dark:hover:text-neutral-200 dark:hover:bg-neutral-800"
+              )}
               title="Notifications"
+              aria-label="Notifications"
+              aria-expanded={showNotifications}
             >
               <Bell className="h-4 w-4" />
               {hasUnread && (
@@ -705,20 +723,6 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
             ) : (
               <Moon className="h-4 w-4 text-neutral-600" />
             )}
-          </motion.button>
-
-          {/* Divider */}
-          <div className="hidden w-px h-6 bg-neutral-100 mx-1 sm:block" />
-
-          {/* Logout */}
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleLogout}
-            className="p-2 rounded-lg text-neutral-400 hover:text-black hover:bg-neutral-100 transition-colors"
-            title="Logout"
-          >
-            <LogOut className="h-4 w-4" />
           </motion.button>
         </div>
       </motion.header>
