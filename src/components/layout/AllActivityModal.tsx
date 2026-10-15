@@ -99,8 +99,10 @@ export function AllActivityModal({ onClose, initialFilter = 'all' }: AllActivity
         setEmployees(empRes.data.items || []);
         setSlips(slipRes.data.items || []);
         try {
-          setLeaveRequests(await listEmployeeLeaveRequests());
-        } catch {
+          const leaves = await listEmployeeLeaveRequests();
+          setLeaveRequests(Array.isArray(leaves) ? leaves : []);
+        } catch (err) {
+          console.error('Failed to load leave requests:', err);
           setLeaveRequests([]);
         }
       } catch (err) {

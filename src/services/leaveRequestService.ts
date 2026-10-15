@@ -19,10 +19,27 @@ const attendanceApiConfig = {
 const endpoint = '/api/attendance/leave-action/';
 
 export async function listEmployeeLeaveRequests(): Promise<EmployeeLeaveRequest[]> {
-  const response = await api.get<{ leave_requests: EmployeeLeaveRequest[] }>(endpoint, attendanceApiConfig);
-  return response.data.leave_requests;
+  try {
+    const response = await api.get<{ leave_requests: EmployeeLeaveRequest[] }>(endpoint, attendanceApiConfig);
+    return response.data?.leave_requests || [];
+  } catch (err) {
+    try {
+      const fallbackResponse = await api.get<{ leave_requests: EmployeeLeaveRequest[] }>('/attendance/leave-action/');
+      return fallbackResponse.data?.leave_requests || [];
+    } catch {
+      throw err;
+    }
+  }
 }
 
 export async function reviewEmployeeLeaveRequest(id: number, action: 'APPROVED' | 'REJECTED') {
-  await api.post(endpoint, { request_id: id, action }, attendanceApiConfig);
+  try {
+    await api.post(endpoint, { request_id: id, action }, attendanceApiConfig);
+  } catch (err) {
+    try {
+      await api.post('/attendance/leave-action/', { request_id: id, action });
+    } catch {
+      throw err;
+    }
+  }
 }
