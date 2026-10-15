@@ -11,12 +11,14 @@ import { useEmployees } from '../../hooks/useEmployees';
 import { salarySlipService } from '../../services/salarySlipService';
 import type { Employee } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { useAttendanceReadiness } from '../../hooks/useAttendance';
 import { hasMinimumPlan } from '../../lib/plans';
 
 export function GenerateSlipsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t, monthNames, getMonthName } = useTranslation();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
@@ -42,7 +44,7 @@ export function GenerateSlipsPage() {
   const selectedEmp = isAllSelected ? undefined : employees.find((e) => e.id === Number(selectedEmployee));
   const selectedAttendanceComplete = Boolean(selectedEmp && readiness?.find((item) => item.employee_id === selectedEmp.id)?.complete);
 
-  const monthName = new Date(2000, month - 1).toLocaleString('default', { month: 'long' });
+  const monthName = getMonthName(month);
 
   // Date of Joining validation helper
   const isEmployeePriorToJoining = (emp: Employee, m: number, y: number) => {
@@ -65,7 +67,7 @@ export function GenerateSlipsPage() {
     if (parts.length >= 2) {
       dojYearNum = parts[0];
       dojMonthNum = parts[1];
-      const dojMonthName = new Date(2000, dojMonthNum - 1).toLocaleString('default', { month: 'long' });
+      const dojMonthName = getMonthName(dojMonthNum);
       dojFormatted = `${dojMonthName} ${dojYearNum}`;
 
       if (year < dojYearNum || (year === dojYearNum && month < dojMonthNum)) {
@@ -194,7 +196,7 @@ export function GenerateSlipsPage() {
         <Link to="/salary-slips" className="text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors">
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h2 className="truncate text-xl font-bold text-neutral-900 dark:text-white sm:text-2xl">Generate Salary Slips</h2>
+        <h2 className="truncate text-xl font-bold text-neutral-900 dark:text-white sm:text-2xl">{t('salary.generateTitle', 'Generate Salary Slips')}</h2>
       </div>
 
       {error && (
@@ -213,7 +215,7 @@ export function GenerateSlipsPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 mb-1.5">
-              Employee
+              {t('employees.title', 'Employee')}
             </label>
             {empLoading ? (
               <LoadingSpinner />
@@ -228,11 +230,11 @@ export function GenerateSlipsPage() {
               >
                 {canGenerateBulk ? (
                   <option value="all" className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
-                    All Employees ({employees.length})
+                    {t('salary.allEmployees', 'All Employees')} ({employees.length})
                   </option>
                 ) : (
                   <option value="" className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
-                    Select an employee
+                    {t('salary.selectEmployee', 'Select an employee')}
                   </option>
                 )}
                 {employees.map((emp) => (
@@ -245,7 +247,7 @@ export function GenerateSlipsPage() {
           </div>
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 mb-1.5">
-              Month
+              {t('salary.month', 'Month')}
             </label>
             <select
               value={month}
@@ -255,9 +257,8 @@ export function GenerateSlipsPage() {
               }}
               className="w-full px-4 py-3 rounded-xl border-2 border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white transition-colors text-sm font-medium"
             >
-              {Array.from({ length: 12 }, (_, i) => {
+              {monthNames.map((mName, i) => {
                 const mNum = i + 1;
-                const mName = new Date(2000, i).toLocaleString('default', { month: 'long' });
                 const isPriorMonth = Boolean(selectedEmp && dojYearNum && (year < dojYearNum || (year === dojYearNum && mNum < dojMonthNum)));
                 return (
                   <option key={mNum} value={mNum} disabled={isPriorMonth} className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
@@ -269,7 +270,7 @@ export function GenerateSlipsPage() {
           </div>
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 mb-1.5">
-              Year
+              {t('salary.year', 'Year')}
             </label>
             <select
               value={year}
@@ -449,9 +450,9 @@ export function GenerateSlipsPage() {
           <button
             type="button"
             onClick={() => navigate('/salary-slips')}
-            className="w-full sm:w-auto px-5 py-3 rounded-xl border border-neutral-200 dark:border-neutral-700 text-xs font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-center"
+            className="w-full sm:w-auto px-5 py-3 rounded-xl border border-neutral-200 dark:border-neutral-700 text-xs font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-center cursor-pointer"
           >
-            ← Back to Salary Slips
+            ← {t('common.back', 'Back')}
           </button>
           <GradientButton
             className="w-full sm:w-auto"
@@ -464,12 +465,12 @@ export function GenerateSlipsPage() {
                 ? 'All Slips Generated (Delete to Re-generate)'
                 : pendingAttendance.length > 0 || someAlreadyGenerated
                 ? `Generate for Attendance-Ready Employees (${readyToGenerate})`
-                : 'Generate All Salary Slips'
+                : t('salary.generateSlipsButton', 'Generate All Salary Slips')
               : isBeforeJoining
               ? `Cannot Generate Before Joining Date (${dojFormatted})`
               : isSelectedAlreadyGenerated
               ? 'Already Generated (Delete Slip First)'
-              : 'Generate Salary Slip'}
+              : t('salary.generateSlipsButton', 'Generate Salary Slip')}
           </GradientButton>
         </div>
       </GlassCard>

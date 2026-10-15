@@ -4,15 +4,16 @@ import { LayoutDashboard, Users, FileText, CalendarDays, Settings, Building2, Pa
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { getPlan, hasMinimumPlan, type Plan } from '../../lib/plans';
 
-const navItems: Array<{ to: string; label: string; icon: typeof LayoutDashboard; minimumPlan: Plan }> = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, minimumPlan: 'starter' },
-  { to: '/employees', label: 'Employees', icon: Users, minimumPlan: 'starter' },
-  { to: '/attendance', label: 'Attendance', icon: CalendarDays, minimumPlan: 'starter' },
-  { to: '/salary-slips', label: 'Salary Slips', icon: FileText, minimumPlan: 'starter' },
-  { to: '/settings', label: 'Settings', icon: Settings, minimumPlan: 'starter' },
-  { to: '/settings/company', label: 'Company Settings', icon: Building2, minimumPlan: 'professional' },
+const navItems: Array<{ to: string; label: string; translationKey: string; icon: typeof LayoutDashboard; minimumPlan: Plan }> = [
+  { to: '/dashboard', label: 'Dashboard', translationKey: 'nav.dashboard', icon: LayoutDashboard, minimumPlan: 'starter' },
+  { to: '/employees', label: 'Employees', translationKey: 'nav.employees', icon: Users, minimumPlan: 'starter' },
+  { to: '/attendance', label: 'Attendance', translationKey: 'nav.attendance', icon: CalendarDays, minimumPlan: 'starter' },
+  { to: '/salary-slips', label: 'Salary Slips', translationKey: 'nav.salarySlips', icon: FileText, minimumPlan: 'starter' },
+  { to: '/settings', label: 'Settings', translationKey: 'nav.settings', icon: Settings, minimumPlan: 'starter' },
+  { to: '/settings/company', label: 'Company Settings', translationKey: 'nav.companySettings', icon: Building2, minimumPlan: 'professional' },
 ];
 
 interface SidebarProps {
@@ -28,6 +29,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const profileRef = useRef<HTMLDivElement>(null);
   const { user, logout } = useAuth();
   const { theme } = useTheme();
+  const { t } = useTranslation();
   const isDark = theme === 'dark';
   const plan = getPlan(user);
   const initials = (user?.full_name || user?.email || 'U')
@@ -81,8 +83,8 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const visibleItems = navItems.filter((item) => hasMinimumPlan(user, item.minimumPlan));
   if (plan === 'enterprise' && user?.is_platform_admin) {
     visibleItems.push(
-      { to: '/admin', label: 'Admin Overview', icon: ShieldCheck, minimumPlan: 'enterprise' },
-      { to: '/admin/users', label: 'User Management', icon: Users, minimumPlan: 'enterprise' },
+      { to: '/admin', label: 'Admin Overview', translationKey: 'nav.adminOverview', icon: ShieldCheck, minimumPlan: 'enterprise' },
+      { to: '/admin/users', label: 'User Management', translationKey: 'nav.userManagement', icon: Users, minimumPlan: 'enterprise' },
     );
   }
 
@@ -98,7 +100,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
         )}
       />
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 flex flex-col border-r lg:static lg:z-auto lg:min-h-screen lg:translate-x-0 transition-[width,transform] duration-300 ease-in-out select-none overflow-x-hidden",
+        "fixed inset-y-0 left-0 z-50 flex flex-col border-r lg:relative lg:z-30 lg:min-h-screen lg:translate-x-0 transition-[width,transform] duration-300 ease-in-out select-none",
         isDark ? "bg-[#0d0d10] border-white/[0.08] text-white" : "bg-white border-neutral-200/90 text-neutral-800 shadow-sm",
         isMobileOpen ? "translate-x-0" : "-translate-x-full",
         isCollapsed ? "w-[280px] lg:w-[72px]" : "w-[280px] lg:w-[260px]"
@@ -179,7 +181,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                 "p-1.5 rounded-lg transition-all duration-200 shrink-0 border border-transparent cursor-pointer",
                 isDark ? "text-neutral-400 hover:text-white hover:bg-white/[0.08] hover:border-white/10" : "text-neutral-400 hover:text-black hover:bg-neutral-100 hover:border-neutral-200"
               )}
-              title="Collapse sidebar"
+              title={isCollapsed ? t('nav.expand', 'Expand sidebar') : t('nav.collapse', 'Collapse sidebar')}
               aria-label="Collapse sidebar"
             >
               <PanelLeftClose className="h-4.5 w-4.5" />
@@ -213,6 +215,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
 
           const isThisItemBlocked = isNavigationLocked && !isCurrentSection;
 
+          const label = t(item.translationKey, item.label);
           return (
             <NavLink
               key={item.to}
@@ -233,7 +236,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                 isThisItemBlocked
                   ? 'Disabled on this page'
                   : isCollapsed
-                    ? item.label
+                    ? label
                     : undefined
               }
             >
@@ -243,24 +246,34 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                   !isCollapsed && 'hover:translate-x-0.5',
                   isActive
                     ? isDark
-                      ? 'keep-white bg-white text-black shadow-md shadow-white/5 font-semibold'
+                      ? 'keep-white bg-white !text-black shadow-md shadow-white/5 font-semibold'
                       : 'bg-neutral-900 text-white shadow-sm font-semibold'
                     : isDark
                       ? 'text-neutral-400 hover:bg-white/[0.06] hover:text-white'
                       : 'text-neutral-600 hover:bg-neutral-100 hover:text-black'
                 )}
+                style={isActive && isDark ? { backgroundColor: '#ffffff', color: '#000000' } : undefined}
               >
-                <item.icon className={cn(
-                  'h-[18px] w-[18px] shrink-0 transition-colors',
-                  isActive 
-                    ? isDark ? 'text-black' : 'text-white'
-                    : isDark ? 'text-neutral-400' : 'text-neutral-500'
-                )} />
-                <span className={cn(
-                  'whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out ml-3 min-w-0',
-                  isCollapsed ? 'lg:w-0 lg:opacity-0 lg:ml-0' : 'lg:w-auto lg:opacity-100'
-                )}>
-                  {item.label}
+                <item.icon
+                  className={cn(
+                    'h-[18px] w-[18px] shrink-0 transition-colors',
+                    isActive 
+                      ? isDark ? '!text-black' : 'text-white'
+                      : isDark ? 'text-neutral-400' : 'text-neutral-500'
+                  )}
+                  style={isActive && isDark ? { color: '#000000' } : undefined}
+                />
+                <span
+                  className={cn(
+                    'whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out ml-3 min-w-0',
+                    isActive
+                      ? isDark ? '!text-black font-semibold' : 'text-white font-semibold'
+                      : isDark ? 'text-neutral-400' : 'text-neutral-600',
+                    isCollapsed ? 'lg:w-0 lg:opacity-0 lg:ml-0' : 'lg:w-auto lg:opacity-100'
+                  )}
+                  style={isActive && isDark ? { color: '#000000' } : undefined}
+                >
+                  {label}
                 </span>
                 {isActive && (
                   <div
@@ -269,6 +282,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                       isDark ? 'bg-black' : 'bg-white',
                       isCollapsed && 'lg:opacity-0'
                     )}
+                    style={isDark ? { backgroundColor: '#000000' } : undefined}
                   />
                 )}
               </div>
@@ -291,10 +305,10 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
             className={cn(
               "absolute z-50 rounded-2xl border p-1.5 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none",
               isDark
-                ? "bg-[#141418] border-white/[0.12] text-white shadow-black/80"
-                : "bg-white border-neutral-200 text-neutral-800 shadow-neutral-900/15",
+                ? "bg-[#141418]/95 border-white/[0.12] text-white shadow-2xl shadow-black/80"
+                : "bg-white/95 border-neutral-200 text-neutral-800 shadow-xl shadow-neutral-900/15",
               isCollapsed
-                ? "left-2 lg:left-14 bottom-14 lg:bottom-1 w-56"
+                ? "left-3 right-3 bottom-full mb-2 lg:left-full lg:right-auto lg:bottom-1 lg:ml-3 lg:mb-0 lg:w-60"
                 : "left-3 right-3 bottom-full mb-2"
             )}
           >
@@ -303,10 +317,18 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
               "px-3 py-2 border-b mb-1",
               isDark ? "border-white/[0.08]" : "border-neutral-100"
             )}>
-              <p className={cn("text-[13px] font-bold truncate", isDark ? "text-white" : "text-neutral-900")}>
-                {user?.full_name || user?.email}
-              </p>
-              <p className={cn("text-[11px] truncate", isDark ? "text-neutral-400" : "text-neutral-500")}>
+              <div className="flex items-center justify-between gap-1.5">
+                <p className={cn("text-[13px] font-bold truncate", isDark ? "text-white" : "text-neutral-900")}>
+                  {user?.full_name || user?.email}
+                </p>
+                <span className={cn(
+                  "shrink-0 text-[8px] font-bold uppercase tracking-wider rounded px-1.5 py-0.5 border",
+                  isDark ? "text-neutral-300 border-white/10 bg-white/[0.05]" : "text-neutral-700 border-neutral-200 bg-neutral-100"
+                )}>
+                  {plan}
+                </span>
+              </div>
+              <p className={cn("text-[11px] truncate mt-0.5", isDark ? "text-neutral-400" : "text-neutral-500")}>
                 {user?.email}
               </p>
             </div>
@@ -326,7 +348,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
               )}
             >
               <User className="h-4 w-4 shrink-0 text-neutral-400" />
-              <span>View Profile</span>
+              <span>{t('nav.viewProfile', 'View Profile')}</span>
             </button>
 
             {/* Field 2: Logout */}
@@ -341,7 +363,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
               )}
             >
               <LogOut className="h-4 w-4 shrink-0" />
-              <span>Logout</span>
+              <span>{t('nav.logout', 'Log Out')}</span>
             </button>
           </div>
         )}
@@ -352,6 +374,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
           onClick={() => setIsProfileMenuOpen((prev) => !prev)}
           className={cn(
             "w-full flex items-center h-11 px-2 rounded-xl transition-all duration-200 group text-left cursor-pointer",
+            isCollapsed && "lg:justify-center lg:px-0",
             isProfileMenuOpen
               ? isDark
                 ? "bg-white/[0.1] text-white"
@@ -360,7 +383,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                 ? "hover:bg-white/[0.08]"
                 : "hover:bg-neutral-100"
           )}
-          title={isCollapsed ? `${user?.full_name || user?.email} (${plan})` : undefined}
+          title={isCollapsed && !isProfileMenuOpen ? `${user?.full_name || user?.email} (${plan})` : undefined}
           aria-haspopup="true"
           aria-expanded={isProfileMenuOpen}
         >

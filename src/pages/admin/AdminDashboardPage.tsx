@@ -5,9 +5,11 @@ import { GlassCard } from '../../components/ui/GlassCard';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { adminService } from '../../services/adminService';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from '../../context/LanguageContext';
 
 export function AdminDashboardPage() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const { data: stats, isLoading } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: () => adminService.getStats().then((r) => r.data),
@@ -17,16 +19,16 @@ export function AdminDashboardPage() {
   if (isLoading) return <LoadingSpinner />;
 
   const cards = [
-    { label: 'Total Users', value: stats?.total_users ?? 0, icon: Users },
-    { label: 'Active Users', value: stats?.active_users ?? 0, icon: ShieldCheck },
-    { label: 'Total Employees', value: stats?.total_employees ?? 0, icon: Building },
-    { label: 'Total Salary Slips', value: stats?.total_slips ?? 0, icon: FileText },
+    { label: t('admin.totalUsers', 'Total Users'), value: stats?.total_users ?? 0, icon: Users },
+    { label: t('admin.activeUsers', 'Active Users'), value: stats?.active_users ?? 0, icon: ShieldCheck },
+    { label: t('admin.totalEmployees', 'Total Employees'), value: stats?.total_employees ?? 0, icon: Building },
+    { label: t('admin.totalSlips', 'Total Salary Slips'), value: stats?.total_slips ?? 0, icon: FileText },
   ];
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 max-w-6xl mx-auto">
       <h2 className="text-xl font-bold text-neutral-900 dark:text-white sm:text-2xl">
-        Admin Platform Overview
+        {t('admin.overview', 'Admin Platform Overview')}
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map((stat, i) => (

@@ -9,10 +9,12 @@ import { AnimatedList } from '../../components/ui/AnimatedList';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { adminService } from '../../services/adminService';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from '../../context/LanguageContext';
 import type { User } from '../../types';
 
 export function AdminUsersPage() {
   const { user: authUser } = useAuth();
+  const { t } = useTranslation();
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
@@ -39,12 +41,12 @@ export function AdminUsersPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 max-w-6xl mx-auto">
-      <h2 className="text-xl font-bold text-neutral-900 dark:text-white sm:text-2xl">User Management</h2>
+      <h2 className="text-xl font-bold text-neutral-900 dark:text-white sm:text-2xl">{t('admin.userManagement')}</h2>
       <GlassCard>
         {isLoading ? (
           <LoadingSpinner />
         ) : !users.length ? (
-          <EmptyState icon={<Users className="h-12 w-12" />} title="No users" description="No users found on the platform." />
+          <EmptyState icon={<Users className="h-12 w-12" />} title={t('admin.noUsers')} description={t('admin.noUsers')} />
         ) : (
           <>
             <AnimatedList>
@@ -63,8 +65,8 @@ export function AdminUsersPage() {
                       onChange={(e) => updateRole.mutate({ userId: user.id, role: e.target.value })}
                       className="col-span-2 w-full rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-black dark:focus:border-white focus:outline-none min-[420px]:col-auto min-[420px]:w-auto font-medium"
                     >
-                      <option value="hr_manager">HR Manager</option>
-                      <option value="admin">Admin</option>
+                      <option value="hr_manager">{t('settings.hrManager')}</option>
+                      <option value="admin">{t('settings.administrator')}</option>
                     </select>
                     <span
                       className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
@@ -73,14 +75,14 @@ export function AdminUsersPage() {
                           : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
                       }`}
                     >
-                      {user.is_active ? 'Active' : 'Inactive'}
+                      {user.is_active ? t('common.active') : t('common.inactive')}
                     </span>
                     <GradientButton
                       variant={user.is_active ? 'danger' : 'primary'}
                       onClick={() => toggleUser.mutate({ userId: user.id, is_active: !user.is_active })}
                       className="w-full !px-3 !py-1.5 text-xs min-[420px]:w-auto"
                     >
-                      {user.is_active ? 'Deactivate' : 'Activate'}
+                      {user.is_active ? t('common.deactivate') : t('common.activate')}
                     </GradientButton>
                   </div>
                 </div>
@@ -95,16 +97,18 @@ export function AdminUsersPage() {
                   disabled={page <= 1}
                   className="px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 text-xs font-semibold text-neutral-700 dark:text-neutral-300 disabled:opacity-40 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
                 >
-                  Previous
+                  {t('common.previous')}
                 </button>
-                <span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">Page {page} of {pages}</span>
+                <span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">
+                  {t('common.page')} {page} {t('common.of')} {pages}
+                </span>
                 <button
                   type="button"
                   onClick={() => setPage((p) => Math.min(pages, p + 1))}
                   disabled={page >= pages}
                   className="px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 text-xs font-semibold text-neutral-700 dark:text-neutral-300 disabled:opacity-40 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
                 >
-                  Next
+                  {t('common.next')}
                 </button>
               </div>
             )}

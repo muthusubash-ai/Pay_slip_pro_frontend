@@ -1,43 +1,113 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CalendarDays, ArrowLeft, Save, Trash2, ChevronDown, ChevronUp, Filter, CheckCircle, X } from 'lucide-react';
+import { CalendarDays, ArrowLeft, Save, Trash2, ChevronDown, ChevronUp, Filter, CheckCircle, X, Clock, AlertTriangle } from 'lucide-react';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { useEmployees } from '../../hooks/useEmployees';
 import { useMonthlyAttendance, useBulkMarkLeaves, useLeaveSummary, useAttendanceReadiness } from '../../hooks/useAttendance';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { hasMinimumPlan } from '../../lib/plans';
+import { companyService } from '../../services/companyService';
+import type { AttendanceRecord } from '../../types';
 
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-
-type DayStatus = 'present' | 'leave' | 'half_day' | 'permission' | 'weekoff' | 'weekoff_halfday';
+type DayStatus = 'present' | 'leave' | 'half_day' | 'permission' | 'weekoff' | 'weekoff_halfday' | 'company_week_off';
+// Admin only ever picks one of these 4 — Weekoff/Weekoff-Half are derived automatically,
+// and Company Week Off days are locked entirely (see companyWeekOffDates).
+type RawStatus = 'present' | 'leave' | 'half_day' | 'permission';
 
 function getDaysInMonth(month: number, year: number): number {
   return new Date(year, month, 0).getDate();
+}
+
+function toRawStatus(status: DayStatus): RawStatus {
+  if (status === 'weekoff') return 'leave';
+  if (status === 'weekoff_halfday') return 'half_day';
+  if (status === 'company_week_off') return 'present';
+  return status;
+}
+
+// The monthly Weekoff is a single shared pool worth 2 half-day units: a full-day
+// leave costs 2 units, a half-day leave costs 1 unit. Whichever comes first
+// chronologically draws from the pool first - no partial credit. This mirrors
+// the backend's allocate_weekoff_pool() in attendance_service.py.
+const WEEKOFF_POOL_UNITS_PER_MONTH = 2;
+
+function computeDisplayStatuses(rawStatuses: Map<string, RawStatus>, joiningDate: string): Map<string, DayStatus> {
+  const combined: Array<{ date: string; kind: 'full' | 'half' }> = [];
+  rawStatuses.forEach((st, d) => {
+    if (joiningDate && d < joiningDate) return;
+    if (st === 'leave') combined.push({ date: d, kind: 'full' });
+    else if (st === 'half_day') combined.push({ date: d, kind: 'half' });
+  });
+  combined.sort((a, b) => a.date.localeCompare(b.date));
+
+  const display = new Map<string, DayStatus>();
+  rawStatuses.forEach((st, d) => display.set(d, st));
+
+  let remaining = WEEKOFF_POOL_UNITS_PER_MONTH;
+  combined.forEach(({ date: d, kind }) => {
+    if (kind === 'full') {
+      if (remaining >= 2) {
+        display.set(d, 'weekoff');
+        remaining -= 2;
+      } else {
+        display.set(d, 'leave');
+      }
+    } else if (remaining >= 1) {
+      display.set(d, 'weekoff_halfday');
+      remaining -= 1;
+    } else {
+      display.set(d, 'half_day');
+    }
+  });
+  return display;
 }
 
 function formatDate(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+function formatDisplayDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+  }
+  return dateStr;
+}
+
 export function AttendancePage() {
   const { user } = useAuth();
+  const { t, monthNames, getMonthName } = useTranslation();
   const navigate = useNavigate();
   const canViewReports = hasMinimumPlan(user, 'professional');
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [selectedEmployee, setSelectedEmployee] = useState<number>(0);
-  const [dayStatuses, setDayStatuses] = useState<Map<string, DayStatus>>(new Map());
+  const [dayStatuses, setDayStatuses] = useState<Map<string, RawStatus>>(new Map());
+  const [biometricMap, setBiometricMap] = useState<Map<string, AttendanceRecord>>(new Map());
+  // Dates the backend reports as the company's standing weekly off (e.g. every Sunday) —
+  // always free, locked from editing, sourced straight from the server (source of truth).
+  const [companyWeekOffDates, setCompanyWeekOffDates] = useState<Set<string>>(new Set());
+  const [showBiometricTimesheet, setShowBiometricTimesheet] = useState<boolean>(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
-  const [isReportOpen, setIsReportOpen] = useState(true);
+  const [quotaWarning, setQuotaWarning] = useState('');
+  const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportFilter, setReportFilter] = useState<'all' | 'leaves' | 'deductions'>('all');
+
+  const { data: company } = useQuery({
+    queryKey: ['company'],
+    queryFn: () => companyService.get().then((r) => r.data),
+    enabled: !!user,
+  });
+  const permissionAllowance = company?.permission_days_per_month ?? 3;
 
   const { data: empData, isLoading: empLoading } = useEmployees(1, undefined, undefined);
   const employees = empData?.items || [];
@@ -57,16 +127,24 @@ export function AttendancePage() {
   const notJoinedCount = readiness?.filter((item) => !item.eligible).length || 0;
   const bulkMark = useBulkMarkLeaves();
 
-  // Sync attendance data from server to local state whenever attendance query completes or filters change
+  // Sync attendance data and biometric records from server to local state whenever query completes
   useEffect(() => {
     if (attendance && attendance.length > 0) {
-      const statuses = new Map<string, DayStatus>();
+      const statuses = new Map<string, RawStatus>();
+      const bioMap = new Map<string, AttendanceRecord>();
+      const weekOffDates = new Set<string>();
       attendance.forEach((a) => {
-        statuses.set(a.date, a.status as DayStatus);
+        statuses.set(a.date, toRawStatus(a.status as DayStatus));
+        bioMap.set(a.date, a);
+        if ((a.status as unknown as string) === 'company_week_off') weekOffDates.add(a.date);
       });
       setDayStatuses(statuses);
+      setBiometricMap(bioMap);
+      setCompanyWeekOffDates(weekOffDates);
     } else {
       setDayStatuses(new Map());
+      setBiometricMap(new Map());
+      setCompanyWeekOffDates(new Set());
     }
   }, [attendance, selectedEmployee, month, year]);
 
@@ -88,9 +166,12 @@ export function AttendancePage() {
     return () => clearTimeout(timer);
   }, [error]);
 
-  // Cycle: present → leave (1.0) → half_day (0.5) → permission (0.25) → weekoff (0) → weekoff_halfday (0, max 2) → present
+  // Cycle: present → leave → half_day → permission → present.
+  // Weekoff / Weekoff Half are derived automatically (see computeDisplayStatuses) —
+  // the employee's first leave/month and first 2 half-days/month are free.
   const cycleStatus = (dateStr: string) => {
     if (joiningDate && dateStr < joiningDate) return;
+    if (companyWeekOffDates.has(dateStr)) return;
     setSuccess('');
     setError('');
 
@@ -103,22 +184,6 @@ export function AttendancePage() {
         next.set(dateStr, 'half_day');
       } else if (current === 'half_day') {
         next.set(dateStr, 'permission');
-      } else if (current === 'permission') {
-        next.set(dateStr, 'weekoff');
-      } else if (current === 'weekoff') {
-        // Enforce maximum 2 Weekoff Halfdays per month for an employee
-        let currentWeekoffHalfCount = 0;
-        prev.forEach((st, d) => {
-          if (d !== dateStr && st === 'weekoff_halfday') {
-            currentWeekoffHalfCount++;
-          }
-        });
-        if (currentWeekoffHalfCount >= 2) {
-          setError('Monthly limit reached: Maximum 2 Weekoff Halfdays allowed per month for an employee.');
-          next.set(dateStr, 'present');
-        } else {
-          next.set(dateStr, 'weekoff_halfday');
-        }
       } else {
         next.set(dateStr, 'present');
       }
@@ -126,13 +191,32 @@ export function AttendancePage() {
     });
   };
 
+  const displayStatuses = useMemo(() => {
+    const base = computeDisplayStatuses(dayStatuses, joiningDate);
+    // Company weekly-off days always win over the derived Leave/Weekoff display.
+    companyWeekOffDates.forEach((d) => base.set(d, 'company_week_off'));
+    return base;
+  }, [dayStatuses, joiningDate, companyWeekOffDates]);
+
+  // Warn when a Half Day won't be free because a full-day Weekoff already used up the
+  // shared monthly pool (1 full day = 2 units, same pool as Weekoff Halfday).
+  useEffect(() => {
+    const hasFullWeekoff = Array.from(displayStatuses.values()).some((s) => s === 'weekoff');
+    const hasDeductingHalfDay = Array.from(displayStatuses.values()).some((s) => s === 'half_day');
+    setQuotaWarning(
+      hasFullWeekoff && hasDeductingHalfDay
+        ? 'This employee already used their monthly Weekoff (full day) this month, so the Half Day marked below is not free — it will deduct 0.5 day salary.'
+        : ''
+    );
+  }, [displayStatuses]);
+
   const handleSave = () => {
     if (!selectedEmployee) {
       setError('Please select an employee.');
       return;
     }
     if (beforeJoiningMonth) {
-      setError(`${selectedEmp?.full_name} joined on ${joiningDate}. Attendance cannot be saved for ${MONTH_NAMES[month - 1]} ${year}.`);
+      setError(`${selectedEmp?.full_name} joined on ${formatDisplayDate(joiningDate)}. Attendance cannot be saved for ${getMonthName(month)} ${year}.`);
       return;
     }
     setError('');
@@ -141,21 +225,12 @@ export function AttendancePage() {
     const leaveDatesList: string[] = [];
     const halfDayDatesList: string[] = [];
     const permissionDatesList: string[] = [];
-    const weekoffDatesList: string[] = [];
-    const weekoffHalfdayDatesList: string[] = [];
     dayStatuses.forEach((status, dateStr) => {
       if (joiningDate && dateStr < joiningDate) return;
       if (status === 'leave') leaveDatesList.push(dateStr);
       else if (status === 'half_day') halfDayDatesList.push(dateStr);
       else if (status === 'permission') permissionDatesList.push(dateStr);
-      else if (status === 'weekoff') weekoffDatesList.push(dateStr);
-      else if (status === 'weekoff_halfday') weekoffHalfdayDatesList.push(dateStr);
     });
-
-    if (weekoffHalfdayDatesList.length > 2) {
-      setError('Maximum 2 Weekoff Halfdays allowed per month.');
-      return;
-    }
 
     bulkMark.mutate(
       {
@@ -165,8 +240,6 @@ export function AttendancePage() {
         leave_dates: leaveDatesList,
         half_day_dates: halfDayDatesList,
         permission_dates: permissionDatesList,
-        weekoff_dates: weekoffDatesList,
-        weekoff_halfday_dates: weekoffHalfdayDatesList,
       },
       {
         onSuccess: () => {
@@ -174,11 +247,9 @@ export function AttendancePage() {
           if (leaveDatesList.length) parts.push(`${leaveDatesList.length} leave`);
           if (halfDayDatesList.length) parts.push(`${halfDayDatesList.length} half day`);
           if (permissionDatesList.length) parts.push(`${permissionDatesList.length} permission`);
-          if (weekoffDatesList.length) parts.push(`${weekoffDatesList.length} weekoff`);
-          if (weekoffHalfdayDatesList.length) parts.push(`${weekoffHalfdayDatesList.length} weekoff halfday`);
           const summaryStr = parts.length ? parts.join(', ') : 'all present';
           setSuccess(
-            `Attendance saved successfully (${summaryStr}) for ${MONTH_NAMES[month - 1]} ${year}.`
+            `Attendance saved successfully (${summaryStr}) for ${getMonthName(month)} ${year}.`
           );
         },
         onError: (err: any) => {
@@ -214,15 +285,28 @@ export function AttendancePage() {
   let permissionCount = 0;
   let weekoffCount = 0;
   let weekoffHalfdayCount = 0;
-  dayStatuses.forEach((status, dateStr) => {
+  let companyWeekOffCount = 0;
+  displayStatuses.forEach((status, dateStr) => {
     if (joiningDate && dateStr < joiningDate) return;
     if (status === 'leave') leaveCount++;
     else if (status === 'half_day') halfDayCount++;
     else if (status === 'permission') permissionCount++;
     else if (status === 'weekoff') weekoffCount++;
     else if (status === 'weekoff_halfday') weekoffHalfdayCount++;
+    else if (status === 'company_week_off') companyWeekOffCount++;
   });
-  const presentCount = activeDays - leaveCount - halfDayCount - permissionCount - weekoffCount - weekoffHalfdayCount;
+  const presentCount = activeDays - leaveCount - halfDayCount - permissionCount - weekoffCount - weekoffHalfdayCount - companyWeekOffCount;
+
+  // Biometric statistics
+  let totalDurationHours = 0;
+  let lateArrivalsCount = 0;
+  let bioPunchDaysCount = 0;
+  biometricMap.forEach((rec, dStr) => {
+    if (joiningDate && dStr < joiningDate) return;
+    if (rec.duration_hours) totalDurationHours += rec.duration_hours;
+    if (rec.is_late) lateArrivalsCount++;
+    if (rec.check_in) bioPunchDaysCount++;
+  });
 
   const isSelectedEmpJoiningMonth = Boolean(
     joiningDate &&
@@ -248,7 +332,8 @@ export function AttendancePage() {
     const proratedGross = Math.round(fullGross * proration * 100) / 100;
     const proratedDeductions = Math.round(fullDeductions * proration * 100) / 100;
 
-    const effectiveLeaves = leaveCount + (halfDayCount * 0.5) + (permissionCount * 0.25);
+    const excessPermissions = Math.max(0, permissionCount - permissionAllowance);
+    const effectiveLeaves = leaveCount + (halfDayCount * 0.5) + (excessPermissions * 1.0);
     const perDayRate = totalDays > 0 ? fullGross / totalDays : 0;
     const leaveDeduction = Math.round(effectiveLeaves * perDayRate * 100) / 100;
 
@@ -275,30 +360,33 @@ export function AttendancePage() {
   const totalHalfDaysSum = filteredSummary.reduce((acc, curr) => acc + (curr.half_day_days || 0), 0);
   const totalPermissionsSum = filteredSummary.reduce((acc, curr) => acc + (curr.permission_days || 0), 0);
   const totalWeekoffHalfSum = filteredSummary.reduce((acc, curr) => acc + (curr.weekoff_halfday_days || 0), 0);
+  const totalCompanyWeekOffSum = filteredSummary.reduce((acc, curr) => acc + (curr.company_week_off_days || 0), 0);
   const totalDeductionsSum = filteredSummary.reduce((acc, curr) => acc + curr.leave_deduction, 0);
   const totalNetPayableSum = filteredSummary.reduce((acc, curr) => acc + (curr.net_payable || 0), 0);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 max-w-6xl mx-auto pb-10">
-      <div className="flex min-w-0 items-center gap-3">
-        <button
-          type="button"
-          onClick={() => {
-            if (window.history.length > 1) {
-              navigate(-1);
-            } else {
-              navigate('/dashboard');
-            }
-          }}
-          className="text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-white transition-colors p-1 -ml-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
-          title="Back"
-          aria-label="Back"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <h2 className="flex items-center gap-2.5 text-xl font-bold text-neutral-900 dark:text-white sm:text-2xl">
-          <CalendarDays className="h-6 w-6 shrink-0" /> {canViewReports ? 'Attendance & Leave Management' : 'Monthly Attendance'}
-        </h2>
+      <div className="flex flex-wrap min-w-0 items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              if (window.history.length > 1) {
+                navigate(-1);
+              } else {
+                navigate('/dashboard');
+              }
+            }}
+            className="text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-white transition-colors p-1 -ml-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            title={t('common.back', 'Back')}
+            aria-label={t('common.back', 'Back')}
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <h2 className="flex items-center gap-2.5 text-xl font-bold text-neutral-900 dark:text-white sm:text-2xl">
+            <CalendarDays className="h-6 w-6 shrink-0" /> {canViewReports ? t('attendance.title', 'Attendance & Leave Management') : t('attendance.monthlyAttendance', 'Monthly Attendance')}
+          </h2>
+        </div>
       </div>
 
       <AnimatePresence mode="wait">
@@ -346,6 +434,21 @@ export function AttendancePage() {
             </button>
           </motion.div>
         )}
+        {quotaWarning && (
+          <motion.div
+            key="quota-warning-alert"
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className="flex items-center justify-between gap-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-xl text-sm shadow-sm"
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>{quotaWarning}</span>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Filters Header */}
@@ -353,7 +456,7 @@ export function AttendancePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 mb-1.5">
-              Employee
+              {t('attendance.employee', 'Employee')}
             </label>
             {empLoading ? (
               <LoadingSpinner />
@@ -368,7 +471,7 @@ export function AttendancePage() {
                 className="w-full px-4 py-3 rounded-xl border-2 border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white transition-colors text-sm font-medium"
               >
                 <option value={0} className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
-                  Select Employee (Overview)
+                  {t('attendance.selectEmployee', 'Select Employee (Overview)')}
                 </option>
                 {employees.map((emp) => (
                   <option key={emp.id} value={emp.id} className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
@@ -380,7 +483,7 @@ export function AttendancePage() {
           </div>
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 mb-1.5">
-              Month
+              {t('attendance.month', 'Month')}
             </label>
             <select
               value={month}
@@ -391,7 +494,7 @@ export function AttendancePage() {
               }}
               className="w-full px-4 py-3 rounded-xl border-2 border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white transition-colors text-sm font-medium"
             >
-              {MONTH_NAMES.map((name, i) => (
+              {monthNames.map((name, i) => (
                 <option key={i} value={i + 1} className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
                   {name}
                 </option>
@@ -400,7 +503,7 @@ export function AttendancePage() {
           </div>
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 mb-1.5">
-              Year
+              {t('attendance.year', 'Year')}
             </label>
             <select
               value={year}
@@ -423,8 +526,8 @@ export function AttendancePage() {
 
       {selectedEmp && beforeJoiningMonth && (
         <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-          <strong>Attendance unavailable for {MONTH_NAMES[month - 1]} {year}.</strong>{' '}
-          {selectedEmp.full_name} joined on {joiningDate}. Select the joining month or a later month to view and save attendance.
+          <strong>Attendance unavailable for {getMonthName(month)} {year}.</strong>{' '}
+          {selectedEmp.full_name} joined on {formatDisplayDate(joiningDate)}. Select the joining month or a later month to view and save attendance.
         </div>
       )}
 
@@ -434,10 +537,10 @@ export function AttendancePage() {
           <div className="flex flex-col gap-4 mb-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 className="text-base font-bold text-neutral-900 dark:text-white">
-                {MONTH_NAMES[month - 1]} {year} — Click to cycle: Present → Leave → Half Day → Permission → Weekoff → Weekoff Half
+                {monthNames[month - 1]} {year} — {t('attendance.cycleHelp', 'Click to cycle: Present → Leave → Half Day → Permission')}
               </h3>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                Full Leave deducts 1 day, Half Day deducts 0.5 day, Permission deducts 0.25 day. Weekoffs & Weekoff Halfday (max 2/month) are paid (no deduction).
+                The monthly Weekoff is a shared pool worth 2 half-day units: a Leave costs 2 units (free only if both are still available), a Half Day costs 1 unit — whichever is marked first (by date) draws from the pool first, with no partial credit. Up to {permissionAllowance} permission{permissionAllowance === 1 ? '' : 's'}/month allowed with 0 deduction (excess permissions deduct 1 day each — configurable in Settings → Company). Days matching the company's configured Weekly Off (Settings → Company) are locked as "Company Off" — always paid, never deducted.
               </p>
               {firstActiveDay > 1 && <p className="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">Joined on {joiningDate}. Days before joining are locked and excluded.</p>}
             </div>
@@ -447,10 +550,10 @@ export function AttendancePage() {
                 onClick={clearAll}
                 className="flex min-h-10 items-center justify-center gap-1 rounded-xl border border-neutral-200 dark:border-neutral-700 px-3.5 py-1.5 text-xs font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
               >
-                <Trash2 className="h-3.5 w-3.5" /> Clear
+                <Trash2 className="h-3.5 w-3.5" /> {t('attendance.clear', 'Clear')}
               </button>
               <GradientButton onClick={handleSave} isLoading={bulkMark.isPending}>
-                <Save className="h-4 w-4 mr-1.5" /> Save Attendance
+                <Save className="h-4 w-4 mr-1.5" /> {t('attendance.saveAttendance', 'Save Attendance')}
               </GradientButton>
             </div>
           </div>
@@ -461,7 +564,15 @@ export function AttendancePage() {
             <>
               {/* Day headers */}
               <div className="grid grid-cols-7 gap-1 mb-2 sm:gap-2">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                {[
+                  t('attendance.sun', 'Sun'),
+                  t('attendance.mon', 'Mon'),
+                  t('attendance.tue', 'Tue'),
+                  t('attendance.wed', 'Wed'),
+                  t('attendance.thu', 'Thu'),
+                  t('attendance.fri', 'Fri'),
+                  t('attendance.sat', 'Sat'),
+                ].map((d) => (
                   <div key={d} className="text-center text-xs font-semibold text-neutral-500 dark:text-neutral-400 py-1">
                     {d}
                   </div>
@@ -469,7 +580,7 @@ export function AttendancePage() {
               </div>
 
               {/* Calendar days */}
-              <div className="grid grid-cols-7 gap-1 sm:gap-2">
+              <div className="grid grid-cols-7 gap-2 sm:gap-3">
                 {/* Empty cells for offset */}
                 {Array.from({ length: new Date(year, month - 1, 1).getDay() }, (_, i) => (
                   <div key={`empty-${i}`} />
@@ -479,75 +590,118 @@ export function AttendancePage() {
                   const day = i + 1;
                   const dateStr = formatDate(year, month, day);
                   const beforeJoiningDay = Boolean(joiningDate && dateStr < joiningDate);
-                  const status = dayStatuses.get(dateStr) || 'present';
+                  const isCompanyWeekOff = companyWeekOffDates.has(dateStr);
+                  const status = displayStatuses.get(dateStr) || 'present';
+                  const bio = biometricMap.get(dateStr);
 
-                  let bgClass = 'bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white border-neutral-200 dark:border-neutral-700 hover:border-black dark:hover:border-white';
-                  let label = 'Present';
+                  let bgClass = 'bg-white dark:bg-[#18181b] text-neutral-900 dark:text-neutral-100 border border-neutral-200 dark:border-[#27272a] hover:border-neutral-400 dark:hover:border-neutral-600';
+                  let label = 'PRESENT';
                   if (status === 'leave') {
-                    bgClass = 'bg-rose-600 text-white border-rose-600 shadow-sm';
-                    label = 'LEAVE (1.0)';
+                    bgClass = 'bg-rose-600 text-white border-transparent shadow-sm';
+                    label = 'LEAVE';
                   } else if (status === 'half_day') {
-                    bgClass = 'bg-amber-500 text-white border-amber-500 shadow-sm';
-                    label = 'HALF DAY (½)';
+                    bgClass = 'bg-amber-500 text-white border-transparent shadow-sm';
+                    label = 'HALF DAY';
                   } else if (status === 'permission') {
-                    bgClass = 'bg-purple-600 text-white border-purple-600 shadow-sm';
-                    label = 'PERM (¼)';
+                    bgClass = 'bg-purple-600 text-white border-transparent shadow-sm';
+                    label = 'PERMISSION';
                   } else if (status === 'weekoff') {
-                    bgClass = 'bg-blue-600 text-white border-blue-600 shadow-sm';
+                    bgClass = 'bg-blue-600 text-white border-transparent shadow-sm';
                     label = 'WEEKOFF';
                   } else if (status === 'weekoff_halfday') {
-                    bgClass = 'bg-teal-600 text-white border-teal-600 shadow-sm';
-                    label = 'WKOFF HALF (½)';
+                    bgClass = 'bg-teal-600 text-white border-transparent shadow-sm';
+                    label = 'WKOFF HALF';
+                  } else if (status === 'company_week_off') {
+                    bgClass = 'bg-slate-500 text-white border-transparent shadow-sm';
+                    label = 'COMPANY OFF';
                   }
+
+                  const locked = beforeJoiningDay || isCompanyWeekOff;
 
                   return (
                     <button
                       key={day}
                       type="button"
-                      disabled={beforeJoiningDay}
+                      disabled={locked}
                       aria-label={beforeJoiningDay ? `${dateStr}: before joining date` : `${dateStr}: ${label}`}
                       onClick={() => cycleStatus(dateStr)}
-                      className={`min-w-0 rounded-xl border p-1 text-center text-xs font-medium transition-all sm:border-2 sm:p-2.5 sm:text-sm ${beforeJoiningDay ? 'cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-600' : bgClass}`}
+                      className={`min-w-0 rounded-2xl p-2.5 sm:p-3 text-center transition-all flex flex-col items-center justify-center min-h-[64px] sm:min-h-[76px] group relative ${
+                        beforeJoiningDay
+                          ? 'cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-600'
+                          : isCompanyWeekOff
+                          ? `cursor-not-allowed ${bgClass}`
+                          : `cursor-pointer ${bgClass}`
+                      }`}
                     >
-                      <span className="block text-sm font-bold sm:text-lg">{day}</span>
-                      <span className="hidden text-[9px] mt-0.5 sm:block font-bold tracking-tight uppercase">{beforeJoiningDay ? 'Not joined' : label}</span>
+                      <span className="block text-base sm:text-lg font-extrabold tracking-tight leading-none mb-1">
+                        {day}
+                      </span>
+
+                      <span className="text-[9px] sm:text-[10px] font-bold tracking-wider uppercase leading-none opacity-90">
+                        {beforeJoiningDay ? 'Not Joined' : label}
+                      </span>
+
+                      {/* Small late arrival indicator badge */}
+                      {bio?.is_late && !beforeJoiningDay && (
+                        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-neutral-900" title="Late arrival punch" />
+                      )}
                     </button>
                   );
                 })}
               </div>
 
-              {/* Summary Legend */}
-              <div className="mt-5 pt-4 border-t border-neutral-100 dark:border-neutral-800 flex items-center gap-3 sm:gap-6 text-xs sm:text-sm flex-wrap">
+              {/* Summary Legend matching screenshot */}
+              <div className="mt-6 pt-4 border-t border-neutral-100 dark:border-neutral-800 flex items-center gap-4 sm:gap-6 text-xs sm:text-sm flex-wrap">
                 <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 bg-white dark:bg-neutral-900 border-2 border-neutral-300 dark:border-neutral-600 rounded" />
-                  <span className="text-neutral-600 dark:text-neutral-300">Present ({presentCount})</span>
+                  <div className="w-3.5 h-3.5 rounded border border-neutral-400 dark:border-neutral-600 bg-transparent" />
+                  <span className="text-neutral-600 dark:text-neutral-300 font-medium">Present ({presentCount})</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 bg-rose-600 rounded" />
-                  <span className="text-neutral-600 dark:text-neutral-300">Leave ({leaveCount})</span>
+                  <div className="w-3.5 h-3.5 rounded-full bg-rose-600" />
+                  <span className="text-neutral-600 dark:text-neutral-300 font-medium">Leave ({leaveCount})</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 bg-amber-500 rounded" />
-                  <span className="text-neutral-600 dark:text-neutral-300">Half Day ({halfDayCount})</span>
+                  <div className="w-3.5 h-3.5 rounded-full bg-amber-500" />
+                  <span className="text-neutral-600 dark:text-neutral-300 font-medium">Half Day ({halfDayCount})</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 bg-purple-600 rounded" />
-                  <span className="text-neutral-600 dark:text-neutral-300">Perm ({permissionCount})</span>
+                  <div className="w-3.5 h-3.5 rounded-full bg-purple-600" />
+                  <span className="text-neutral-600 dark:text-neutral-300 font-medium">Perm ({permissionCount})</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 bg-blue-600 rounded" />
-                  <span className="text-neutral-600 dark:text-neutral-300">Weekoff ({weekoffCount})</span>
+                  <div className="w-3.5 h-3.5 rounded bg-blue-600" />
+                  <span className="text-neutral-600 dark:text-neutral-300 font-medium">Weekoff ({weekoffCount})</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 bg-teal-600 rounded" />
-                  <span className="text-neutral-600 dark:text-neutral-300">Wkoff Half ({weekoffHalfdayCount}/2)</span>
+                  <div className="w-3.5 h-3.5 rounded bg-teal-600" />
+                  <span className="text-neutral-600 dark:text-neutral-300 font-medium">Wkoff Half ({weekoffHalfdayCount}/2)</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3.5 h-3.5 rounded bg-slate-500" />
+                  <span className="text-neutral-600 dark:text-neutral-300 font-medium">Company Off ({companyWeekOffCount})</span>
+                </div>
+
+                {/* Biometric summary stats */}
+                {totalDurationHours > 0 && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-700 font-bold text-xs">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Total Worked: {totalDurationHours.toFixed(1)} hrs</span>
+                  </div>
+                )}
+
+                {lateArrivalsCount > 0 && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-bold text-xs">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>Late Punches: {lateArrivalsCount}</span>
+                  </div>
+                )}
+
                 <div className="w-full flex items-center justify-between sm:justify-end gap-2.5 font-bold text-neutral-900 dark:text-white sm:ml-auto sm:w-auto text-xs sm:text-sm flex-wrap">
-                  <span>Working: {presentCount + weekoffCount + weekoffHalfdayCount}</span>
+                  <span>Working: {presentCount + weekoffCount + weekoffHalfdayCount + companyWeekOffCount}</span>
                   <span className="text-neutral-300 dark:text-neutral-700">|</span>
-                  <span>Leaves: {leaveCount + (halfDayCount * 0.5) + (permissionCount * 0.25)}d</span>
+                  <span>Leaves: {leaveCount + (halfDayCount * 0.5) + (Math.max(0, permissionCount - permissionAllowance) * 1.0)}d</span>
                   <span className="text-neutral-300 dark:text-neutral-700">|</span>
-                  <span>Eligible: {activeDays}d{isSelectedEmpJoiningMonth ? ` (from ${joiningDate})` : ''}</span>
+                  <span>Eligible: {activeDays}d{isSelectedEmpJoiningMonth ? ` (from ${formatDisplayDate(joiningDate)})` : ''}</span>
                   {selectedEmp && (
                     <>
                       <span className="text-neutral-300 dark:text-neutral-700">|</span>
@@ -564,21 +718,141 @@ export function AttendancePage() {
         </GlassCard>
       )}
 
+      {/* Biometric Daily Punch Audit & Working Hours Breakdown */}
+      {selectedEmployee > 0 && !beforeJoiningMonth && (
+        <GlassCard className="dark:bg-neutral-900/90 dark:border-neutral-800">
+          <div 
+            onClick={() => setShowBiometricTimesheet(!showBiometricTimesheet)}
+            className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between cursor-pointer select-none transition-colors ${showBiometricTimesheet ? 'pb-3 border-b border-neutral-100 dark:border-neutral-800' : ''}`}
+          >
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-neutral-600 dark:text-neutral-400" />
+              <h3 className="text-base font-bold text-neutral-900 dark:text-white">
+                Biometric Punch Timesheet & Daily Hours ({selectedEmp?.full_name})
+              </h3>
+              <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-700">
+                {bioPunchDaysCount} Punches Recorded
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowBiometricTimesheet(!showBiometricTimesheet);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors shadow-sm cursor-pointer"
+            >
+              <span>{showBiometricTimesheet ? 'Hide Daily Logs' : 'Show Daily Logs'}</span>
+              {showBiometricTimesheet ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+          </div>
+
+          {/* Collapsible Content with smooth expand & collapse animation */}
+          <AnimatePresence initial={false}>
+            {showBiometricTimesheet && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden pt-4"
+              >
+                <div className="overflow-x-auto max-h-[430px] overflow-y-auto rounded-xl border border-neutral-200/60 dark:border-neutral-800/80 shadow-inner">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="sticky top-0 bg-white dark:bg-neutral-900 z-10 shadow-sm">
+                      <tr className="border-b border-neutral-200 dark:border-neutral-800 text-neutral-500 dark:text-neutral-400 font-bold uppercase tracking-wider">
+                        <th className="py-2.5 px-3">{t('attendance.date', 'Date')}</th>
+                        <th className="py-2.5 px-3">{t('attendance.day', 'Day')}</th>
+                        <th className="py-2.5 px-3">{t('attendance.checkIn', 'Check-In')}</th>
+                        <th className="py-2.5 px-3">{t('attendance.checkOut', 'Check-Out')}</th>
+                        <th className="py-2.5 px-3">{t('attendance.workingHours', 'Working Hours')}</th>
+                        <th className="py-2.5 px-3">{t('attendance.biometricVerification', 'Biometric Verification')}</th>
+                        <th className="py-2.5 px-3">{t('attendance.payslipStatus', 'Payslip Status')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                      {Array.from({ length: totalDays }, (_, i) => {
+                        const day = i + 1;
+                        const dateStr = formatDate(year, month, day);
+                        const displayDate = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+                        const beforeJoiningDay = Boolean(joiningDate && dateStr < joiningDate);
+                        const status = displayStatuses.get(dateStr) || 'present';
+                        const bio = biometricMap.get(dateStr);
+                        const dObj = new Date(year, month - 1, day);
+                        const dayName = dObj.toLocaleDateString('en-US', { weekday: 'short' });
+
+                        if (beforeJoiningDay) return null;
+
+                        return (
+                          <tr key={dateStr} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors">
+                            <td className="py-2.5 px-3 font-semibold text-neutral-900 dark:text-white">{displayDate}</td>
+                            <td className="py-2.5 px-3 text-neutral-500 dark:text-neutral-400 font-medium">{dayName}</td>
+                            <td className="py-2.5 px-3 font-mono font-medium text-emerald-600 dark:text-emerald-400">
+                              {bio?.check_in ? `🟢 ${bio.check_in}` : <span className="text-neutral-400">—</span>}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono font-medium text-rose-600 dark:text-rose-400">
+                              {bio?.check_out ? `🔴 ${bio.check_out}` : <span className="text-neutral-400">—</span>}
+                            </td>
+                            <td className="py-2.5 px-3 font-bold text-neutral-800 dark:text-neutral-200">
+                              {bio?.duration_hours !== null && bio?.duration_hours !== undefined ? (
+                                `⏱️ ${bio.duration_hours} hrs`
+                              ) : (
+                                <span className="text-neutral-400 font-normal">—</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              {bio?.is_late ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                                  ⚡ Late Punch
+                                </span>
+                              ) : bio?.check_in ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                  ✓ On-Time ({bio.distance_meters ? `${bio.distance_meters}m` : 'Office'})
+                                </span>
+                              ) : (
+                                <span className="text-neutral-400 font-normal">No Punch</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold uppercase ${
+                                status === 'leave' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300' :
+                                status === 'half_day' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' :
+                                status === 'permission' ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300' :
+                                status === 'weekoff' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300' :
+                                status === 'weekoff_halfday' ? 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300' :
+                                status === 'company_week_off' ? 'bg-slate-200 text-slate-800 dark:bg-slate-800/60 dark:text-slate-300' :
+                                'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                              }`}>
+                                {status.replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </GlassCard>
+      )}
+
       {/* Month-wise Leave & Salary Summary Report */}
       {canViewReports && <GlassCard className="dark:bg-neutral-900/90 dark:border-neutral-800">
         {notJoinedCount > 0 && (
           <div role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-            {notJoinedCount} employee(s) joined after {MONTH_NAMES[month - 1]} {year} and are excluded from this month's attendance and salary summary.
+            {notJoinedCount} employee(s) joined after {getMonthName(month)} {year} and are excluded from this month's attendance and salary summary.
           </div>
         )}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-neutral-100 dark:border-neutral-800">
+        <div className={`flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between transition-colors ${isReportOpen ? 'pb-3 border-b border-neutral-100 dark:border-neutral-800' : ''}`}>
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-base sm:text-lg font-bold text-neutral-900 dark:text-white">
-                Leave Summary — {MONTH_NAMES[month - 1]} {year}
+                {t('attendance.leaveSummary', 'Leave Summary')} — {monthNames[month - 1]} {year}
               </h3>
               <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300">
-                {totalEmployeesCount} {totalEmployeesCount === 1 ? 'Employee' : 'Employees'}
+                {totalEmployeesCount} {t('attendance.totalEmployees', 'Employees')}
               </span>
             </div>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
@@ -679,6 +953,10 @@ export function AttendancePage() {
                             <span className="block text-[10px] text-teal-600 dark:text-teal-400 uppercase font-semibold">Weekoff Half</span>
                             <span className="font-bold text-teal-800 dark:text-teal-300">{s.weekoff_halfday_days || 0}/2</span>
                           </div>
+                          <div className="rounded-lg bg-slate-50 dark:bg-slate-800/40 p-2 border border-slate-100 dark:border-slate-700/60">
+                            <span className="block text-[10px] text-slate-600 dark:text-slate-400 uppercase font-semibold">Company Off</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-300">{s.company_week_off_days || 0}</span>
+                          </div>
                           <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 p-2 border border-rose-100 dark:border-rose-900/60">
                             <span className="block text-[10px] text-rose-600 dark:text-rose-400 uppercase font-semibold">Full Leave (1.0)</span>
                             <span className="font-bold text-rose-800 dark:text-rose-300">{s.leave_days}</span>
@@ -688,7 +966,7 @@ export function AttendancePage() {
                             <span className="font-bold text-amber-800 dark:text-amber-300">{s.half_day_days || 0}</span>
                           </div>
                           <div className="rounded-lg bg-purple-50 dark:bg-purple-950/40 p-2 border border-purple-100 dark:border-purple-900/60">
-                            <span className="block text-[10px] text-purple-600 dark:text-purple-400 uppercase font-semibold">Permission (0.25)</span>
+                            <span className="block text-[10px] text-purple-600 dark:text-purple-400 uppercase font-semibold">Permission (Max {permissionAllowance} Free)</span>
                             <span className="font-bold text-purple-800 dark:text-purple-300">{s.permission_days || 0}</span>
                           </div>
                         </div>
@@ -708,17 +986,18 @@ export function AttendancePage() {
                     <table className="w-full text-left border-collapse">
                       <thead className="bg-neutral-100/90 dark:bg-neutral-800/90">
                         <tr className="text-xs font-bold uppercase tracking-wider border-b border-neutral-200 dark:border-neutral-700">
-                          <th className="py-3.5 px-4 text-left text-neutral-700 dark:text-neutral-200">Employee</th>
-                          <th className="py-3.5 px-4 text-left text-neutral-700 dark:text-neutral-200">Code</th>
+                          <th className="py-3.5 px-4 text-left text-neutral-700 dark:text-neutral-200">{t('attendance.employee', 'Employee')}</th>
+                          <th className="py-3.5 px-4 text-left text-neutral-700 dark:text-neutral-200">{t('employees.employeeCode', 'Code')}</th>
                           <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Eligible Days</th>
-                          <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Present</th>
-                          <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Weekoff</th>
+                          <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">{t('attendance.present', 'Present')}</th>
+                          <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">{t('attendance.weekoff', 'Weekoff')}</th>
                           <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Wkoff Half</th>
-                          <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Leave</th>
-                          <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Half Day</th>
-                          <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">Permission</th>
-                          <th className="py-3.5 px-4 text-right text-neutral-700 dark:text-neutral-200">Deduction</th>
-                          <th className="py-3.5 px-4 text-right text-neutral-700 dark:text-neutral-200">Net Payable</th>
+                          <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">{t('attendance.companyOff', 'Company Off')}</th>
+                          <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">{t('attendance.leave', 'Leave')}</th>
+                          <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">{t('attendance.halfDay', 'Half Day')}</th>
+                          <th className="py-3.5 px-3 text-center text-neutral-700 dark:text-neutral-200">{t('attendance.permission', 'Permission')}</th>
+                          <th className="py-3.5 px-4 text-right text-neutral-700 dark:text-neutral-200">{t('attendance.totalDeductions', 'Deduction')}</th>
+                          <th className="py-3.5 px-4 text-right text-neutral-700 dark:text-neutral-200">{t('attendance.netPayable', 'Net Payable')}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800 bg-white/40 dark:bg-neutral-900/40 text-sm">
@@ -754,6 +1033,9 @@ export function AttendancePage() {
                             </td>
                             <td className={`py-3.5 px-3 text-center font-bold ${(s.weekoff_halfday_days || 0) > 0 ? 'text-teal-600 dark:text-teal-400' : 'text-neutral-400 dark:text-neutral-500'}`}>
                               {s.weekoff_halfday_days || 0}
+                            </td>
+                            <td className={`py-3.5 px-3 text-center font-bold ${(s.company_week_off_days || 0) > 0 ? 'text-slate-600 dark:text-slate-400' : 'text-neutral-400 dark:text-neutral-500'}`}>
+                              {s.company_week_off_days || 0}
                             </td>
                             <td className={`py-3.5 px-3 text-center font-bold ${s.leave_days > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-neutral-400 dark:text-neutral-500'}`}>
                               {s.leave_days}
@@ -792,6 +1074,9 @@ export function AttendancePage() {
                           <td className="py-3.5 px-3 text-center text-sm font-extrabold text-teal-600 dark:text-teal-400">
                             {totalWeekoffHalfSum}
                           </td>
+                          <td className="py-3.5 px-3 text-center text-sm font-extrabold text-slate-600 dark:text-slate-400">
+                            {totalCompanyWeekOffSum}
+                          </td>
                           <td className="py-3.5 px-3 text-center text-sm font-extrabold text-rose-600 dark:text-rose-400">
                             {totalLeavesSum}
                           </td>
@@ -814,7 +1099,7 @@ export function AttendancePage() {
                 </>
               ) : (
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 py-4 text-center">
-                  No attendance records found for {MONTH_NAMES[month - 1]} {year}.
+                  No attendance records found for {getMonthName(month)} {year}.
                 </p>
               )}
             </motion.div>

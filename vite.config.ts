@@ -5,9 +5,17 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    port: 3000,
+    // Must match GOOGLE_REDIRECT_URI's host in backend/.env ("localhost") - the Google
+    // OAuth state cookie is scoped to the exact host that set it, and browsers treat
+    // "localhost" and "127.0.0.1" as different hosts despite resolving to the same IP.
+    host: 'localhost',
+    port: 3050,
+    strictPort: false,
     proxy: {
-      '/api': 'http://localhost:8000'
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      }
     }
   },
   build: {

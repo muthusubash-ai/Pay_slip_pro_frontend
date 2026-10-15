@@ -48,6 +48,7 @@ export const PLAN_CATALOG: PlanDetails[] = [
       'Detailed attendance and leave tracking',
       'Bulk salary slip generation',
       'Payroll reports and summaries',
+      'AI Assistant support',
     ],
     cta: 'Choose Professional',
     popular: true,

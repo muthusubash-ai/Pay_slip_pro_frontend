@@ -7,14 +7,18 @@ import {
   Users,
   FileText,
   CreditCard,
+  CalendarDays,
+  Check,
   Trash2,
   ExternalLink,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { employeeService } from '../../services/employeeService';
 import { salarySlipService } from '../../services/salarySlipService';
 import type { Employee, SalarySlip } from '../../types';
+import { listEmployeeLeaveRequests, reviewEmployeeLeaveRequest, type EmployeeLeaveRequest } from '../../services/leaveRequestService';
 import {
   getNotificationOverrides,
   dismissNotification,
@@ -24,7 +28,7 @@ import {
 
 export interface ActivityItem {
   id: string;
-  type: 'slip' | 'employee' | 'plan';
+  type: 'slip' | 'employee' | 'plan' | 'leave';
   rawId: number;
   title: string;
   desc: string;
@@ -37,20 +41,25 @@ export interface ActivityItem {
 
 interface AllActivityModalProps {
   onClose: () => void;
+  initialFilter?: 'all' | 'leaves';
 }
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-export function AllActivityModal({ onClose }: AllActivityModalProps) {
+export function AllActivityModal({ onClose, initialFilter = 'all' }: AllActivityModalProps) {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const modalRef = useRef<HTMLDivElement>(null);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [slips, setSlips] = useState<SalarySlip[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<EmployeeLeaveRequest[]>([]);
+  const [leaveActionBusy, setLeaveActionBusy] = useState<number | null>(null);
+  const [leaveError, setLeaveError] = useState('');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'slips' | 'employees' | 'plans'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'slips' | 'employees' | 'leaves'>(initialFilter);
   const [overrides, setOverrides] = useState(() => getNotificationOverrides());
 
   // Close on Escape
@@ -89,6 +98,11 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
         ]);
         setEmployees(empRes.data.items || []);
         setSlips(slipRes.data.items || []);
+        try {
+          setLeaveRequests(await listEmployeeLeaveRequests());
+        } catch {
+          setLeaveRequests([]);
+        }
       } catch (err) {
         console.error('Failed to load activity items:', err);
       } finally {
@@ -151,6 +165,26 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
         color: 'text-violet-600 dark:text-violet-400',
         iconBg: 'bg-violet-50 dark:bg-violet-950/50',
         path: `/employees/${emp.id}`,
+      });
+    });
+
+    leaveRequests.forEach((leave) => {
+      const id = `leave-${leave.id}`;
+      const ov = overrides[id];
+      if (ov?.dismissed) return;
+
+      const requestedAt = leave.created_at;
+      items.push({
+        id,
+        type: 'leave',
+        rawId: leave.id,
+        title: leave.status === 'PENDING' ? 'Employee leave request' : `Leave request ${leave.status.toLowerCase()}`,
+        desc: `${leave.employee_name} (${leave.emp_id}) · ${leave.request_type} · ${leave.start_date}${leave.end_date !== leave.start_date ? ` to ${leave.end_date}` : ''} · ${leave.reason}`,
+        time: formatTimeAgo(requestedAt),
+        timestamp: requestedAt ? new Date(requestedAt).getTime() : 0,
+        color: leave.status === 'PENDING' ? 'text-amber-600 dark:text-amber-400' : leave.status === 'APPROVED' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400',
+        iconBg: leave.status === 'PENDING' ? 'bg-amber-50 dark:bg-amber-950/50' : leave.status === 'APPROVED' ? 'bg-emerald-50 dark:bg-emerald-950/50' : 'bg-rose-50 dark:bg-rose-950/50',
+        path: '/attendance',
       });
     });
 
@@ -255,13 +289,14 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
     // Sort newest first
     items.sort((a, b) => b.timestamp - a.timestamp);
     return items;
-  }, [slips, employees, overrides, user]);
+  }, [slips, employees, leaveRequests, overrides, user]);
 
   // Filter & Search
   const filteredActivities = useMemo(() => {
     return allActivities.filter((item) => {
       if (activeFilter === 'slips' && item.type !== 'slip') return false;
       if (activeFilter === 'employees' && item.type !== 'employee') return false;
+      if (activeFilter === 'leaves' && item.type !== 'leave') return false;
 
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
@@ -275,6 +310,20 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
   // Dismiss an item
   const handleDismiss = (id: string) => {
     dismissNotification(id);
+    setOverrides(getNotificationOverrides());
+  };
+
+  const handleLeaveDecision = async (id: number, action: 'APPROVED' | 'REJECTED') => {
+    setLeaveActionBusy(id);
+    setLeaveError('');
+    try {
+      await reviewEmployeeLeaveRequest(id, action);
+      setLeaveRequests((current) => current.map((leave) => leave.id === id ? { ...leave, status: action } : leave));
+    } catch {
+      setLeaveError('Unable to update this request. Please try again.');
+    } finally {
+      setLeaveActionBusy(null);
+    }
   };
 
   return (
@@ -327,7 +376,7 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search activity by name or description..."
+              placeholder={t('header.searchPlaceholder')}
               className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:border-neutral-400 dark:focus:border-neutral-600 transition-colors"
             />
             {searchQuery && (
@@ -342,7 +391,7 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
           </div>
 
           {/* Filter Pills */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => setActiveFilter('all')}
@@ -352,7 +401,7 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
                   : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
               }`}
             >
-              All ({allActivities.length})
+              {t('common.all')} ({allActivities.length})
             </button>
             <button
               type="button"
@@ -364,7 +413,7 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
               }`}
             >
               <FileText className="h-3 w-3" />
-              Slips ({allActivities.filter((a) => a.type === 'slip').length})
+              {t('salary.title')} ({allActivities.filter((a) => a.type === 'slip').length})
             </button>
             <button
               type="button"
@@ -376,17 +425,30 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
               }`}
             >
               <Users className="h-3 w-3" />
-              Employees ({allActivities.filter((a) => a.type === 'employee').length})
+              {t('employees.title')} ({allActivities.filter((a) => a.type === 'employee').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveFilter('leaves')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                activeFilter === 'leaves'
+                  ? 'bg-neutral-900 text-white dark:bg-white dark:text-black shadow-sm'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+              }`}
+            >
+              <CalendarDays className="h-3 w-3" />
+              {t('attendance.leaveRequests')} ({allActivities.filter((a) => a.type === 'leave').length})
             </button>
           </div>
         </div>
 
         {/* Notification List Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+          {leaveError && <p role="alert" className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">{leaveError}</p>}
           {loading ? (
             <div className="py-16 text-center">
               <div className="w-6 h-6 border-2 border-neutral-300 border-t-neutral-800 dark:border-neutral-700 dark:border-t-white rounded-full mx-auto animate-spin mb-3" />
-              <p className="text-xs text-neutral-400">Loading activity...</p>
+              <p className="text-xs text-neutral-400">{t('common.loading')}</p>
             </div>
           ) : filteredActivities.length === 0 ? (
             <div className="py-16 text-center">
@@ -420,6 +482,8 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
                           <CreditCard className="h-4 w-4" />
                         ) : item.type === 'slip' ? (
                           <FileText className="h-4 w-4" />
+                        ) : item.type === 'leave' ? (
+                          <CalendarDays className="h-4 w-4" />
                         ) : (
                           <Users className="h-4 w-4" />
                         )}
@@ -441,30 +505,43 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
                               ? 'Salary Slip'
                               : item.type === 'plan'
                               ? 'Subscription'
+                              : item.type === 'leave'
+                              ? 'Leave Request'
                               : 'Employee'}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Actions: View and Dismiss */}
+                    {/* Pending leave requests can be reviewed directly from notifications. */}
                     <div className="flex items-center gap-1.5 self-end sm:self-start shrink-0 pt-1">
+                      {item.type === 'leave' && leaveRequests.find((leave) => leave.id === item.rawId)?.status === 'PENDING' && (
+                        <>
+                          <button type="button" disabled={leaveActionBusy === item.rawId} onClick={() => void handleLeaveDecision(item.rawId, 'APPROVED')} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-900 dark:text-emerald-400 dark:hover:bg-emerald-950/40">
+                            <Check className="h-3 w-3" /> Approve
+                          </button>
+                          <button type="button" disabled={leaveActionBusy === item.rawId} onClick={() => void handleLeaveDecision(item.rawId, 'REJECTED')} className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/40">
+                            <X className="h-3 w-3" /> Reject
+                          </button>
+                        </>
+                      )}
                       <button
                         onClick={() => {
                           onClose();
                           navigate(item.path);
                         }}
                         className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-neutral-900 dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 transition-colors"
-                        title="View Details"
+                        title={t('common.details')}
                       >
                         <ExternalLink className="h-3 w-3" />
-                        View
+                        {t('common.view')}
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => handleDismiss(item.id)}
-                        className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
-                        title="Dismiss notification"
+                        className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                        title={t('common.delete')}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -478,15 +555,29 @@ export function AllActivityModal({ onClose }: AllActivityModalProps) {
 
         {/* Modal Footer */}
         <div className="px-5 py-3 border-t border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 flex items-center justify-between">
-          <div className="text-xs text-neutral-400">
-            Click any item to view details
+          <div className="flex items-center gap-3 text-xs text-neutral-400">
+            <span>Click any item to view details</span>
+            {allActivities.some((item) => item.type === 'leave') && activeFilter === 'leaves' && (
+              <button
+                type="button"
+                onClick={() => {
+                  allActivities.filter((item) => item.type === 'leave').forEach((item) => {
+                    dismissNotification(item.id);
+                  });
+                  setOverrides(getNotificationOverrides());
+                }}
+                className="text-xs text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 font-medium cursor-pointer"
+              >
+                <Trash2 className="h-3 w-3" /> Clear all leave notifications
+              </button>
+            )}
           </div>
 
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-xl bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-xs font-semibold transition-colors"
+            className="px-4 py-1.5 rounded-xl bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-xs font-semibold transition-colors cursor-pointer"
           >
-            Close
+            {t('common.close')}
           </button>
         </div>
       </motion.div>

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MotionConfig } from 'framer-motion';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
 import { PageLoader } from './components/layout/PageLoader';
@@ -25,6 +26,8 @@ const EmployeeCreatePage = lazy(() => import('./pages/employees/EmployeeCreatePa
 const EmployeeDetailPage = lazy(() => import('./pages/employees/EmployeeDetailPage').then((m) => ({ default: m.EmployeeDetailPage })));
 const EmployeeEditPage = lazy(() => import('./pages/employees/EmployeeEditPage').then((m) => ({ default: m.EmployeeEditPage })));
 const AttendancePage = lazy(() => import('./pages/attendance/AttendancePage').then((m) => ({ default: m.AttendancePage })));
+const AttendancePunch = lazy(() => import('./pages/attendance/AttendancePunch').then((m) => ({ default: m.AttendancePunch })));
+const AttendanceLogs = lazy(() => import('./pages/attendance/AttendanceLogs').then((m) => ({ default: m.AttendanceLogs })));
 const SalarySlipListPage = lazy(() => import('./pages/salary-slips/SalarySlipListPage').then((m) => ({ default: m.SalarySlipListPage })));
 const GenerateSlipsPage = lazy(() => import('./pages/salary-slips/GenerateSlipsPage').then((m) => ({ default: m.GenerateSlipsPage })));
 const SalarySlipDetailPage = lazy(() => import('./pages/salary-slips/SalarySlipDetailPage').then((m) => ({ default: m.SalarySlipDetailPage })));
@@ -56,36 +59,45 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <ThemeProvider>
-            <AuthProvider>
-              <Suspense fallback={<PageLoader />}>
-                <Routes>
-                {/* Public routes */}
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/register" element={<RegisterPage />} />
-                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
+            <LanguageProvider>
+              <AuthProvider>
+                <Suspense fallback={<PageLoader />}>
+                  <Routes>
+                  {/* Standalone Biometric & Attendance Kiosk Portal (Independent Full Page) */}
+                  <Route path="/biometric" element={<AttendancePunch />} />
+                  <Route path="/punch" element={<AttendancePunch />} />
+                  <Route path="/attendance-portal" element={<AttendancePunch />} />
+                  <Route path="/biometric/logs" element={<AttendanceLogs />} />
+                  <Route path="/attendance-portal/logs" element={<AttendanceLogs />} />
 
-                {/* Protected routes with layout */}
-                <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                  <Route index element={<PlanHomeRedirect />} />
-                  <Route path="dashboard" element={<PlanRoute minimumPlan="starter"><DashboardPage /></PlanRoute>} />
-                  <Route path="profile" element={<SettingsPage />} />
-                  <Route path="settings" element={<PlanRoute minimumPlan="starter"><SettingsPage /></PlanRoute>} />
-                  <Route path="employees" element={<EmployeeListPage />} />
-                  <Route path="employees/new" element={<EmployeeCreatePage />} />
-                  <Route path="employees/:id" element={<EmployeeDetailPage />} />
-                  <Route path="employees/:id/edit" element={<EmployeeEditPage />} />
-                  <Route path="attendance" element={<PlanRoute minimumPlan="starter"><AttendancePage /></PlanRoute>} />
-                  <Route path="salary-slips" element={<SalarySlipListPage />} />
-                  <Route path="salary-slips/generate" element={<GenerateSlipsPage />} />
-                  <Route path="salary-slips/:id" element={<SalarySlipDetailPage />} />
-                  <Route path="settings/company" element={<PlanRoute minimumPlan="professional"><CompanySettingsPage /></PlanRoute>} />
-                  <Route path="admin" element={<PlanRoute minimumPlan="enterprise" adminOnly><AdminDashboardPage /></PlanRoute>} />
-                  <Route path="admin/users" element={<PlanRoute minimumPlan="enterprise" adminOnly><AdminUsersPage /></PlanRoute>} />
-                </Route>
-                </Routes>
-              </Suspense>
-            </AuthProvider>
+                  {/* Public routes */}
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/register" element={<RegisterPage />} />
+                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                  <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
+
+                  {/* Protected routes with layout */}
+                  <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+                    <Route index element={<PlanHomeRedirect />} />
+                    <Route path="dashboard" element={<PlanRoute minimumPlan="starter"><DashboardPage /></PlanRoute>} />
+                    <Route path="profile" element={<SettingsPage />} />
+                    <Route path="settings" element={<PlanRoute minimumPlan="starter"><SettingsPage /></PlanRoute>} />
+                    <Route path="employees" element={<EmployeeListPage />} />
+                    <Route path="employees/new" element={<EmployeeCreatePage />} />
+                    <Route path="employees/:id" element={<EmployeeDetailPage />} />
+                    <Route path="employees/:id/edit" element={<EmployeeEditPage />} />
+                    <Route path="attendance" element={<PlanRoute minimumPlan="starter"><AttendancePage /></PlanRoute>} />
+                    <Route path="salary-slips" element={<SalarySlipListPage />} />
+                    <Route path="salary-slips/generate" element={<GenerateSlipsPage />} />
+                    <Route path="salary-slips/:id" element={<SalarySlipDetailPage />} />
+                    <Route path="settings/company" element={<PlanRoute minimumPlan="professional"><CompanySettingsPage /></PlanRoute>} />
+                    <Route path="admin" element={<PlanRoute minimumPlan="enterprise" adminOnly><AdminDashboardPage /></PlanRoute>} />
+                    <Route path="admin/users" element={<PlanRoute minimumPlan="enterprise" adminOnly><AdminUsersPage /></PlanRoute>} />
+                  </Route>
+                  </Routes>
+                </Suspense>
+              </AuthProvider>
+            </LanguageProvider>
           </ThemeProvider>
         </BrowserRouter>
       </QueryClientProvider>

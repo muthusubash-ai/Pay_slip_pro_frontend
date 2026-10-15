@@ -360,11 +360,9 @@ function LoginModal({
       else navigate(getPlanHome(signedInUser));
     }
     catch (err: unknown) {
-      const msg =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { detail?: string; message?: string } } }).response?.data?.detail ||
-            (err as { response?: { data?: { detail?: string; message?: string } } }).response?.data?.message
-          : undefined;
+      console.error('Login error:', err);
+      const resData = (err as { response?: { data?: { detail?: string; message?: string } } })?.response?.data;
+      const msg = resData?.detail || resData?.message;
       setError(msg || 'Invalid email or password');
     }
     finally { setIsLoading(false); }

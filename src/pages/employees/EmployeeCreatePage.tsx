@@ -1,22 +1,31 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { AnimatedInput } from '../../components/ui/AnimatedInput';
 import { GradientButton } from '../../components/ui/GradientButton';
-import { ArrowLeft, ChevronDown, Landmark } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Landmark, Mail } from 'lucide-react';
 import { useCreateEmployee } from '../../hooks/useEmployees';
 import { DEPARTMENT_OPTIONS, DESIGNATION_OPTIONS } from '../../lib/employeeOptions';
 import { ThemedSelect } from '../../components/ui/ThemedSelect';
 import { ThemedDatePicker } from '../../components/ui/ThemedDatePicker';
 import { BankNamePicker } from '../../components/ui/BankNamePicker';
 import { IfscLookupField } from '../../components/ui/IfscLookupField';
+import { companyService } from '../../services/companyService';
+import { useTranslation } from '../../context/LanguageContext';
 
 export function EmployeeCreatePage() {
   const navigate = useNavigate();
   const createEmployee = useCreateEmployee();
+  const { t } = useTranslation();
   const [error, setError] = useState('');
   const [showBankDetails, setShowBankDetails] = useState(false);
+  const { data: company } = useQuery({
+    queryKey: ['company'],
+    queryFn: () => companyService.get().then((r) => r.data),
+  });
+  const shiftTimingEnabled = Boolean(company?.enable_employee_shift_timing);
 
   const [form, setForm] = useState({
     employee_code: '',
@@ -39,6 +48,8 @@ export function EmployeeCreatePage() {
     professional_tax: '',
     tds: '',
     esi: '',
+    shift_start_time: '',
+    shift_end_time: '',
   });
 
   const handleChange = (
@@ -102,9 +113,14 @@ export function EmployeeCreatePage() {
         professional_tax: parseFloat(form.professional_tax) || 0,
         tds: parseFloat(form.tds) || 0,
         esi: parseFloat(form.esi) || 0,
+        shift_start_time: shiftTimingEnabled ? (form.shift_start_time || undefined) : undefined,
+        shift_end_time: shiftTimingEnabled ? (form.shift_end_time || undefined) : undefined,
+        send_invitation: true,
       },
       {
-        onSuccess: () => navigate('/employees'),
+        onSuccess: () => {
+          navigate('/employees');
+        },
         onError: (err: unknown) => {
           const msg =
             err && typeof err === 'object' && 'response' in err
@@ -122,7 +138,7 @@ export function EmployeeCreatePage() {
         <Link to="/employees" className="text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-white transition-colors">
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">Add Employee</h2>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">{t('employees.addEmployee', 'Add Employee')}</h2>
       </div>
 
       {error && (
@@ -130,30 +146,30 @@ export function EmployeeCreatePage() {
       )}
 
       <GlassCard>
-        <h3 className="text-lg font-semibold mb-4 text-neutral-900 dark:text-white">Personal Information</h3>
+        <h3 className="text-lg font-semibold mb-4 text-neutral-900 dark:text-white">{t('employees.personalInfo', 'Personal Information')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AnimatedInput label="Employee Code *" placeholder="EMP001" value={form.employee_code} onChange={handleChange('employee_code', 'alphanumeric')} />
-          <AnimatedInput label="Full Name *" placeholder="John Doe" value={form.full_name} onChange={handleChange('full_name', 'alphabets')} />
-          <AnimatedInput label="Email *" type="email" placeholder="john@company.com" value={form.email} onChange={handleChange('email')} />
-          <AnimatedInput label="Phone" placeholder="+91 9876543210" value={form.phone} onChange={handleChange('phone', 'phone')} />
+          <AnimatedInput label={`${t('employees.employeeCode', 'Employee Code')} *`} placeholder="EMP001" value={form.employee_code} onChange={handleChange('employee_code', 'alphanumeric')} />
+          <AnimatedInput label={`${t('employees.fullName', 'Full Name')} *`} placeholder="John Doe" value={form.full_name} onChange={handleChange('full_name', 'alphabets')} />
+          <AnimatedInput label={`${t('employees.email', 'Email')} *`} type="email" placeholder="john@company.com" value={form.email} onChange={handleChange('email')} />
+          <AnimatedInput label={t('employees.phone', 'Phone')} placeholder="+91 9876543210" value={form.phone} onChange={handleChange('phone', 'phone')} />
           <ThemedSelect
-            label="Department"
+            label={t('employees.department', 'Department')}
             value={form.department}
             onChange={(val) => setForm((prev) => ({ ...prev, department: val }))}
             options={DEPARTMENT_OPTIONS}
-            placeholder="Select department"
+            placeholder={t('employees.department', 'Select department')}
             customPlaceholder="Type custom department (e.g. AI Research)..."
           />
           <ThemedSelect
-            label="Designation"
+            label={t('employees.designation', 'Designation')}
             value={form.designation}
             onChange={(val) => setForm((prev) => ({ ...prev, designation: val }))}
             options={DESIGNATION_OPTIONS}
-            placeholder="Select designation"
+            placeholder={t('employees.designation', 'Select designation')}
             customPlaceholder="Type custom designation (e.g. Lead Architect)..."
           />
           <ThemedDatePicker
-            label="Date of Joining *"
+            label={`${t('employees.dateOfJoining', 'Date of Joining')} *`}
             value={form.date_of_joining}
             onChange={(val) => setForm((prev) => ({ ...prev, date_of_joining: val }))}
             required
@@ -162,13 +178,28 @@ export function EmployeeCreatePage() {
         </div>
       </GlassCard>
 
+      {shiftTimingEnabled && (
+        <GlassCard>
+          <h3 className="text-lg font-semibold mb-1 text-neutral-900 dark:text-white">
+            {t('employees.shiftTiming', 'Shift Timing')}
+          </h3>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
+            {t('employees.shiftTimingDesc', "Optional. Leave blank to use the company's default office timing for this employee.")}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <AnimatedInput label={t('employees.shiftStartTime', 'Shift Start Time')} type="time" value={form.shift_start_time} onChange={handleChange('shift_start_time')} />
+            <AnimatedInput label={t('employees.shiftEndTime', 'Shift End Time')} type="time" value={form.shift_end_time} onChange={handleChange('shift_end_time')} />
+          </div>
+        </GlassCard>
+      )}
+
       <GlassCard>
         <button type="button" onClick={() => setShowBankDetails((open) => !open)} className="flex w-full items-center justify-between gap-4 text-left" aria-expanded={showBankDetails}>
           <span className="flex items-center gap-3">
             <span className="rounded-lg bg-gray-100 dark:bg-neutral-800 p-2"><Landmark className="h-4 w-4 text-gray-600 dark:text-neutral-300" /></span>
             <span>
-              <span className="block text-lg font-semibold text-neutral-900 dark:text-white">Bank Details</span>
-              <span className="block text-xs font-normal text-gray-500 dark:text-neutral-400">Optional payment account information</span>
+              <span className="block text-lg font-semibold text-neutral-900 dark:text-white">{t('employees.bankDetails', 'Bank Details')}</span>
+              <span className="block text-xs font-normal text-gray-500 dark:text-neutral-400">{t('employees.bankDetailsDesc', 'Optional payment account information')}</span>
             </span>
           </span>
           <ChevronDown className={`h-5 w-5 shrink-0 text-gray-500 dark:text-neutral-400 transition-transform ${showBankDetails ? 'rotate-180' : ''}`} />
@@ -176,37 +207,48 @@ export function EmployeeCreatePage() {
         {showBankDetails && (
           <div className="mt-5 grid grid-cols-1 gap-4 border-t border-gray-100 dark:border-neutral-800 pt-5 md:grid-cols-2">
             <BankNamePicker value={form.bank_name} onChange={(bank_name) => setForm((prev) => ({ ...prev, bank_name }))} />
-            <AnimatedInput label="Account Number" placeholder="1234567890" value={form.bank_account_number} onChange={handleChange('bank_account_number', 'digits')} />
+            <AnimatedInput label={t('employees.bankAccount', 'Account Number')} placeholder="1234567890" value={form.bank_account_number} onChange={handleChange('bank_account_number', 'digits')} />
             <IfscLookupField value={form.ifsc_code} bankName={form.bank_name} onChange={(ifsc_code) => setForm((prev) => ({ ...prev, ifsc_code }))} onBankSelect={(bank_name) => setForm((prev) => ({ ...prev, bank_name }))} />
-            <AnimatedInput label="PAN Number" placeholder="ABCDE1234F" value={form.pan_number} onChange={handleChange('pan_number', 'alphanumeric')} />
+            <AnimatedInput label={t('employees.pan', 'PAN Number')} placeholder="ABCDE1234F" value={form.pan_number} onChange={handleChange('pan_number', 'alphanumeric')} />
           </div>
         )}
       </GlassCard>
 
       <GlassCard>
-        <h3 className="text-lg font-semibold mb-4 text-neutral-900 dark:text-white">Salary Details</h3>
+        <h3 className="text-lg font-semibold mb-4 text-neutral-900 dark:text-white">{t('employees.salaryDetails', 'Salary Details')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <AnimatedInput label="Basic Salary *" type="number" placeholder="0.00" value={form.basic_salary} onChange={handleChange('basic_salary', 'decimal')} />
-          <AnimatedInput label="HRA" type="number" placeholder="0.00" value={form.hra} onChange={handleChange('hra', 'decimal')} />
-          <AnimatedInput label="Conveyance Allowance" type="number" placeholder="0.00" value={form.conveyance_allowance} onChange={handleChange('conveyance_allowance', 'decimal')} />
-          <AnimatedInput label="Medical Allowance" type="number" placeholder="0.00" value={form.medical_allowance} onChange={handleChange('medical_allowance', 'decimal')} />
-          <AnimatedInput label="Special Allowance" type="number" placeholder="0.00" value={form.special_allowance} onChange={handleChange('special_allowance', 'decimal')} />
+          <AnimatedInput label={`${t('employees.basicSalary', 'Basic Salary')} *`} type="number" placeholder="0.00" value={form.basic_salary} onChange={handleChange('basic_salary', 'decimal')} />
+          <AnimatedInput label={t('employees.hra', 'HRA')} type="number" placeholder="0.00" value={form.hra} onChange={handleChange('hra', 'decimal')} />
+          <AnimatedInput label={t('employees.conveyance', 'Conveyance Allowance')} type="number" placeholder="0.00" value={form.conveyance_allowance} onChange={handleChange('conveyance_allowance', 'decimal')} />
+          <AnimatedInput label={t('employees.medical', 'Medical Allowance')} type="number" placeholder="0.00" value={form.medical_allowance} onChange={handleChange('medical_allowance', 'decimal')} />
+          <AnimatedInput label={t('employees.specialAllowance', 'Special Allowance')} type="number" placeholder="0.00" value={form.special_allowance} onChange={handleChange('special_allowance', 'decimal')} />
         </div>
-        <h4 className="text-md font-medium mt-6 mb-3 text-neutral-900 dark:text-white">Deductions</h4>
+        <h4 className="text-md font-medium mt-6 mb-3 text-neutral-900 dark:text-white">{t('employees.deductions', 'Deductions')}</h4>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <AnimatedInput label="PF" type="number" placeholder="0.00" value={form.pf_deduction} onChange={handleChange('pf_deduction', 'decimal')} />
-          <AnimatedInput label="Professional Tax" type="number" placeholder="0.00" value={form.professional_tax} onChange={handleChange('professional_tax', 'decimal')} />
-          <AnimatedInput label="TDS" type="number" placeholder="0.00" value={form.tds} onChange={handleChange('tds', 'decimal')} />
-          <AnimatedInput label="ESI" type="number" placeholder="0.00" value={form.esi} onChange={handleChange('esi', 'decimal')} />
+          <AnimatedInput label={t('employees.pf', 'PF')} type="number" placeholder="0.00" value={form.pf_deduction} onChange={handleChange('pf_deduction', 'decimal')} />
+          <AnimatedInput label={t('employees.profTax', 'Professional Tax')} type="number" placeholder="0.00" value={form.professional_tax} onChange={handleChange('professional_tax', 'decimal')} />
+          <AnimatedInput label={t('employees.tds', 'TDS')} type="number" placeholder="0.00" value={form.tds} onChange={handleChange('tds', 'decimal')} />
+          <AnimatedInput label={t('employees.esi', 'ESI')} type="number" placeholder="0.00" value={form.esi} onChange={handleChange('esi', 'decimal')} />
         </div>
       </GlassCard>
 
-      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-        <Link to="/employees" className="w-full sm:w-auto"><GradientButton variant="secondary" className="w-full sm:w-auto">Cancel</GradientButton></Link>
-        <GradientButton onClick={handleSubmit} isLoading={createEmployee.isPending} className="w-full sm:w-auto">
-          Save Employee
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <Link to="/employees" className="w-full sm:w-auto">
+          <GradientButton variant="secondary" className="w-full sm:w-auto">
+            {t('common.cancel', 'Cancel')}
+          </GradientButton>
+        </Link>
+        <GradientButton
+          type="button"
+          onClick={handleSubmit}
+          isLoading={createEmployee.isPending}
+          className="w-full sm:w-auto flex items-center justify-center gap-2"
+        >
+          <Mail className="h-4 w-4 shrink-0" />
+          <span>{t('employees.saveAndInvite', 'Save & Send Invitation Email')}</span>
         </GradientButton>
       </div>
     </motion.div>
   );
 }
+

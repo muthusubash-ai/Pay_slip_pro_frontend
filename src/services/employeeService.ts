@@ -29,6 +29,11 @@ interface EmployeeCreateData {
   professional_tax?: number;
   tds?: number;
   esi?: number;
+  /** Optional per-employee shift timing (24-hour "HH:MM"); only used when the company
+   * has enabled Company.enable_employee_shift_timing. */
+  shift_start_time?: string;
+  shift_end_time?: string;
+  send_invitation?: boolean;
 }
 
 export interface IfscDetails {
@@ -49,7 +54,10 @@ export const employeeService = {
     api.get<Employee>(`/employees/${id}`),
 
   create: (data: EmployeeCreateData) =>
-    api.post<Employee>('/employees/', data),
+    api.post<Employee & { email_sent?: boolean }>('/employees/', data),
+
+  sendInvite: (id: number) =>
+    api.post<{ detail: string }>(`/employees/${id}/send-invite`),
 
   update: (id: number, data: Partial<EmployeeCreateData>) =>
     api.put<Employee>(`/employees/${id}`, data),

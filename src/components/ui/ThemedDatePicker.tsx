@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useTranslation } from '../../context/LanguageContext';
 
 interface ThemedDatePickerProps {
   label?: string;
@@ -13,11 +14,6 @@ interface ThemedDatePickerProps {
   placeholder?: string;
   disabled?: boolean;
 }
-
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
 
 const WEEK_DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
@@ -31,6 +27,7 @@ export function ThemedDatePicker({
   placeholder = 'Select date...',
   disabled = false,
 }: ThemedDatePickerProps) {
+  const { monthNames } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -236,8 +233,8 @@ export function ThemedDatePicker({
                   onChange={(e) => setViewMonth(Number(e.target.value))}
                   className="px-2 py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-xs font-bold text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white cursor-pointer"
                 >
-                  {MONTH_NAMES.map((name, i) => (
-                    <option key={name} value={i} className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
+                  {monthNames.map((name, i) => (
+                    <option key={i} value={i} className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
                       {name}
                     </option>
                   ))}

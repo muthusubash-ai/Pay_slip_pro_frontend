@@ -5,6 +5,7 @@ import { Header } from './Header';
 import { useAuth } from '../../context/AuthContext';
 import { isUserPlanExpired } from '../../lib/plans';
 import { PlanExpiredModal } from '../plans/PlanExpiredModal';
+import { AIAssistantLauncher } from '../common/AIAssistantLauncher';
 
 export function AppLayout() {
   const { user } = useAuth();
@@ -26,8 +27,12 @@ export function AppLayout() {
         </main>
       </div>
 
+      {/* Floating AI Assistant Trigger (Bottom-Right) */}
+      <AIAssistantLauncher />
+
       {/* Plan Expired Blocking Modal with Page Freeze */}
       <PlanExpiredModal isOpen={isPlanExpired} />
     </div>
   );
 }
+

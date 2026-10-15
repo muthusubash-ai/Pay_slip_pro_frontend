@@ -58,3 +58,9 @@ export function useDeleteEmployee() {
     },
   });
 }
+
+export function useSendEmployeeInvite() {
+  return useMutation({
+    mutationFn: (id: number) => employeeService.sendInvite(id),
+  });
+}

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   User as UserIcon, 
+  ArrowLeft,
   Building2, 
   Check, 
   CreditCard, 
@@ -16,6 +17,7 @@ import {
   Crown
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { AnimatedInput } from '../../components/ui/AnimatedInput';
 import { GradientButton } from '../../components/ui/GradientButton';
@@ -27,6 +29,7 @@ import { getPlanDetails, getPlanHome, PLAN_CATALOG, getUserPlanRemainingText } f
 
 export function SettingsPage() {
   const { user, updateUser } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [fullName, setFullName] = useState(user?.full_name || '');
@@ -154,9 +157,14 @@ export function SettingsPage() {
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-8 pb-12">
       {/* Header */}
-      <div>
-        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">Settings & Profile</h2>
-        <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Manage your personal information, organization details, and subscription plan.</p>
+      <div className="flex items-start gap-2">
+        <Link to="/dashboard" className="mt-0.5 rounded-lg p-1.5 text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-white" aria-label="Back to dashboard" title="Back to dashboard">
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <div>
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">{t('settings.title', 'Settings & Profile')}</h2>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">{t('settings.subtitle', 'Manage your personal information, organization details, and subscription plan.')}</p>
+        </div>
       </div>
 
       {paymentNotice && (
@@ -185,18 +193,18 @@ export function SettingsPage() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-base font-bold text-neutral-900 dark:text-white">User Profile</h3>
+              <h3 className="text-base font-bold text-neutral-900 dark:text-white">{t('settings.profileSettings', 'Profile Settings')}</h3>
               {isEditingProfile ? (
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
                   Editing Mode
                 </span>
               ) : (
                 <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">
-                  View Mode
+                  {t('settings.viewMode', 'View Mode')}
                 </span>
               )}
             </div>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">Your personal details and account role</p>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">{t('settings.profileDesc', 'Your personal details and account role')}</p>
           </div>
         </div>
 
@@ -208,9 +216,9 @@ export function SettingsPage() {
 
         <form onSubmit={handleProfileSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <AnimatedInput label="Email Address" value={user?.email || ''} disabled />
+            <AnimatedInput label={t('settings.email', 'Email Address')} value={user?.email || ''} disabled />
             <AnimatedInput 
-              label="Full Name" 
+              label={t('settings.fullName', 'Full Name')} 
               value={fullName} 
               onChange={(e) => setFullName(e.target.value)} 
               disabled={!isEditingProfile}
@@ -221,7 +229,7 @@ export function SettingsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
-                Mobile Number
+                {t('settings.phone', 'Mobile Number')}
               </label>
               <div className="relative flex items-center">
                 <div className="absolute left-3.5 flex items-center gap-1.5 pointer-events-none select-none text-neutral-600 dark:text-neutral-400 font-semibold text-sm">
@@ -244,7 +252,7 @@ export function SettingsPage() {
               </div>
             </div>
             <AnimatedInput
-              label="Registered Company"
+              label={t('settings.registeredCompany', 'Registered Company')}
               placeholder="Enter company name"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
@@ -255,8 +263,8 @@ export function SettingsPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <AnimatedInput
-              label="Account Role"
-              value={user?.role === 'admin' ? 'Administrator' : 'HR Manager'}
+              label={t('settings.accountRole', 'Account Role')}
+              value={user?.role === 'admin' ? t('settings.administrator', 'Administrator') : t('settings.hrManager', 'HR Manager')}
               disabled
             />
           </div>
@@ -272,7 +280,7 @@ export function SettingsPage() {
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold bg-neutral-900 hover:bg-black text-white dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 shadow-sm transition-all"
               >
                 <Edit3 className="w-3.5 h-3.5" />
-                Edit Profile
+                {t('settings.editProfile', 'Edit Profile')}
               </button>
             ) : (
               <>
@@ -286,10 +294,10 @@ export function SettingsPage() {
                   }}
                   className="px-4 py-2.5 rounded-xl text-xs font-semibold border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
                 >
-                  Cancel
+                  {t('common.cancel', 'Cancel')}
                 </button>
                 <GradientButton type="submit" isLoading={isSavingProfile} className="w-full sm:w-auto">
-                  Save Changes
+                  {t('settings.saveChanges', 'Save Changes')}
                 </GradientButton>
               </>
             )}
@@ -305,12 +313,12 @@ export function SettingsPage() {
               <CreditCard className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-neutral-900">Subscription Plan</h3>
-              <p className="text-xs text-neutral-500">Current tier and available plan upgrades</p>
+              <h3 className="text-base font-bold text-neutral-900">{t('settings.subscriptionPlan', 'Subscription Plan')}</h3>
+              <p className="text-xs text-neutral-500">{t('settings.subscriptionDesc', 'Current tier and available plan upgrades')}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-neutral-400">Current Status:</span>
+            <span className="text-xs text-neutral-400">{t('settings.currentStatus', 'Current Status')}:</span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-neutral-900 text-white shadow-sm">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               {currentPlan}

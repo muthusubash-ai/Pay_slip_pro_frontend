@@ -12,8 +12,6 @@ export const attendanceService = {
     leave_dates: string[];
     half_day_dates?: string[];
     permission_dates?: string[];
-    weekoff_dates: string[];
-    weekoff_halfday_dates?: string[];
   }) => api.post('/attendance/bulk', data),
 
   getMonthlyAttendance: (employeeId: number, month: number, year: number) =>

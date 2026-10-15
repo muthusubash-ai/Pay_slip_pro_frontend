@@ -75,8 +75,7 @@ html.dark .dark-card-white .card-badge {
 /* Dark button inside inverted white card in dark mode */
 html.dark .keep-dark,
 html.dark button.keep-dark,
-html.dark a.keep-dark,
-html.dark .dark\:bg-neutral-950 {
+html.dark a.keep-dark {
   background-color: #0a0a0a !important;
   color: #ffffff !important;
 }
@@ -92,9 +91,7 @@ html.dark .keep-dark span,
 html.dark button.keep-dark svg,
 html.dark button.keep-dark span,
 html.dark a.keep-dark svg,
-html.dark a.keep-dark span,
-html.dark .dark\:bg-neutral-950 svg,
-html.dark .dark\:bg-neutral-950 span {
+html.dark a.keep-dark span {
   color: #ffffff !important;
 }
 
@@ -169,18 +166,116 @@ html.dark .text-gray-500 {
   color: #a3a3a3 !important;
 }
 
-html.dark input,
-html.dark select,
-html.dark textarea {
-  background-color: #1c1c1c !important;
-  color: #f5f5f5 !important;
-  border-color: #333333 !important;
+/* Dark Mode Inputs - Only for main Pay Slip Pro dashboard */
+html.dark .bg-neutral-900 input:not(.keep-white),
+html.dark .bg-neutral-900 select:not(.keep-white),
+html.dark .bg-neutral-900 textarea:not(.keep-white),
+html.dark form:not(.biometric-portal-light form) input:not(.biometric-input):not(.keep-white),
+html.dark form:not(.biometric-portal-light form) select:not(.biometric-input):not(.keep-white),
+html.dark form:not(.biometric-portal-light form) textarea:not(.biometric-input):not(.keep-white) {
+  background-color: #1c1c1c;
+  color: #f5f5f5;
+  border-color: #333333;
 }
 
-html.dark input:focus,
-html.dark select:focus,
-html.dark textarea:focus {
-  border-color: #ededed !important;
+/* ==========================================================================
+   BIOMETRIC PORTAL - 100% BULLETPROOF LIGHT / DARK THEME STYLING
+   ========================================================================== */
+
+.biometric-portal-light,
+.biometric-portal-light * {
+  color-scheme: light !important;
+}
+
+html.dark .biometric-portal-light,
+html.dark .biometric-portal-light * {
+  color-scheme: light !important;
+}
+
+html.dark .biometric-portal-light input,
+html.dark .biometric-portal-light select,
+html.dark .biometric-portal-light textarea,
+html.dark .biometric-portal-light input[type="text"],
+html.dark .biometric-portal-light input[type="date"],
+html.dark .biometric-portal-light input[type="time"],
+html.dark .biometric-portal-light input[type="password"],
+html.dark .biometric-portal-light input[type="email"],
+html.dark .biometric-portal-light input[type="number"],
+.biometric-portal-light input,
+.biometric-portal-light select,
+.biometric-portal-light textarea,
+.biometric-portal-light input[type="text"],
+.biometric-portal-light input[type="date"],
+.biometric-portal-light input[type="time"],
+.biometric-portal-light input[type="password"],
+.biometric-portal-light input[type="email"],
+.biometric-portal-light input[type="number"] {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+  color-scheme: light !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.dark .biometric-portal-light input:focus,
+html.dark .biometric-portal-light select:focus,
+html.dark .biometric-portal-light textarea:focus,
+.biometric-portal-light input:focus,
+.biometric-portal-light select:focus,
+.biometric-portal-light textarea:focus {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #4f46e5 !important;
+  outline: 2px solid rgba(79, 70, 229, 0.15) !important;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12) !important;
+}
+
+html.dark .biometric-portal-light input::placeholder,
+html.dark .biometric-portal-light textarea::placeholder,
+.biometric-portal-light input::placeholder,
+.biometric-portal-light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html.dark .biometric-portal-light input[type="date"]::-webkit-calendar-picker-indicator,
+html.dark .biometric-portal-light input[type="time"]::-webkit-calendar-picker-indicator,
+.biometric-portal-light input[type="date"]::-webkit-calendar-picker-indicator,
+.biometric-portal-light input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: none !important;
+  opacity: 0.65 !important;
+  cursor: pointer;
+}
+
+.biometric-portal-dark input,
+.biometric-portal-dark select,
+.biometric-portal-dark textarea {
+  background-color: #18181b !important;
+  color: #f4f4f5 !important;
+  border: 1px solid #27272a !important;
+}
+
+.biometric-portal-dark input:focus,
+.biometric-portal-dark select:focus,
+.biometric-portal-dark textarea:focus {
+  background-color: #18181b !important;
+  color: #ffffff !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25) !important;
+}
+
+.biometric-portal-dark input::placeholder,
+.biometric-portal-dark textarea::placeholder {
+  color: #71717a !important;
+}
+
+.biometric-portal-dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.85);
+  cursor: pointer;
+}
+
+.biometric-portal-dark input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.85);
+  cursor: pointer;
 }
 
 html.dark .hover\:bg-neutral-50:hover,

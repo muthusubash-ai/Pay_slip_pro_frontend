@@ -37,6 +37,9 @@ export interface Employee {
   professional_tax: number;
   tds: number;
   esi: number;
+  /** Optional per-employee shift timing (24-hour "HH:MM"); falls back to the company default when unset. */
+  shift_start_time?: string | null;
+  shift_end_time?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string | null;
@@ -83,6 +86,18 @@ export interface Company {
   financial_year_start: number;
   pf_number: string | null;
   tan_number: string | null;
+  office_lat?: number | null;
+  office_lng?: number | null;
+  allowed_radius_meters?: number | null;
+  /** Recurring weekly off days. Monday=0 ... Sunday=6. */
+  weekly_off_days?: number[];
+  /** Permission requests allowed per month with 0 salary deduction. */
+  permission_days_per_month?: number;
+  office_timing?: string | null;
+  office_start_time?: string | null;
+  office_end_time?: string | null;
+  /** When true, HR can set a custom shift start/end time per employee (optional per employee). */
+  enable_employee_shift_timing?: boolean;
 }
 
 export interface PaginatedResponse<T> {
@@ -122,10 +137,17 @@ export interface DepartmentBreakdown {
 export type DayStatus = 'present' | 'leave' | 'half_day' | 'permission' | 'weekoff' | 'weekoff_halfday';
 
 export interface AttendanceRecord {
-  id: number;
+  id?: number | null;
   employee_id: number;
   date: string;
   status: DayStatus;
+  check_in?: string | null;
+  check_out?: string | null;
+  duration_hours?: number | null;
+  is_late?: boolean;
+  biometric_status?: string | null;
+  leave_type?: string | null;
+  distance_meters?: number | null;
 }
 
 export interface EmployeeLeaveSummary {
@@ -141,6 +163,7 @@ export interface EmployeeLeaveSummary {
   effective_leave_days: number;
   weekoff_days: number;
   weekoff_halfday_days?: number;
+  company_week_off_days?: number;
   present_days: number;
   leave_deduction: number;
   gross_salary?: number;

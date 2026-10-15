@@ -24,9 +24,11 @@ export function ForgotPasswordPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as { email?: string } | null;
+  const searchParams = new URLSearchParams(location.search);
+  const queryEmail = searchParams.get('email') || '';
 
   const [step, setStep] = useState<Step>('email');
-  const [email, setEmail] = useState(state?.email?.trim() || '');
+  const [email, setEmail] = useState(state?.email?.trim() || queryEmail.trim() || '');
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -36,7 +38,7 @@ export function ForgotPasswordPage() {
   const [isNotRegistered, setIsNotRegistered] = useState(false);
 
   // If email was provided from the login modal, lock it so user cannot edit it
-  const isEmailLocked = Boolean(state?.email?.trim());
+  const isEmailLocked = Boolean(state?.email?.trim() || queryEmail.trim());
 
   const handleSendCode = async (e?: FormEvent) => {
     e?.preventDefault();
@@ -271,8 +273,22 @@ export function ForgotPasswordPage() {
                 label="New Password"
                 type="password"
                 showPasswordToggle
+                disableCopyPaste
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
+                onCopy={(e) => {
+                  e.preventDefault();
+                  setError('Copying password is disabled for security reasons.');
+                }}
+                onCut={(e) => {
+                  e.preventDefault();
+                  setError('Cutting password is disabled for security reasons.');
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  setError('Pasting into password fields is disabled. Please type manually.');
+                }}
+                onDrop={(e) => e.preventDefault()}
                 required
                 placeholder="12+ chars, upper, lower, number, special"
               />
@@ -281,8 +297,22 @@ export function ForgotPasswordPage() {
                 label="Confirm Password"
                 type="password"
                 showPasswordToggle
+                disableCopyPaste
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                onCopy={(e) => {
+                  e.preventDefault();
+                  setError('Copying password is disabled for security reasons.');
+                }}
+                onCut={(e) => {
+                  e.preventDefault();
+                  setError('Cutting password is disabled for security reasons.');
+                }}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  setError('Pasting into confirm password is disabled. Please type manually to confirm.');
+                }}
+                onDrop={(e) => e.preventDefault()}
                 required
                 placeholder="Re-enter password"
               />

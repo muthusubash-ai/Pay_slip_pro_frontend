@@ -1,24 +1,52 @@
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { ArrowLeft, Trash2, AlertCircle } from 'lucide-react';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { AnimatedInput } from '../../components/ui/AnimatedInput';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
-import { useEmployee, useUpdateEmployee } from '../../hooks/useEmployees';
+import { useEmployee, useUpdateEmployee, useDeleteEmployee } from '../../hooks/useEmployees';
 import { DEPARTMENT_OPTIONS, DESIGNATION_OPTIONS } from '../../lib/employeeOptions';
 import { ThemedSelect } from '../../components/ui/ThemedSelect';
 import { BankNamePicker } from '../../components/ui/BankNamePicker';
 import { IfscLookupField } from '../../components/ui/IfscLookupField';
 import { ThemedDatePicker } from '../../components/ui/ThemedDatePicker';
+import { companyService } from '../../services/companyService';
+import { useTranslation } from '../../context/LanguageContext';
 
 export function EmployeeEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { data: emp, isLoading } = useEmployee(Number(id));
   const updateEmployee = useUpdateEmployee();
+  const deleteEmployee = useDeleteEmployee();
   const [error, setError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const { data: company } = useQuery({
+    queryKey: ['company'],
+    queryFn: () => companyService.get().then((r) => r.data),
+  });
+  const shiftTimingEnabled = Boolean(company?.enable_employee_shift_timing);
+
+  const handleDeactivate = () => {
+    setDeleteError('');
+    if (!confirm('Are you sure you want to deactivate and remove this employee?')) return;
+    deleteEmployee.mutate(Number(id), {
+      onSuccess: () => {
+        navigate('/employees', { replace: true });
+      },
+      onError: (err: unknown) => {
+        const msg =
+          err && typeof err === 'object' && 'response' in err
+            ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+            : undefined;
+        setDeleteError(msg || 'Failed to deactivate employee. Please try again.');
+      },
+    });
+  };
 
   const [form, setForm] = useState({
     full_name: '',
@@ -40,6 +68,8 @@ export function EmployeeEditPage() {
     professional_tax: '',
     tds: '',
     esi: '',
+    shift_start_time: '',
+    shift_end_time: '',
   });
 
   useEffect(() => {
@@ -64,6 +94,8 @@ export function EmployeeEditPage() {
         professional_tax: String(emp.professional_tax),
         tds: String(emp.tds),
         esi: String(emp.esi),
+        shift_start_time: emp.shift_start_time || '',
+        shift_end_time: emp.shift_end_time || '',
       });
     }
   }, [emp]);
@@ -130,6 +162,8 @@ export function EmployeeEditPage() {
           professional_tax: parseFloat(form.professional_tax) || 0,
           tds: parseFloat(form.tds) || 0,
           esi: parseFloat(form.esi) || 0,
+          shift_start_time: shiftTimingEnabled ? (form.shift_start_time || undefined) : undefined,
+          shift_end_time: shiftTimingEnabled ? (form.shift_end_time || undefined) : undefined,
         },
       },
       {
@@ -146,41 +180,41 @@ export function EmployeeEditPage() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (!emp) return <p className="text-center text-gray-500 mt-10">Employee not found.</p>;
+  if (!emp) return <p className="text-center text-gray-500 mt-10">{t('employees.employeeNotFound', 'Employee not found.')}</p>;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6">
       <div className="flex min-w-0 items-center gap-3">
         <Link to={`/employees/${id}`} className="text-gray-500 hover:text-gray-700"><ArrowLeft className="h-5 w-5" /></Link>
-        <h2 className="truncate text-xl font-bold text-gray-900 sm:text-2xl">Edit {emp.full_name}</h2>
+        <h2 className="truncate text-xl font-bold text-gray-900 sm:text-2xl">{t('employees.editEmployee', 'Edit Employee')} — {emp.full_name}</h2>
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">{error}</div>}
 
       <GlassCard>
-        <h3 className="text-lg font-semibold mb-4">Personal Information</h3>
+        <h3 className="text-lg font-semibold mb-4">{t('employees.personalInfo', 'Personal Information')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AnimatedInput label="Full Name *" value={form.full_name} onChange={handleChange('full_name', 'alphabets')} />
-          <AnimatedInput label="Email *" type="email" value={form.email} onChange={handleChange('email')} />
-          <AnimatedInput label="Phone" value={form.phone} onChange={handleChange('phone', 'phone')} />
+          <AnimatedInput label={`${t('employees.fullName', 'Full Name')} *`} value={form.full_name} onChange={handleChange('full_name', 'alphabets')} />
+          <AnimatedInput label={`${t('employees.email', 'Email')} *`} type="email" value={form.email} onChange={handleChange('email')} />
+          <AnimatedInput label={t('employees.phone', 'Phone')} value={form.phone} onChange={handleChange('phone', 'phone')} />
           <ThemedSelect
-            label="Department"
+            label={t('employees.department', 'Department')}
             value={form.department}
             onChange={(val) => setForm((prev) => ({ ...prev, department: val }))}
             options={DEPARTMENT_OPTIONS}
-            placeholder="Select department"
+            placeholder={t('employees.department', 'Select department')}
             customPlaceholder="Type custom department..."
           />
           <ThemedSelect
-            label="Designation"
+            label={t('employees.designation', 'Designation')}
             value={form.designation}
             onChange={(val) => setForm((prev) => ({ ...prev, designation: val }))}
             options={DESIGNATION_OPTIONS}
-            placeholder="Select designation"
+            placeholder={t('employees.designation', 'Select designation')}
             customPlaceholder="Type custom designation..."
           />
           <ThemedDatePicker
-            label="Date of Joining *"
+            label={`${t('employees.dateOfJoining', 'Date of Joining')} *`}
             value={form.date_of_joining}
             onChange={(date_of_joining) => setForm((prev) => ({ ...prev, date_of_joining }))}
             required
@@ -194,37 +228,79 @@ export function EmployeeEditPage() {
         )}
       </GlassCard>
 
+      {shiftTimingEnabled && (
+        <GlassCard>
+          <h3 className="text-lg font-semibold mb-1 text-neutral-900 dark:text-white">
+            {t('employees.shiftTiming', 'Shift Timing')}
+          </h3>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
+            {t('employees.shiftTimingDesc', "Optional. Leave blank to use the company's default office timing for this employee.")}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <AnimatedInput label={t('employees.shiftStartTime', 'Shift Start Time')} type="time" value={form.shift_start_time} onChange={handleChange('shift_start_time')} />
+            <AnimatedInput label={t('employees.shiftEndTime', 'Shift End Time')} type="time" value={form.shift_end_time} onChange={handleChange('shift_end_time')} />
+          </div>
+        </GlassCard>
+      )}
+
       <GlassCard>
-        <h3 className="text-lg font-semibold mb-4">Bank Details</h3>
+        <h3 className="text-lg font-semibold mb-4">{t('employees.bankDetails', 'Bank Details')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <BankNamePicker value={form.bank_name} onChange={(bank_name) => setForm((prev) => ({ ...prev, bank_name }))} />
-          <AnimatedInput label="Account Number" value={form.bank_account_number} onChange={handleChange('bank_account_number', 'digits')} />
+          <AnimatedInput label={t('employees.bankAccount', 'Account Number')} value={form.bank_account_number} onChange={handleChange('bank_account_number', 'digits')} />
           <IfscLookupField value={form.ifsc_code} bankName={form.bank_name} onChange={(ifsc_code) => setForm((prev) => ({ ...prev, ifsc_code }))} onBankSelect={(bank_name) => setForm((prev) => ({ ...prev, bank_name }))} />
-          <AnimatedInput label="PAN Number" value={form.pan_number} onChange={handleChange('pan_number', 'alphanumeric')} />
+          <AnimatedInput label={t('employees.pan', 'PAN Number')} value={form.pan_number} onChange={handleChange('pan_number', 'alphanumeric')} />
         </div>
       </GlassCard>
 
       <GlassCard>
-        <h3 className="text-lg font-semibold mb-4">Salary Details</h3>
+        <h3 className="text-lg font-semibold mb-4">{t('employees.salaryDetails', 'Salary Details')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <AnimatedInput label="Basic Salary" type="number" value={form.basic_salary} onChange={handleChange('basic_salary', 'decimal')} />
-          <AnimatedInput label="HRA" type="number" value={form.hra} onChange={handleChange('hra', 'decimal')} />
-          <AnimatedInput label="Conveyance Allowance" type="number" value={form.conveyance_allowance} onChange={handleChange('conveyance_allowance', 'decimal')} />
-          <AnimatedInput label="Medical Allowance" type="number" value={form.medical_allowance} onChange={handleChange('medical_allowance', 'decimal')} />
-          <AnimatedInput label="Special Allowance" type="number" value={form.special_allowance} onChange={handleChange('special_allowance', 'decimal')} />
+          <AnimatedInput label={t('employees.basicSalary', 'Basic Salary')} type="number" value={form.basic_salary} onChange={handleChange('basic_salary', 'decimal')} />
+          <AnimatedInput label={t('employees.hra', 'HRA')} type="number" value={form.hra} onChange={handleChange('hra', 'decimal')} />
+          <AnimatedInput label={t('employees.conveyance', 'Conveyance Allowance')} type="number" value={form.conveyance_allowance} onChange={handleChange('conveyance_allowance', 'decimal')} />
+          <AnimatedInput label={t('employees.medical', 'Medical Allowance')} type="number" value={form.medical_allowance} onChange={handleChange('medical_allowance', 'decimal')} />
+          <AnimatedInput label={t('employees.specialAllowance', 'Special Allowance')} type="number" value={form.special_allowance} onChange={handleChange('special_allowance', 'decimal')} />
         </div>
-        <h4 className="text-md font-medium mt-6 mb-3">Deductions</h4>
+        <h4 className="text-md font-medium mt-6 mb-3">{t('employees.deductions', 'Deductions')}</h4>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <AnimatedInput label="PF" type="number" value={form.pf_deduction} onChange={handleChange('pf_deduction', 'decimal')} />
-          <AnimatedInput label="Professional Tax" type="number" value={form.professional_tax} onChange={handleChange('professional_tax', 'decimal')} />
-          <AnimatedInput label="TDS" type="number" value={form.tds} onChange={handleChange('tds', 'decimal')} />
-          <AnimatedInput label="ESI" type="number" value={form.esi} onChange={handleChange('esi', 'decimal')} />
+          <AnimatedInput label={t('employees.pf', 'PF')} type="number" value={form.pf_deduction} onChange={handleChange('pf_deduction', 'decimal')} />
+          <AnimatedInput label={t('employees.profTax', 'Professional Tax')} type="number" value={form.professional_tax} onChange={handleChange('professional_tax', 'decimal')} />
+          <AnimatedInput label={t('employees.tds', 'TDS')} type="number" value={form.tds} onChange={handleChange('tds', 'decimal')} />
+          <AnimatedInput label={t('employees.esi', 'ESI')} type="number" value={form.esi} onChange={handleChange('esi', 'decimal')} />
         </div>
       </GlassCard>
 
-      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-        <Link to={`/employees/${id}`} className="w-full sm:w-auto"><GradientButton variant="secondary" className="w-full sm:w-auto">Cancel</GradientButton></Link>
-        <GradientButton onClick={handleSubmit} isLoading={updateEmployee.isPending} className="w-full sm:w-auto">Update Employee</GradientButton>
+      {deleteError && (
+        <div className="flex items-center justify-between gap-2 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 px-4 py-3 rounded-xl text-sm">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+            <span>{deleteError}</span>
+          </div>
+          <button type="button" onClick={() => setDeleteError('')} className="text-rose-500 hover:text-rose-700 dark:text-rose-400 font-bold p-1 cursor-pointer">×</button>
+        </div>
+      )}
+
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <GradientButton
+          type="button"
+          variant="danger"
+          onClick={handleDeactivate}
+          isLoading={deleteEmployee.isPending}
+          className="w-full sm:w-auto gap-2"
+        >
+          <Trash2 className="h-4 w-4 shrink-0" />
+          <span>{t('employees.deactivateEmployee', 'Deactivate Employee')}</span>
+        </GradientButton>
+
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:w-auto">
+          <Link to={`/employees/${id}`} className="w-full sm:w-auto">
+            <GradientButton variant="secondary" className="w-full sm:w-auto">{t('common.cancel', 'Cancel')}</GradientButton>
+          </Link>
+          <GradientButton onClick={handleSubmit} isLoading={updateEmployee.isPending} className="w-full sm:w-auto">
+            {t('employees.updateEmployee', 'Update Employee')}
+          </GradientButton>
+        </div>
       </div>
     </motion.div>
   );

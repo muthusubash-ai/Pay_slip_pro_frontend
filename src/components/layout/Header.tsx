@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell, Search, X, Users, FileText, CreditCard, ChevronRight, Calendar, Settings, Menu, Sun, Moon } from 'lucide-react';
+import { ArrowLeft, Bell, Search, X, Users, FileText, CreditCard, ChevronRight, Calendar, CalendarDays, Settings, Menu, Sun, Moon, Languages } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { employeeService } from '../../services/employeeService';
 import { salarySlipService } from '../../services/salarySlipService';
 import type { Employee, SalarySlip } from '../../types';
+import { listEmployeeLeaveRequests, type EmployeeLeaveRequest } from '../../services/leaveRequestService';
 import { AllActivityModal } from './AllActivityModal';
 import {
   getNotificationOverrides,
@@ -266,15 +268,16 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
 /* ─── Notification Dropdown ─── */
 interface NotificationDropdownProps {
   onClose: () => void;
-  onViewAllActivity: () => void;
+  onViewAllActivity: (filter?: 'leaves') => void;
 }
 
-let cachedNotificationData: { employees: Employee[]; slips: SalarySlip[] } | null = null;
+let cachedNotificationData: { employees: Employee[]; slips: SalarySlip[]; leaveRequests: EmployeeLeaveRequest[] } | null = null;
 
 function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdownProps) {
   const { user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>(() => cachedNotificationData?.employees || []);
   const [slips, setSlips] = useState<SalarySlip[]>(() => cachedNotificationData?.slips || []);
+  const [leaveRequests, setLeaveRequests] = useState<EmployeeLeaveRequest[]>(() => cachedNotificationData?.leaveRequests || []);
   const [loading, setLoading] = useState(() => !cachedNotificationData);
   const [overrides, setOverrides] = useState(() => getNotificationOverrides());
   const navigate = useNavigate();
@@ -298,9 +301,12 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
         ]);
         const newEmps = empRes.data.items || [];
         const newSlips = slipRes.data.items || [];
-        cachedNotificationData = { employees: newEmps, slips: newSlips };
+        let newLeaveRequests: EmployeeLeaveRequest[] = [];
+        try { newLeaveRequests = await listEmployeeLeaveRequests(); } catch { /* Attendance may not be enabled for this account. */ }
+        cachedNotificationData = { employees: newEmps, slips: newSlips, leaveRequests: newLeaveRequests };
         setEmployees(newEmps);
         setSlips(newSlips);
+        setLeaveRequests(newLeaveRequests);
       } catch {
         // ignore
       } finally {
@@ -324,6 +330,7 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
     timestamp: number;
     color: string;
     path: string;
+    kind?: 'leave';
   }
 
   const notifications: NotificationItem[] = [];
@@ -371,6 +378,24 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
       timestamp,
       color: 'bg-violet-100 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400',
       path: `/employees/${emp.id}`,
+    });
+  });
+
+  leaveRequests.filter((leave) => leave.status === 'PENDING').forEach((leave) => {
+    const id = `leave-${leave.id}`;
+    const ov = overrides[id];
+    if (ov?.dismissed) return;
+
+    notifications.push({
+      id,
+      icon: CalendarDays,
+      title: 'Employee leave request',
+      desc: `${leave.employee_name} · ${leave.request_type} · ${leave.start_date}`,
+      time: formatTimeAgo(leave.created_at),
+      timestamp: leave.created_at ? new Date(leave.created_at).getTime() : 0,
+      color: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400',
+      path: '/attendance',
+      kind: 'leave',
     });
   });
 
@@ -498,7 +523,7 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
             <button
               key={notif.id}
               type="button"
-              onClick={() => goTo(notif.path)}
+              onClick={() => notif.kind === 'leave' ? onViewAllActivity('leaves') : goTo(notif.path)}
               className="w-full flex items-start gap-3 px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/60 transition-colors text-left border-b border-neutral-50 dark:border-neutral-800/60 last:border-0 cursor-pointer"
             >
               <div className={`p-1.5 rounded-lg ${notif.color} shrink-0 mt-0.5`}>
@@ -519,7 +544,7 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
         <div className="border-t border-neutral-100 dark:border-neutral-800 px-4 py-2.5">
           <button
             type="button"
-            onClick={onViewAllActivity}
+            onClick={() => onViewAllActivity()}
             className="text-[11px] font-semibold text-neutral-600 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors flex items-center gap-1 mx-auto cursor-pointer"
           >
             View all activity <ChevronRight className="h-3 w-3" />
@@ -534,12 +559,23 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { language, toggleLanguage, t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
   const [showSearch, setShowSearch] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
+  const [activityInitialFilter, setActivityInitialFilter] = useState<'all' | 'leaves'>('all');
   const [hasUnread, setHasUnread] = useState(false);
   const notificationWrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (location.pathname === '/attendance' && new URLSearchParams(location.search).has('leave_request')) {
+      setShowNotifications(false);
+      setActivityInitialFilter('leaves');
+      setShowActivityModal(true);
+    }
+  }, [location.pathname, location.search]);
 
   const checkUnread = useCallback(async () => {
     try {
@@ -549,13 +585,19 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
       ]);
       const empItems = empRes.data.items || [];
       const slipItems = slipRes.data.items || [];
-      cachedNotificationData = { employees: empItems, slips: slipItems };
-
       const latestEmp = empItems[0];
       const latestSlip = slipItems[0];
 
       const empTime = latestEmp ? new Date(latestEmp.created_at || latestEmp.date_of_joining).getTime() : 0;
       const slipTime = latestSlip ? new Date(latestSlip.emailed_at || latestSlip.generated_at).getTime() : 0;
+      let latestLeaveTime = 0;
+      try {
+        const requests = await listEmployeeLeaveRequests();
+        cachedNotificationData = { employees: empItems, slips: slipItems, leaveRequests: requests };
+        latestLeaveTime = requests.filter((leave) => leave.status === 'PENDING').reduce(
+          (latest, leave) => Math.max(latest, new Date(leave.created_at).getTime() || 0), 0,
+        );
+      } catch { /* Attendance can be unavailable for this user. */ }
 
       let latestPlanAlertTime = 0;
       if (user?.plan && user.plan !== 'starter' && user.plan_expires_at) {
@@ -566,7 +608,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
         }
       }
 
-      const maxTime = Math.max(empTime, slipTime, latestPlanAlertTime);
+      const maxTime = Math.max(empTime, slipTime, latestPlanAlertTime, latestLeaveTime);
 
       setHasUnread(hasUnreadItems(maxTime));
     } catch {
@@ -625,6 +667,19 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const closeNotifications = useCallback(() => setShowNotifications(false), []);
 
   const pageTitle = getPageTitle(location.pathname);
+  const mainTitlePages = ['/employees', '/salary-slips', '/attendance', '/settings', '/profile', '/settings/company'];
+  const hideSharedTitle = mainTitlePages.includes(location.pathname);
+  const pageHasOwnBackButton = hideSharedTitle
+    || /^\/employees\/(new|\d+(\/edit)?)$/.test(location.pathname)
+    || /^\/salary-slips\/(generate|\d+)$/.test(location.pathname);
+  const showBackButton = location.pathname !== '/dashboard' && !pageHasOwnBackButton;
+  const backTarget = location.pathname === '/settings/company'
+    ? '/settings'
+    : location.pathname.startsWith('/salary-slips')
+      ? '/salary-slips'
+      : location.pathname.startsWith('/employees')
+        ? '/employees'
+        : '/dashboard';
 
   return (
     <>
@@ -644,7 +699,18 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <h1 className="truncate text-sm font-bold tracking-tight text-neutral-900 min-[380px]:text-base sm:text-lg">{pageTitle}</h1>
+          {showBackButton && (
+            <button
+              type="button"
+              onClick={() => navigate(backTarget)}
+              className="rounded-lg p-2 text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-black"
+              aria-label="Go back"
+              title="Go back"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
+          {!hideSharedTitle && <h1 className="truncate text-sm font-bold tracking-tight text-neutral-900 min-[380px]:text-base sm:text-lg">{pageTitle}</h1>}
         </div>
 
         {/* Right — Actions */}
@@ -657,7 +723,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
           >
             <Search className="h-4 w-4 shrink-0 text-neutral-400 dark:text-neutral-500" />
             <span className="text-xs text-neutral-400 dark:text-neutral-400 font-normal truncate">
-              Search employees, slips...
+              {t('header.searchPlaceholder', 'Search employees, slips...')}
             </span>
           </button>
 
@@ -700,8 +766,9 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
               {showNotifications && (
                 <NotificationDropdown
                   onClose={closeNotifications}
-                  onViewAllActivity={() => {
+                  onViewAllActivity={(filter) => {
                     setShowNotifications(false);
+                    setActivityInitialFilter(filter || 'all');
                     setShowActivityModal(true);
                   }}
                 />
@@ -709,13 +776,33 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
             </AnimatePresence>
           </div>
 
+          {/* Language Switcher (English / தமிழ்) */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={toggleLanguage}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer",
+              language === 'ta'
+                ? "bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/70 dark:border-indigo-800 dark:text-indigo-300 shadow-sm"
+                : "bg-neutral-50 border-neutral-200 text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 dark:bg-neutral-800/80 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700"
+            )}
+            title={language === 'en' ? 'தமிழில் மாற்றுக (Switch to Tamil)' : 'Switch to English (ஆங்கிலத்திற்கு மாறுக)'}
+            aria-label="Toggle language"
+          >
+            <Languages className="h-4 w-4 text-indigo-500 shrink-0" />
+            <span className="font-bold tracking-wide">
+              {language === 'en' ? 'EN' : 'தமிழ்'}
+            </span>
+          </motion.button>
+
           {/* Theme Toggle (Light / Dark) */}
           <motion.button
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
             onClick={toggleTheme}
-            className="p-2 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
-            title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+            className="p-2 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors cursor-pointer"
+            title={theme === 'dark' ? t('header.switchToLight', 'Switch to Light Theme') : t('header.switchToDark', 'Switch to Dark Theme')}
             aria-label="Toggle theme"
           >
             {theme === 'dark' ? (
@@ -735,7 +822,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
       {/* Centered Activity & Notifications Modal */}
       <AnimatePresence>
         {showActivityModal && (
-          <AllActivityModal onClose={() => setShowActivityModal(false)} />
+          <AllActivityModal onClose={() => setShowActivityModal(false)} initialFilter={activityInitialFilter} />
         )}
       </AnimatePresence>
     </>

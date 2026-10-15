@@ -7,12 +7,14 @@ interface AnimatedInputProps extends HTMLMotionProps<'input'> {
   label?: string;
   error?: string;
   showPasswordToggle?: boolean;
+  disableCopyPaste?: boolean;
 }
 
 export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
-  ({ label, error, className, showPasswordToggle = false, type, ...props }, ref) => {
+  ({ label, error, className, showPasswordToggle = false, disableCopyPaste, type, onCopy, onCut, onPaste, onDrop, ...props }, ref) => {
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const canTogglePassword = showPasswordToggle && type === 'password';
+    const isProtectedPassword = disableCopyPaste || type === 'password' || showPasswordToggle || label?.toLowerCase().includes('password');
 
     return (
       <div className="space-y-1">
@@ -22,6 +24,30 @@ export const AnimatedInput = forwardRef<HTMLInputElement, AnimatedInputProps>(
             ref={ref}
             type={canTogglePassword && isPasswordVisible ? 'text' : type}
             whileFocus={{ scale: 1.01 }}
+            onCopy={(e) => {
+              if (isProtectedPassword) {
+                e.preventDefault();
+              }
+              onCopy?.(e);
+            }}
+            onCut={(e) => {
+              if (isProtectedPassword) {
+                e.preventDefault();
+              }
+              onCut?.(e);
+            }}
+            onPaste={(e) => {
+              if (isProtectedPassword) {
+                e.preventDefault();
+              }
+              onPaste?.(e);
+            }}
+            onDrop={(e) => {
+              if (isProtectedPassword) {
+                e.preventDefault();
+              }
+              onDrop?.(e);
+            }}
             className={cn(
               'w-full rounded-xl border-2 bg-white px-4 py-3 outline-none transition-colors text-neutral-900 dark:text-white dark:bg-neutral-900 dark:border-neutral-800 focus:border-black dark:focus:border-white disabled:bg-neutral-100 disabled:text-neutral-500 disabled:border-neutral-200 disabled:cursor-not-allowed dark:disabled:bg-neutral-800/50 dark:disabled:text-neutral-400 dark:disabled:border-neutral-800',
               canTogglePassword && 'pr-12',

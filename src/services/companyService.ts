@@ -12,6 +12,15 @@ interface CompanyUpdateData {
   financial_year_start?: number;
   pf_number?: string;
   tan_number?: string;
+  office_lat?: number;
+  office_lng?: number;
+  allowed_radius_meters?: number;
+  weekly_off_days?: number[];
+  permission_days_per_month?: number;
+  office_timing?: string;
+  office_start_time?: string;
+  office_end_time?: string;
+  enable_employee_shift_timing?: boolean;
 }
 
 export interface AddressSuggestion {

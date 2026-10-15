@@ -6,6 +6,7 @@ import { useDashboardStats, useDepartmentBreakdown, usePayrollSummary } from '..
 import { useServerTime } from '../../hooks/useServerTime';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from '../../context/LanguageContext';
 import { hasMinimumPlan } from '../../lib/plans';
 
 /** Custom stacked coins icon */
@@ -42,8 +43,6 @@ function AnimatedValue({ value }: { value: number }) {
   return <>{display.toLocaleString()}</>;
 }
 
-const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
 const fadeUp = {
   initial: { opacity: 0, y: 14 },
   animate: { opacity: 1, y: 0 },
@@ -56,6 +55,7 @@ export function DashboardPage() {
   const [selectedYear, setSelectedYear] = useState(currentTime.getFullYear());
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t, monthNames, getMonthName } = useTranslation();
   const canViewReports = hasMinimumPlan(user, 'professional');
   const isEnterprise = hasMinimumPlan(user, 'enterprise');
 
@@ -79,10 +79,10 @@ export function DashboardPage() {
   const fullName = user?.full_name || 'Admin';
 
   const cards = [
-    { label: 'Total Employees', value: stats?.total_employees ?? 0, icon: Users, trend: '+12%', trendUp: true },
-    { label: 'Active Employees', value: stats?.active_employees ?? 0, icon: UserCheck, trend: '+5%', trendUp: true },
-    { label: 'Total Payroll', value: stats?.total_payroll ?? 0, icon: CoinsStackIcon, trend: '+8%', trendUp: true, isCurrency: true },
-    { label: 'This Month', value: stats?.current_month_salary ?? 0, icon: TrendingUp, trend: '-2%', trendUp: false, isCurrency: true },
+    { label: t('dashboard.totalEmployees', 'Total Employees'), value: stats?.total_employees ?? 0, icon: Users, trend: '+12%', trendUp: true },
+    { label: t('dashboard.activeEmployees', 'Active Employees'), value: stats?.active_employees ?? 0, icon: UserCheck, trend: '+5%', trendUp: true },
+    { label: t('dashboard.monthlyPayroll', 'Total Payroll'), value: stats?.total_payroll ?? 0, icon: CoinsStackIcon, trend: '+8%', trendUp: true, isCurrency: true },
+    { label: t('salary.month', 'This Month'), value: stats?.current_month_salary ?? 0, icon: TrendingUp, trend: '-2%', trendUp: false, isCurrency: true },
   ];
 
   const currentPlan = user?.plan || 'starter';
@@ -184,7 +184,7 @@ export function DashboardPage() {
                 <div className="p-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800">
                   <Wallet className="h-3.5 w-3.5 text-neutral-600 dark:text-neutral-300" />
                 </div>
-                <h3 className="text-[13px] font-bold text-neutral-900 dark:text-white">Monthly Payroll</h3>
+                <h3 className="text-[13px] font-bold text-neutral-900 dark:text-white">{t('dashboard.monthlyPayroll', 'Monthly Payroll')}</h3>
               </div>
               <div className="flex items-center gap-1.5">
                 <select
@@ -192,7 +192,7 @@ export function DashboardPage() {
                   onChange={(e) => setSelectedMonth(Number(e.target.value))}
                   className="border border-neutral-200 dark:border-neutral-700 rounded-md px-2 py-1 text-[11px] bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 focus:outline-none focus:border-neutral-400 cursor-pointer"
                 >
-                  {MONTH_SHORT.map((name, i) => (
+                  {monthNames.map((name, i) => (
                     <option key={i} value={i + 1}>{name}</option>
                   ))}
                 </select>
@@ -213,10 +213,10 @@ export function DashboardPage() {
             ) : payroll && payroll.slip_count > 0 ? (
               <div className="flex-1 flex flex-col gap-2">
                 {[
-                  { label: 'Slips Generated', value: payroll.slip_count.toString() },
-                  { label: 'Gross Salary', value: `₹${payroll.total_gross.toLocaleString()}` },
-                  { label: 'Deductions', value: `₹${payroll.total_deductions.toLocaleString()}` },
-                  { label: 'Net Pay', value: `₹${payroll.total_net.toLocaleString()}` },
+                  { label: t('salary.generated', 'Slips Generated'), value: payroll.slip_count.toString() },
+                  { label: t('salary.grossSalary', 'Gross Salary'), value: `₹${payroll.total_gross.toLocaleString()}` },
+                  { label: t('salary.totalDeductions', 'Deductions'), value: `₹${payroll.total_deductions.toLocaleString()}` },
+                  { label: t('salary.netPay', 'Net Pay'), value: `₹${payroll.total_net.toLocaleString()}` },
                 ].map((item, i) => (
                   <motion.div
                     key={item.label}
@@ -238,7 +238,7 @@ export function DashboardPage() {
                 <div className="w-10 h-10 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-2">
                   <Calendar className="h-4 w-4 text-neutral-400 dark:text-neutral-500" />
                 </div>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">No slips for {MONTH_SHORT[selectedMonth - 1]} {selectedYear}</p>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">{t('dashboard.noSlipsForPeriod', 'No slips for')} {getMonthName(selectedMonth)} {selectedYear}</p>
               </div>
             )}
           </motion.div>
@@ -264,7 +264,7 @@ export function DashboardPage() {
                 onClick={() => navigate('/employees')}
                 className="text-[11px] font-semibold text-neutral-400 hover:text-neutral-800 dark:hover:text-white flex items-center gap-0.5 transition-colors"
               >
-                View all <ChevronRight className="h-3 w-3" />
+                {t('common.view', 'View all')} <ChevronRight className="h-3 w-3" />
               </button>
             </div>
 
