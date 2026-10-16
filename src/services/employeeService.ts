@@ -6,6 +6,7 @@ interface EmployeeFilters {
   per_page?: number;
   search?: string;
   department?: string;
+  sort?: string;
 }
 
 interface EmployeeCreateData {

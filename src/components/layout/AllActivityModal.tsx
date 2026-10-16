@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
   X,
@@ -50,6 +51,7 @@ export function AllActivityModal({ onClose, initialFilter = 'all' }: AllActivity
   const { user } = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const modalRef = useRef<HTMLDivElement>(null);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -176,6 +178,25 @@ export function AllActivityModal({ onClose, initialFilter = 'all' }: AllActivity
       if (ov?.dismissed) return;
 
       const requestedAt = leave.created_at;
+
+      let leaveMonth = '';
+      let leaveYear = '';
+      if (leave.start_date) {
+        const parts = leave.start_date.split('-');
+        if (parts.length >= 2) {
+          leaveYear = parts[0];
+          leaveMonth = String(parseInt(parts[1], 10));
+        }
+      }
+
+      const params = new URLSearchParams();
+      if (leave.employee_id) params.set('employee_id', String(leave.employee_id));
+      if (leave.emp_id) params.set('code', leave.emp_id);
+      if (leave.employee_name) params.set('name', leave.employee_name);
+      if (leaveMonth) params.set('month', leaveMonth);
+      if (leaveYear) params.set('year', leaveYear);
+      const leavePath = `/attendance${params.toString() ? `?${params.toString()}` : ''}`;
+
       items.push({
         id,
         type: 'leave',
@@ -186,7 +207,7 @@ export function AllActivityModal({ onClose, initialFilter = 'all' }: AllActivity
         timestamp: requestedAt ? new Date(requestedAt).getTime() : 0,
         color: leave.status === 'PENDING' ? 'text-amber-600 dark:text-amber-400' : leave.status === 'APPROVED' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400',
         iconBg: leave.status === 'PENDING' ? 'bg-amber-50 dark:bg-amber-950/50' : leave.status === 'APPROVED' ? 'bg-emerald-50 dark:bg-emerald-950/50' : 'bg-rose-50 dark:bg-rose-950/50',
-        path: '/attendance',
+        path: leavePath,
       });
     });
 
@@ -321,6 +342,23 @@ export function AllActivityModal({ onClose, initialFilter = 'all' }: AllActivity
     try {
       await reviewEmployeeLeaveRequest(id, action);
       setLeaveRequests((current) => current.map((leave) => leave.id === id ? { ...leave, status: action } : leave));
+
+      // Invalidate attendance and payroll caches so the UI updates immediately without reload
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['attendance'] }),
+        queryClient.invalidateQueries({ queryKey: ['leave-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['attendance-readiness'] }),
+        queryClient.invalidateQueries({ queryKey: ['employee-leave-requests'] }),
+        queryClient.invalidateQueries({ queryKey: ['salary-slips'] }),
+        queryClient.invalidateQueries({ queryKey: ['salary-slips-for-period'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['payroll-summary'] }),
+      ]);
+
+      // Broadcast update event so AttendancePage or any listener updates immediately
+      window.dispatchEvent(new CustomEvent('attendance_updated', {
+        detail: { leaveRequestId: id, action }
+      }));
     } catch {
       setLeaveError('Unable to update this request. Please try again.');
     } finally {

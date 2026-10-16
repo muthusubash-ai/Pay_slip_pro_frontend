@@ -2,11 +2,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { employeeService } from '../services/employeeService';
 import { useAuth } from '../context/AuthContext';
 
-export function useEmployees(page = 1, search?: string, department?: string) {
+export function useEmployees(page = 1, search?: string, department?: string, sort?: string, per_page?: number) {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ['employees', page, search, department],
-    queryFn: () => employeeService.list({ page, search, department }).then((r) => r.data),
+    queryKey: ['employees', page, search, department, sort, per_page],
+    queryFn: () => employeeService.list({ page, search, department, sort, per_page }).then((r) => r.data),
     enabled: !!user,
   });
 }

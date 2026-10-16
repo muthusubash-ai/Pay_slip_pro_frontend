@@ -386,6 +386,24 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
     const ov = overrides[id];
     if (ov?.dismissed) return;
 
+    let leaveMonth = '';
+    let leaveYear = '';
+    if (leave.start_date) {
+      const parts = leave.start_date.split('-');
+      if (parts.length >= 2) {
+        leaveYear = parts[0];
+        leaveMonth = String(parseInt(parts[1], 10));
+      }
+    }
+
+    const params = new URLSearchParams();
+    if (leave.employee_id) params.set('employee_id', String(leave.employee_id));
+    if (leave.emp_id) params.set('code', leave.emp_id);
+    if (leave.employee_name) params.set('name', leave.employee_name);
+    if (leaveMonth) params.set('month', leaveMonth);
+    if (leaveYear) params.set('year', leaveYear);
+    const leavePath = `/attendance${params.toString() ? `?${params.toString()}` : ''}`;
+
     notifications.push({
       id,
       icon: CalendarDays,
@@ -394,7 +412,7 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
       time: formatTimeAgo(leave.created_at),
       timestamp: leave.created_at ? new Date(leave.created_at).getTime() : 0,
       color: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400',
-      path: '/attendance',
+      path: leavePath,
       kind: 'leave',
     });
   });
@@ -523,17 +541,26 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
             <button
               key={notif.id}
               type="button"
-              onClick={() => notif.kind === 'leave' ? onViewAllActivity('leaves') : goTo(notif.path)}
-              className="w-full flex items-start gap-3 px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/60 transition-colors text-left border-b border-neutral-50 dark:border-neutral-800/60 last:border-0 cursor-pointer"
+              onClick={() => goTo(notif.path)}
+              className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/60 transition-colors text-left border-b border-neutral-50 dark:border-neutral-800/60 last:border-0 cursor-pointer group"
             >
-              <div className={`p-1.5 rounded-lg ${notif.color} shrink-0 mt-0.5`}>
-                <notif.icon className="h-3.5 w-3.5" />
+              <div className="flex items-start gap-3 min-w-0 flex-1">
+                <div className={`p-1.5 rounded-lg ${notif.color} shrink-0 mt-0.5`}>
+                  <notif.icon className="h-3.5 w-3.5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-semibold text-neutral-800 dark:text-neutral-100">{notif.title}</p>
+                  <p className="text-[11px] text-neutral-400 dark:text-neutral-400 truncate">{notif.desc}</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-semibold text-neutral-800 dark:text-neutral-100">{notif.title}</p>
-                <p className="text-[11px] text-neutral-400 dark:text-neutral-400 truncate">{notif.desc}</p>
+              <div className="flex flex-col items-end shrink-0 gap-1">
+                <span className="text-[10px] text-neutral-400">{notif.time}</span>
+                {notif.kind === 'leave' && (
+                  <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.5 rounded group-hover:bg-amber-100 dark:group-hover:bg-amber-900/60 transition-colors">
+                    View &rarr;
+                  </span>
+                )}
               </div>
-              <span className="text-[10px] text-neutral-400 shrink-0 mt-0.5">{notif.time}</span>
             </button>
           ))
         )}
@@ -621,9 +648,14 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
     const handleReadUpdate = () => {
       checkUnread();
     };
+    // Admins often leave this tab open in the background (no focus/reload event
+    // fires), so poll periodically too - otherwise a new leave/permission
+    // request only surfaces after the tab is refocused.
+    const pollId = window.setInterval(checkUnread, 45000);
     window.addEventListener('notifications_read_updated', handleReadUpdate);
     window.addEventListener('focus', checkUnread);
     return () => {
+      window.clearInterval(pollId);
       window.removeEventListener('notifications_read_updated', handleReadUpdate);
       window.removeEventListener('focus', checkUnread);
     };

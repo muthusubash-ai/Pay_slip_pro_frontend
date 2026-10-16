@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 
 type Leave = { id: number; employee_name: string; emp_id: string; request_type: string; start_date: string; end_date: string; reason: string; status: string };
@@ -7,6 +8,7 @@ const endpoint = '/api/attendance/leave-action/';
 const config = { baseURL: (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '') };
 
 export function LeaveApprovals() {
+  const queryClient = useQueryClient();
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<number | null>(null);
@@ -22,6 +24,18 @@ export function LeaveApprovals() {
     setBusy(id);
     try {
       await api.post(endpoint, { request_id: id, action }, config);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['attendance'] }),
+        queryClient.invalidateQueries({ queryKey: ['leave-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['attendance-readiness'] }),
+        queryClient.invalidateQueries({ queryKey: ['employee-leave-requests'] }),
+        queryClient.invalidateQueries({ queryKey: ['salary-slips'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['payroll-summary'] }),
+      ]);
+      window.dispatchEvent(new CustomEvent('attendance_updated', {
+        detail: { leaveRequestId: id, action }
+      }));
       await refresh();
     } catch { setError('Unable to update this request. Refresh and try again.'); }
     finally { setBusy(null); }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CalendarDays, ArrowLeft, Save, Trash2, ChevronDown, ChevronUp, Filter, CheckCircle, X, Clock, AlertTriangle } from 'lucide-react';
 import { GlassCard } from '../../components/ui/GlassCard';
@@ -8,6 +8,7 @@ import { GradientButton } from '../../components/ui/GradientButton';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { useEmployees } from '../../hooks/useEmployees';
 import { useMonthlyAttendance, useBulkMarkLeaves, useLeaveSummary, useAttendanceReadiness } from '../../hooks/useAttendance';
+import { listEmployeeLeaveRequests, reviewEmployeeLeaveRequest } from '../../services/leaveRequestService';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { hasMinimumPlan } from '../../lib/plans';
@@ -85,6 +86,8 @@ export function AttendancePage() {
   const { user } = useAuth();
   const { t, monthNames, getMonthName } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const canViewReports = hasMinimumPlan(user, 'professional');
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -96,6 +99,7 @@ export function AttendancePage() {
   // always free, locked from editing, sourced straight from the server (source of truth).
   const [companyWeekOffDates, setCompanyWeekOffDates] = useState<Set<string>>(new Set());
   const [showBiometricTimesheet, setShowBiometricTimesheet] = useState<boolean>(false);
+  const [leaveActionBusy, setLeaveActionBusy] = useState<number | null>(null);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [quotaWarning, setQuotaWarning] = useState('');
@@ -109,7 +113,7 @@ export function AttendancePage() {
   });
   const permissionAllowance = company?.permission_days_per_month ?? 3;
 
-  const { data: empData, isLoading: empLoading } = useEmployees(1, undefined, undefined);
+  const { data: empData, isLoading: empLoading } = useEmployees(1, undefined, undefined, undefined, 200);
   const employees = empData?.items || [];
   const selectedEmp = employees.find((employee) => employee.id === selectedEmployee);
   const joiningDate = selectedEmp?.date_of_joining || '';
@@ -119,13 +123,123 @@ export function AttendancePage() {
     ? Number(joiningDate.slice(8, 10)) : 1;
   const activeDays = beforeJoiningMonth ? 0 : totalDays - firstActiveDay + 1;
 
-  const { data: attendance, isLoading: attLoading } = useMonthlyAttendance(
+  const { data: attendance, isLoading: attLoading, refetch: refetchAttendance } = useMonthlyAttendance(
     selectedEmployee, month, year, !beforeJoiningMonth
   );
-  const { data: leaveSummary, isLoading: summaryLoading } = useLeaveSummary(month, year);
-  const { data: readiness } = useAttendanceReadiness(month, year);
+  const { data: leaveSummary, isLoading: summaryLoading, refetch: refetchSummary } = useLeaveSummary(month, year);
+  const { data: readiness, refetch: refetchReadiness } = useAttendanceReadiness(month, year);
   const notJoinedCount = readiness?.filter((item) => !item.eligible).length || 0;
   const bulkMark = useBulkMarkLeaves();
+
+  // Load leave requests for quick review and synchronization
+  const { data: leaveRequestsData, refetch: refetchLeaveRequests } = useQuery({
+    queryKey: ['employee-leave-requests'],
+    queryFn: listEmployeeLeaveRequests,
+    enabled: !!user,
+  });
+
+  // Filter pending requests for the selected employee
+  const pendingRequestsForEmp = useMemo(() => {
+    if (!selectedEmp || !leaveRequestsData) return [];
+    return leaveRequestsData.filter((lr) => {
+      if (lr.status !== 'PENDING') return false;
+      const matchesId = lr.employee_id && lr.employee_id === selectedEmployee;
+      const matchesCode =
+        selectedEmp.employee_code &&
+        lr.emp_id?.trim().toLowerCase() === selectedEmp.employee_code.trim().toLowerCase();
+      const matchesName =
+        selectedEmp.full_name &&
+        lr.employee_name?.trim().toLowerCase() === selectedEmp.full_name.trim().toLowerCase();
+      return matchesId || matchesCode || matchesName;
+    });
+  }, [leaveRequestsData, selectedEmployee, selectedEmp]);
+
+  // Handle URL query parameters (?employee_id=...&code=...&month=...&year=...)
+  useEffect(() => {
+    const paramMonth = searchParams.get('month');
+    if (paramMonth) {
+      const m = parseInt(paramMonth, 10);
+      if (m >= 1 && m <= 12 && m !== month) setMonth(m);
+    }
+    const paramYear = searchParams.get('year');
+    if (paramYear) {
+      const y = parseInt(paramYear, 10);
+      if (y >= 2000 && y <= 2100 && y !== year) setYear(y);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const paramEmpId = searchParams.get('employee_id');
+    const paramCode = searchParams.get('code') || searchParams.get('emp_id');
+    const paramName = searchParams.get('name') || searchParams.get('employee_name');
+
+    if (!employees || employees.length === 0) return;
+
+    let matchedEmp: (typeof employees)[0] | undefined;
+
+    if (paramEmpId) {
+      const numId = parseInt(paramEmpId, 10);
+      if (!isNaN(numId)) {
+        matchedEmp = employees.find((e) => e.id === numId);
+      }
+    }
+    if (!matchedEmp && paramCode) {
+      const cleanCode = paramCode.trim().toLowerCase();
+      matchedEmp = employees.find(
+        (e) => (e.employee_code || '').trim().toLowerCase() === cleanCode
+      );
+    }
+    if (!matchedEmp && paramName) {
+      const cleanName = paramName.trim().toLowerCase();
+      matchedEmp = employees.find(
+        (e) => (e.full_name || '').trim().toLowerCase() === cleanName
+      );
+    }
+
+    if (matchedEmp && matchedEmp.id !== selectedEmployee) {
+      setSelectedEmployee(matchedEmp.id);
+    }
+  }, [searchParams, employees, selectedEmployee]);
+
+  // Listen for global attendance updates (from modal or another tab) to refresh real-time without reloading
+  useEffect(() => {
+    const handleAttendanceUpdated = () => {
+      refetchAttendance();
+      refetchSummary();
+      refetchReadiness();
+      refetchLeaveRequests();
+    };
+    window.addEventListener('attendance_updated', handleAttendanceUpdated);
+    return () => {
+      window.removeEventListener('attendance_updated', handleAttendanceUpdated);
+    };
+  }, [refetchAttendance, refetchSummary, refetchReadiness, refetchLeaveRequests]);
+
+  // Review pending leave requests directly from the attendance calendar
+  const handlePageLeaveDecision = async (reqId: number, action: 'APPROVED' | 'REJECTED') => {
+    setLeaveActionBusy(reqId);
+    setError('');
+    try {
+      await reviewEmployeeLeaveRequest(reqId, action);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['attendance'] }),
+        queryClient.invalidateQueries({ queryKey: ['leave-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['attendance-readiness'] }),
+        queryClient.invalidateQueries({ queryKey: ['employee-leave-requests'] }),
+        queryClient.invalidateQueries({ queryKey: ['salary-slips'] }),
+        queryClient.invalidateQueries({ queryKey: ['salary-slips-for-period'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['payroll-summary'] }),
+      ]);
+      await refetchAttendance();
+      await refetchLeaveRequests();
+      setSuccess(`Leave request ${action === 'APPROVED' ? 'approved' : 'rejected'} successfully. Attendance updated.`);
+    } catch {
+      setError('Unable to update leave request. Please try again.');
+    } finally {
+      setLeaveActionBusy(null);
+    }
+  };
 
   // Sync attendance data and biometric records from server to local state whenever query completes
   useEffect(() => {
@@ -529,6 +643,68 @@ export function AttendancePage() {
           <strong>Attendance unavailable for {getMonthName(month)} {year}.</strong>{' '}
           {selectedEmp.full_name} joined on {formatDisplayDate(joiningDate)}. Select the joining month or a later month to view and save attendance.
         </div>
+      )}
+
+      {/* Pending Leave / Permission Request Review Card */}
+      {selectedEmployee > 0 && pendingRequestsForEmp.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-3"
+        >
+          {pendingRequestsForEmp.map((req) => (
+            <div
+              key={req.id}
+              className="rounded-2xl border-2 border-amber-300 dark:border-amber-700/80 bg-amber-50/90 dark:bg-amber-950/40 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+            >
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-xl bg-amber-200/80 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 shrink-0 mt-0.5">
+                  <Clock className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 uppercase tracking-wide">
+                      Pending {req.request_type.replace('_', ' ')}
+                    </span>
+                    <span className="text-xs text-amber-900 dark:text-amber-200 font-semibold">
+                      {req.start_date === req.end_date ? req.start_date : `${req.start_date} to ${req.end_date}`}
+                    </span>
+                    {req.duration_hours && (
+                      <span className="text-xs text-amber-800 dark:text-amber-300 font-medium">
+                        ({req.duration_hours} {req.duration_hours === 1 ? 'hour' : 'hours'})
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm font-medium text-amber-950 dark:text-amber-100 mt-1">
+                    {req.reason}
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                    Requested by {req.employee_name} ({req.emp_id})
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                <button
+                  type="button"
+                  disabled={leaveActionBusy === req.id}
+                  onClick={() => handlePageLeaveDecision(req.id, 'APPROVED')}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 text-xs font-bold shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  <CheckCircle className="h-3.5 w-3.5" /> Approve
+                </button>
+                <button
+                  type="button"
+                  disabled={leaveActionBusy === req.id}
+                  onClick={() => handlePageLeaveDecision(req.id, 'REJECTED')}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-rose-300 dark:border-rose-700 bg-white dark:bg-neutral-900 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 px-3.5 py-2 text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5" /> Reject
+                </button>
+              </div>
+            </div>
+          ))}
+        </motion.div>
       )}
 
       {/* Calendar Grid (Shown only from the employee's joining month) */}

@@ -2,6 +2,7 @@ import api from './api';
 
 export interface EmployeeLeaveRequest {
   id: number;
+  employee_id?: number | null;
   employee_name: string;
   emp_id: string;
   request_type: string;
@@ -10,6 +11,7 @@ export interface EmployeeLeaveRequest {
   duration_hours?: number | null;
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  admin_remarks?: string;
   created_at: string;
 }
 
