@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import { useTranslation } from '../../context/LanguageContext';
@@ -21,6 +21,20 @@ export function AIAssistantLauncher({ onOpen, className = '' }: AIAssistantLaunc
   const dashboardName = user?.full_name || 'Admin';
   const greetingText = `${t('ai.greeting')}, ${dashboardName}?`;
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [autoShowTooltip, setAutoShowTooltip] = useState(false);
+
+  // Pop the tooltip up on its own every 10s (like a chatbot bubble), not just on hover.
+  useEffect(() => {
+    if (isDrawerOpen) {
+      setAutoShowTooltip(false);
+      return;
+    }
+    const showTimer = setInterval(() => {
+      setAutoShowTooltip(true);
+      setTimeout(() => setAutoShowTooltip(false), 4000);
+    }, 10000);
+    return () => clearInterval(showTimer);
+  }, [isDrawerOpen]);
 
   const handleClick = () => {
     if (onOpen) {
@@ -48,7 +62,11 @@ export function AIAssistantLauncher({ onOpen, className = '' }: AIAssistantLaunc
           {!isDrawerOpen && (
             <div
               role="tooltip"
-              className="hidden sm:flex absolute right-full mr-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-xl bg-neutral-900/95 text-white dark:bg-white/95 dark:text-neutral-900 text-xs font-semibold shadow-xl border border-neutral-800/80 dark:border-neutral-200/80 pointer-events-none whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-200 translate-x-1 group-hover:translate-x-0 items-center gap-2 backdrop-blur-sm"
+              className={`hidden sm:flex absolute right-full mr-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-xl bg-neutral-900/95 text-white dark:bg-white/95 dark:text-neutral-900 text-xs font-semibold shadow-xl border border-neutral-800/80 dark:border-neutral-200/80 pointer-events-none whitespace-nowrap transition-all duration-200 items-center gap-2 backdrop-blur-sm ${
+                autoShowTooltip
+                  ? 'opacity-100 translate-x-0'
+                  : 'opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 group-focus-within:opacity-100 group-focus-within:translate-x-0'
+              }`}
             >
               <span className="flex h-2 w-2 relative">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />

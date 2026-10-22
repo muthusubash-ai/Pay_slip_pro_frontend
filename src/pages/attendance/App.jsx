@@ -286,9 +286,33 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
     try { localStorage.setItem('attendance_company_branding', JSON.stringify(info)); } catch (e) {}
   };
 
-  const [officeLat, setOfficeLat] = useState(() => parseFloat(localStorage.getItem('OFFICE_LAT')) || DEFAULT_OFFICE_LAT);
-  const [officeLng, setOfficeLng] = useState(() => parseFloat(localStorage.getItem('OFFICE_LNG')) || DEFAULT_OFFICE_LNG);
-  const [allowedRadius, setAllowedRadius] = useState(() => parseInt(localStorage.getItem('ALLOWED_RADIUS')) || 70);
+  const [officeLat, setOfficeLat] = useState(() => {
+    const v = parseFloat(localStorage.getItem('OFFICE_LAT'));
+    if (!isNaN(v)) return v;
+    try {
+      const c = JSON.parse(localStorage.getItem('attendance_company_branding') || '{}');
+      if (c.office_lat !== undefined && !isNaN(parseFloat(c.office_lat))) return parseFloat(c.office_lat);
+    } catch (e) {}
+    return DEFAULT_OFFICE_LAT;
+  });
+  const [officeLng, setOfficeLng] = useState(() => {
+    const v = parseFloat(localStorage.getItem('OFFICE_LNG'));
+    if (!isNaN(v)) return v;
+    try {
+      const c = JSON.parse(localStorage.getItem('attendance_company_branding') || '{}');
+      if (c.office_lng !== undefined && !isNaN(parseFloat(c.office_lng))) return parseFloat(c.office_lng);
+    } catch (e) {}
+    return DEFAULT_OFFICE_LNG;
+  });
+  const [allowedRadius, setAllowedRadius] = useState(() => {
+    const v = parseInt(localStorage.getItem('ALLOWED_RADIUS'));
+    if (!isNaN(v) && v > 0) return v;
+    try {
+      const c = JSON.parse(localStorage.getItem('attendance_company_branding') || '{}');
+      if (c.allowed_radius_meters && !isNaN(parseInt(c.allowed_radius_meters))) return parseInt(c.allowed_radius_meters);
+    } catch (e) {}
+    return 70;
+  });
   const [userCoords, setUserCoords] = useState(null);
   const [distanceMeters, setDistanceMeters] = useState(null);
   const [isWithinZone, setIsWithinZone] = useState(false);
@@ -476,6 +500,10 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
 
     if (data.company_name || data.company_logo || data.company_data) {
       const c = data.company_data || {};
+      const cLat = c.office_lat !== undefined && c.office_lat !== null ? parseFloat(c.office_lat) : (data.office_lat !== undefined && data.office_lat !== null ? parseFloat(data.office_lat) : undefined);
+      const cLng = c.office_lng !== undefined && c.office_lng !== null ? parseFloat(c.office_lng) : (data.office_lng !== undefined && data.office_lng !== null ? parseFloat(data.office_lng) : undefined);
+      const cRadius = c.allowed_radius_meters !== undefined && c.allowed_radius_meters !== null ? parseInt(c.allowed_radius_meters) : (data.allowed_radius_meters !== undefined && data.allowed_radius_meters !== null ? parseInt(data.allowed_radius_meters) : undefined);
+
       setCompanyInfo((prev) => {
         const next = {
           ...prev,
@@ -483,9 +511,9 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
           company_logo: (data.company_logo !== undefined && data.company_logo !== '') ? data.company_logo : ((c.company_logo !== undefined && c.company_logo !== '') ? c.company_logo : prev.company_logo),
           primary_color: c.primary_color || prev.primary_color,
           address: c.address || prev.address,
-          office_lat: c.office_lat !== undefined && c.office_lat !== null ? parseFloat(c.office_lat) : prev.office_lat,
-          office_lng: c.office_lng !== undefined && c.office_lng !== null ? parseFloat(c.office_lng) : prev.office_lng,
-          allowed_radius_meters: c.allowed_radius_meters !== undefined && c.allowed_radius_meters !== null ? parseInt(c.allowed_radius_meters) : prev.allowed_radius_meters,
+          office_lat: cLat !== undefined ? cLat : prev.office_lat,
+          office_lng: cLng !== undefined ? cLng : prev.office_lng,
+          allowed_radius_meters: cRadius !== undefined ? cRadius : prev.allowed_radius_meters,
           office_timing: c.office_timing || data.office_timing || prev.office_timing,
           office_start_time: c.office_start_time || data.office_start_time || prev.office_start_time,
           office_end_time: c.office_end_time || data.office_end_time || prev.office_end_time,
@@ -493,6 +521,19 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
         cacheCompanyBranding(next);
         return next;
       });
+
+      if (cLat !== undefined && !isNaN(cLat)) {
+        setOfficeLat(cLat);
+        try { localStorage.setItem('OFFICE_LAT', String(cLat)); } catch (e) {}
+      }
+      if (cLng !== undefined && !isNaN(cLng)) {
+        setOfficeLng(cLng);
+        try { localStorage.setItem('OFFICE_LNG', String(cLng)); } catch (e) {}
+      }
+      if (cRadius !== undefined && !isNaN(cRadius)) {
+        setAllowedRadius(cRadius);
+        try { localStorage.setItem('ALLOWED_RADIUS', String(cRadius)); } catch (e) {}
+      }
     }
 
     // The cutoff/checkout time actually enforced for this employee - company default,
@@ -545,6 +586,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
   }, []);
 
   useEffect(() => {
+    fetchGeofenceConfig();
     if (hasAttendanceInvite()) {
       setCurrentUser(null);
       const inviteToken = getAttendanceInvite();
@@ -576,16 +618,33 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
           phone_number: data.phone_number || prev.phone_number,
         }));
         if (data.company_name) {
+          const cLat = data.office_lat !== undefined && data.office_lat !== null ? parseFloat(data.office_lat) : undefined;
+          const cLng = data.office_lng !== undefined && data.office_lng !== null ? parseFloat(data.office_lng) : undefined;
+          const cRadius = data.allowed_radius_meters !== undefined && data.allowed_radius_meters !== null ? parseInt(data.allowed_radius_meters) : undefined;
+
           setCompanyInfo((prev) => ({
             ...prev,
             company_name: data.company_name || prev.company_name,
             company_logo: data.company_logo || prev.company_logo,
             primary_color: data.primary_color || prev.primary_color,
-            office_lat: data.office_lat !== undefined ? parseFloat(data.office_lat) : prev.office_lat,
-            office_lng: data.office_lng !== undefined ? parseFloat(data.office_lng) : prev.office_lng,
-            allowed_radius_meters: data.allowed_radius_meters !== undefined ? parseInt(data.allowed_radius_meters) : prev.allowed_radius_meters,
+            office_lat: cLat !== undefined ? cLat : prev.office_lat,
+            office_lng: cLng !== undefined ? cLng : prev.office_lng,
+            allowed_radius_meters: cRadius !== undefined ? cRadius : prev.allowed_radius_meters,
             address: data.office_address || data.address || prev.address
           }));
+
+          if (cLat !== undefined && !isNaN(cLat)) {
+            setOfficeLat(cLat);
+            try { localStorage.setItem('OFFICE_LAT', String(cLat)); } catch (e) {}
+          }
+          if (cLng !== undefined && !isNaN(cLng)) {
+            setOfficeLng(cLng);
+            try { localStorage.setItem('OFFICE_LNG', String(cLng)); } catch (e) {}
+          }
+          if (cRadius !== undefined && !isNaN(cRadius)) {
+            setAllowedRadius(cRadius);
+            try { localStorage.setItem('ALLOWED_RADIUS', String(cRadius)); } catch (e) {}
+          }
         }
       }).catch(error => {
         setErrorBanner(error.message);

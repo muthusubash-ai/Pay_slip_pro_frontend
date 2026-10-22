@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Upload, Trash2, Check, AlertTriangle, X, CheckCircle, Navigation, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Check, AlertTriangle, X, CheckCircle, Navigation, ExternalLink, Info } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { AnimatedInput } from '../../components/ui/AnimatedInput';
@@ -185,75 +185,6 @@ export function CompanySettingsPage() {
     return `${String(h).padStart(2, '0')}:${m} ${ampm}`;
   };
 
-  const parseSingleTimeTo24Hour = (
-    timeStr: string,
-    isEndTime: boolean = false
-  ): string | null => {
-    if (!timeStr) return null;
-    const cleaned = timeStr.trim().replace(/\./g, '').toLowerCase();
-
-    // Match 12-hour with minutes: "09:30 am", "9:30am", "6:00 pm", "6:00pm", etc.
-    const match12WithMin = cleaned.match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/i);
-    if (match12WithMin) {
-      let hour = parseInt(match12WithMin[1], 10);
-      const minute = parseInt(match12WithMin[2], 10);
-      const period = match12WithMin[3].toLowerCase();
-
-      if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return null;
-      if (period === 'pm' && hour < 12) hour += 12;
-      if (period === 'am' && hour === 12) hour = 0;
-      return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-    }
-
-    // Match 12-hour without minutes: "9 am", "9am", "6 pm", "6pm"
-    const match12HourOnly = cleaned.match(/^(\d{1,2})\s*(am|pm)$/i);
-    if (match12HourOnly) {
-      let hour = parseInt(match12HourOnly[1], 10);
-      const period = match12HourOnly[2].toLowerCase();
-
-      if (hour < 1 || hour > 12) return null;
-      if (period === 'pm' && hour < 12) hour += 12;
-      if (period === 'am' && hour === 12) hour = 0;
-      return `${String(hour).padStart(2, '0')}:00`;
-    }
-
-    // Match 24-hour or without AM/PM: "09:30", "18:00", "9:30", "6:00"
-    const match24 = cleaned.match(/^(\d{1,2}):(\d{2})$/);
-    if (match24) {
-      let hour = parseInt(match24[1], 10);
-      const minute = parseInt(match24[2], 10);
-      if (minute < 0 || minute > 59) return null;
-
-      // In office shift context, afternoon/evening hours like 1:00 to 7:59 for end time default to PM
-      if (isEndTime && hour >= 1 && hour <= 7) {
-        hour += 12;
-      }
-      if (hour < 0 || hour > 23) return null;
-      return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-    }
-
-    return null;
-  };
-
-  const parseOfficeTimingRange = (
-    timingStr: string
-  ): { startTime?: string; endTime?: string } => {
-    if (!timingStr) return {};
-    const parts = timingStr.split(/\s*(?:-|–|—|\bto\b|\btill\b|\buntil\b)\s*/i);
-    if (parts.length < 2) {
-      const single = parseSingleTimeTo24Hour(parts[0], false);
-      return single ? { startTime: single } : {};
-    }
-
-    const startParsed = parseSingleTimeTo24Hour(parts[0], false);
-    const endParsed = parseSingleTimeTo24Hour(parts[1], true);
-
-    const res: { startTime?: string; endTime?: string } = {};
-    if (startParsed) res.startTime = startParsed;
-    if (endParsed) res.endTime = endParsed;
-    return res;
-  };
-
   const handleStartTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setForm((prev) => {
@@ -278,17 +209,6 @@ export function CompanySettingsPage() {
         office_timing: start && end ? `${start} - ${end}` : prev.office_timing,
       };
     });
-  };
-
-  const handleOfficeTimingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    const parsed = parseOfficeTimingRange(val);
-    setForm((prev) => ({
-      ...prev,
-      office_timing: val,
-      office_start_time: parsed.startTime !== undefined ? parsed.startTime : prev.office_start_time,
-      office_end_time: parsed.endTime !== undefined ? parsed.endTime : prev.office_end_time,
-    }));
   };
 
   const toggleWeeklyOffDay = (day: number) => {
@@ -369,7 +289,9 @@ export function CompanySettingsPage() {
         allowed_radius_meters: form.allowed_radius_meters ? parseInt(form.allowed_radius_meters) : undefined,
         weekly_off_days: weeklyOffDays,
         permission_days_per_month: form.permission_days_per_month ? parseInt(form.permission_days_per_month) : undefined,
-        office_timing: form.office_timing || undefined,
+        office_timing: (form.office_start_time && form.office_end_time)
+          ? `${format12Hour(form.office_start_time)} - ${format12Hour(form.office_end_time)}`
+          : (form.office_timing || undefined),
         office_start_time: form.office_start_time || undefined,
         office_end_time: form.office_end_time || undefined,
         enable_employee_shift_timing: enableEmployeeShiftTiming,
@@ -716,42 +638,60 @@ export function CompanySettingsPage() {
           />
         </div>
 
+        {/* GPS Coordinates Lookup Hint & Browser Permission Note */}
+        <div className="mt-4 p-3.5 rounded-xl bg-neutral-50/80 dark:bg-neutral-900/50 border border-neutral-200/80 dark:border-neutral-800 text-xs text-neutral-700 dark:text-neutral-300">
+          <div className="flex items-start gap-2.5">
+            <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400 shrink-0 mt-0.5">
+              <Info className="h-4 w-4" />
+            </div>
+            <div className="space-y-2 leading-relaxed min-w-0 flex-1">
+              <p className="text-xs text-neutral-700 dark:text-neutral-300">
+                <span className="font-semibold text-neutral-900 dark:text-white">
+                  {t('company.geoFencingHintTitle', "Don't know your Office Latitude & Longitude?")}{' '}
+                </span>
+                <span>
+                  {t('company.geoFencingHintDesc', 'You can check your exact office location coordinates using')}{' '}
+                </span>
+                <a
+                  href="https://www.gps-coordinates.net/my-location"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline inline-flex items-center gap-1"
+                >
+                  <span>gps-coordinates.net/my-location</span>
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </p>
+              <div className="p-2 rounded-lg bg-amber-50/90 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/40 text-[11px] text-amber-900 dark:text-amber-200 flex items-start gap-2">
+                <span className="font-bold text-amber-700 dark:text-amber-400 shrink-0">Note:</span>
+                <span>
+                  {t('company.geoFencingNote', 'When visiting the website, please allow / turn on Location permission in your browser to accurately detect your current office coordinates.')}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {form.office_lat && form.office_lng && (
-          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-neutral-800 flex flex-wrap items-center justify-between gap-3 text-xs text-neutral-500 dark:text-neutral-400">
+          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-neutral-800 text-xs text-neutral-500 dark:text-neutral-400">
             <span>
               Target Coordinates: <strong className="font-mono text-neutral-800 dark:text-neutral-200">{form.office_lat}, {form.office_lng}</strong> (within {form.allowed_radius_meters}m)
             </span>
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${form.office_lat},${form.office_lng}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-neutral-700 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white font-medium underline"
-            >
-              <span>View Location in Google Maps</span>
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
           </div>
         )}
 
-        {/* Office Timings & Working Hours */}
+        {/* Office Working Hours */}
         <div className="mt-5 pt-4 border-t border-gray-100 dark:border-neutral-800">
           <div className="mb-3">
             <h4 className="text-sm font-semibold text-neutral-900 dark:text-white">
-              {t('company.officeTiming', 'Office Timing & Working Hours')}
+              {t('company.officeWorkingHours', 'Office Working Hours')}
             </h4>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
               {t('company.officeTimingDesc', 'Set standard daily office working hours for employee attendance check-ins, late cutoff, and check-out tracking.')}
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <AnimatedInput
-              label={t('company.officeTiming', 'Office Timing')}
-              placeholder="09:30 AM - 06:00 PM"
-              value={form.office_timing}
-              onChange={handleOfficeTimingChange}
-              disabled={!isEditing}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <AnimatedInput
               label={t('company.startTime', 'Office Start Time (Check-In Cutoff)')}
               type="time"
@@ -769,14 +709,6 @@ export function CompanySettingsPage() {
               disabled={!isEditing}
             />
           </div>
-
-          {form.office_timing && (
-            <div className="mt-3 flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-700 font-medium">
-                {t('company.activeShift', 'Active Shift Timing')}: {form.office_timing}
-              </span>
-            </div>
-          )}
 
           <div className="mt-5 pt-4 border-t border-gray-100 dark:border-neutral-800 flex items-start justify-between gap-4">
             <div className="min-w-0">
