@@ -344,7 +344,7 @@ export const en = {
     title: 'Zigmaa AI Assistant',
     subtitle: 'Payroll, Attendance & HR Co-pilot',
     live: 'Live',
-    greeting: "Hello! 👋 I'm your **Zigmaa AI Assistant**.\n\nYou can ask me anything about employee salary calculations, leave deductions, attendance punches, or payslips.",
+    greeting: 'How can I help you',
     askPlaceholder: 'Ask a question about employees, salary, leaves...',
     online: 'Online',
     thinking: 'Thinking...',

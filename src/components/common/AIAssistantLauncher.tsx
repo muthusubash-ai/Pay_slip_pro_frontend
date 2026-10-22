@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import { useTranslation } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { AIAssistantDrawer } from './AIAssistantDrawer';
 
 interface AIAssistantLauncherProps {
@@ -12,7 +13,13 @@ interface AIAssistantLauncherProps {
 export function AIAssistantLauncher({ onOpen, className = '' }: AIAssistantLauncherProps) {
   const { theme } = useTheme();
   const { t } = useTranslation();
+  const { user } = useAuth();
   const isDark = theme === 'dark';
+
+  // Same name shown on the Dashboard greeting ("Welcome back, {name}") and in the
+  // assistant's own first chat message - kept in sync across all three places.
+  const dashboardName = user?.full_name || 'Admin';
+  const greetingText = `${t('ai.greeting')}, ${dashboardName}?`;
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const handleClick = () => {
@@ -47,7 +54,7 @@ export function AIAssistantLauncher({ onOpen, className = '' }: AIAssistantLaunc
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
               </span>
-              <span>{t('ai.title')}</span>
+              <span>{greetingText}</span>
               <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 dark:bg-black/10 text-neutral-300 dark:text-neutral-600 font-mono">
                 {t('ai.online')}
               </span>
@@ -64,16 +71,18 @@ export function AIAssistantLauncher({ onOpen, className = '' }: AIAssistantLaunc
             title={t('ai.title')}
             aria-label={t('ai.title')}
           >
-            {/* Wolf Logo Image - Perfectly adapted for Light & Dark mode */}
-            <img
+            {/* Wolf Logo Image - Perfectly adapted for Light & Dark mode, with a steady heartbeat pulse */}
+            <motion.img
               src="/ai-assistant-logo.png"
               alt="Zigmaa AI"
+              animate={{ scale: [1, 1.15, 1] }}
+              transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
               style={{
                 filter: isDark
                   ? 'brightness(1) drop-shadow(0 0 6px rgba(255, 255, 255, 0.45))'
                   : 'brightness(0)',
               }}
-              className="relative w-7 h-7 sm:w-8.5 sm:h-8.5 object-contain transition-all duration-300 group-hover:scale-110"
+              className="relative w-7 h-7 sm:w-8.5 sm:h-8.5 object-contain"
             />
           </motion.button>
         </div>

@@ -43,7 +43,9 @@ import {
   AlertCircle,
   ArrowLeft,
   MailCheck,
-  KeyRound
+  KeyRound,
+  Trash2,
+  CalendarDays
 } from 'lucide-react';
 
 // DYNAMIC BACKEND API BASE URL (Native Pay Slip Pro Monorepo Routing)
@@ -131,11 +133,15 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
   });
   const [authMode, setAuthMode] = useState('app');
   const [activeTab, setActiveTab] = useState(() => {
+    // A fresh invite link always wins, even if a stale saved session from a
+    // previous employee is still sitting in localStorage on this (often shared,
+    // kiosk) browser - otherwise the page would briefly try to render the punch
+    // tab for the old session before the invite effect corrects it.
+    if (hasAttendanceInvite()) return 'onboard';
     if (typeof window !== 'undefined') {
       const savedUser = localStorage.getItem('attendance_current_user');
       if (savedUser) return 'punch';
     }
-    if (hasAttendanceInvite()) return 'onboard';
     if (typeof window !== 'undefined') {
       const searchTab = new URLSearchParams(window.location.search).get('tab');
       if (searchTab && ['punch', 'history', 'leave', 'status'].includes(searchTab)) {
@@ -169,20 +175,116 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
   });
   const [myLeavesList, setMyLeavesList] = useState([]);
   const [loadingLeaves, setLoadingLeaves] = useState(false);
-
-  // Geofence & Company Branding states
-  const [companyInfo, setCompanyInfo] = useState({
-    company_name: 'ZIGMAA TECH',
-    company_logo: '',
-    primary_color: '#e3010f',
-    address: 'JP THANAM COMPLEX, 16H/7, Maharaja Nagar, Jeyalani Colony, Thoothukudi, Tamil Nadu 628008',
-    office_lat: DEFAULT_OFFICE_LAT,
-    office_lng: DEFAULT_OFFICE_LNG,
-    allowed_radius_meters: 70,
-    office_timing: '09:30 AM - 06:00 PM',
-    office_start_time: '09:30',
-    office_end_time: '18:00',
+  const [dismissedNotifIds, setDismissedNotifIds] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('attendance_current_user');
+      const u = savedUser ? JSON.parse(savedUser) : null;
+      const userKey = u?.emp_id || 'guest';
+      return JSON.parse(localStorage.getItem(`attendance_dismissed_notifs_${userKey}`) || '[]');
+    } catch {
+      return [];
+    }
   });
+
+  // Re-sync dismissed notifications when currentUser changes
+  useEffect(() => {
+    if (currentUser?.emp_id) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(`attendance_dismissed_notifs_${currentUser.emp_id}`) || '[]');
+        setDismissedNotifIds(stored);
+      } catch {
+        setDismissedNotifIds([]);
+      }
+    }
+  }, [currentUser?.emp_id]);
+
+  const activeNotifications = myLeavesList.filter((item) => !dismissedNotifIds.includes(item.id));
+
+  const handleDeleteNotification = (e, id) => {
+    e.stopPropagation();
+    const updated = [...dismissedNotifIds, id];
+    setDismissedNotifIds(updated);
+    try {
+      const userKey = currentUser?.emp_id || 'guest';
+      localStorage.setItem(`attendance_dismissed_notifs_${userKey}`, JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleClearAllNotifications = (e) => {
+    if (e) e.stopPropagation();
+    const allIds = myLeavesList.map((item) => item.id);
+    setDismissedNotifIds(allIds);
+    try {
+      const userKey = currentUser?.emp_id || 'guest';
+      localStorage.setItem(`attendance_dismissed_notifs_${userKey}`, JSON.stringify(allIds));
+    } catch {}
+  };
+
+  // Centered Notifications & Activity Center Modal States
+  const [notifModalOpen, setNotifModalOpen] = useState(false);
+  const [notifSearchQuery, setNotifSearchQuery] = useState('');
+  const [notifFilter, setNotifFilter] = useState('all'); // 'all' | 'permissions' | 'leaves'
+
+  const filteredNotifications = activeNotifications.filter((item) => {
+    if (notifFilter === 'permissions' && item.request_type !== 'PERMISSION') return false;
+    if (notifFilter === 'leaves' && item.request_type === 'PERMISSION') return false;
+
+    if (notifSearchQuery.trim()) {
+      const q = notifSearchQuery.toLowerCase();
+      const typeStr = getRequestTypeLabel(item.request_type).toLowerCase();
+      const reasonStr = (item.reason || '').toLowerCase();
+      const statusStr = (item.status || '').toLowerCase();
+      const dateStr = (item.start_date || '').toLowerCase();
+      const empName = (currentUser?.name || '').toLowerCase();
+      const empId = (currentUser?.emp_id || '').toLowerCase();
+      return (
+        typeStr.includes(q) ||
+        reasonStr.includes(q) ||
+        statusStr.includes(q) ||
+        dateStr.includes(q) ||
+        empName.includes(q) ||
+        empId.includes(q)
+      );
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && notifModalOpen) {
+        setNotifModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [notifModalOpen]);
+
+  // Geofence & Company Branding states - seeded from the last fetch (cached in
+  // localStorage) so the real company logo shows immediately on refresh instead
+  // of flashing the generic placeholder icon before the API call resolves.
+  const [companyInfo, setCompanyInfo] = useState(() => {
+    const defaults = {
+      company_name: 'ZIGMAA TECH',
+      company_logo: '',
+      primary_color: '#e3010f',
+      address: 'JP THANAM COMPLEX, 16H/7, Maharaja Nagar, Jeyalani Colony, Thoothukudi, Tamil Nadu 628008',
+      office_lat: DEFAULT_OFFICE_LAT,
+      office_lng: DEFAULT_OFFICE_LNG,
+      allowed_radius_meters: 70,
+      office_timing: '09:30 AM - 06:00 PM',
+      office_start_time: '09:30',
+      office_end_time: '18:00',
+    };
+    try {
+      const cached = localStorage.getItem('attendance_company_branding');
+      if (cached) return { ...defaults, ...JSON.parse(cached) };
+    } catch (e) {}
+    return defaults;
+  });
+
+  const cacheCompanyBranding = (info) => {
+    try { localStorage.setItem('attendance_company_branding', JSON.stringify(info)); } catch (e) {}
+  };
 
   const [officeLat, setOfficeLat] = useState(() => parseFloat(localStorage.getItem('OFFICE_LAT')) || DEFAULT_OFFICE_LAT);
   const [officeLng, setOfficeLng] = useState(() => parseFloat(localStorage.getItem('OFFICE_LNG')) || DEFAULT_OFFICE_LNG);
@@ -196,10 +298,30 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
   // Time & Late evaluation - the cutoff that actually applies to THIS employee
   // (company default, or their own shift timing when the company has enabled
   // per-employee shift timing), fetched from the server rather than hardcoded.
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [shiftTiming, setShiftTiming] = useState({ start_time: '09:30', end_time: '18:00', timing_label: '09:30 AM - 06:00 PM' });
+  const [shiftTiming, setShiftTiming] = useState(() => {
+    try {
+      const saved = localStorage.getItem('attendance_current_user');
+      if (saved) {
+        const u = JSON.parse(saved);
+        if (u.effective_start_time || u.effective_end_time || u.effective_timing) {
+          return {
+            start_time: u.effective_start_time || '09:30',
+            end_time: u.effective_end_time || '18:00',
+            timing_label: u.effective_timing || '09:30 AM - 06:00 PM',
+          };
+        }
+      }
+    } catch {}
+    return { start_time: '09:30', end_time: '18:00', timing_label: '09:30 AM - 06:00 PM' };
+  });
   const [isPastCutoff, setIsPastCutoff] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
   const [hasCheckedIn, setHasCheckedIn] = useState(false);
+  // True between a PERMISSION_OUT punch (stepped out under an approved permission)
+  // and the PERMISSION_IN punch (back from it) - the day's check-in/check-out stay
+  // open the whole time, this just tracks the temporary break for the punch UI.
+  const [onPermissionBreak, setOnPermissionBreak] = useState(false);
+  const [permissionOutTime, setPermissionOutTime] = useState('');
 
   // Camera & Face capture
   const [punchCameraActive, setPunchCameraActive] = useState(false);
@@ -303,7 +425,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
         const cLng = data.office_lng !== undefined && data.office_lng !== null ? parseFloat(data.office_lng) : DEFAULT_OFFICE_LNG;
         const cRadius = data.allowed_radius_meters !== undefined && data.allowed_radius_meters !== null ? parseInt(data.allowed_radius_meters) : 70;
 
-        setCompanyInfo({
+        const nextCompanyInfo = {
           company_name: cName,
           company_logo: cLogo,
           primary_color: data.primary_color || '#e3010f',
@@ -311,7 +433,9 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
           office_lat: cLat,
           office_lng: cLng,
           allowed_radius_meters: cRadius,
-        });
+        };
+        setCompanyInfo((prev) => ({ ...prev, ...nextCompanyInfo }));
+        cacheCompanyBranding(nextCompanyInfo);
 
         setOfficeLat(cLat);
         setOfficeLng(cLng);
@@ -339,6 +463,11 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
       company_name: data.company_name,
       company_logo: data.company_logo,
       face_descriptor: data.face_descriptor || data.face_encoding,
+      shift_start_time: data.shift_start_time,
+      shift_end_time: data.shift_end_time,
+      effective_start_time: data.effective_start_time,
+      effective_end_time: data.effective_end_time,
+      effective_timing: data.effective_timing,
     };
     setCurrentUser(userObj);
     try {
@@ -347,19 +476,23 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
 
     if (data.company_name || data.company_logo || data.company_data) {
       const c = data.company_data || {};
-      setCompanyInfo((prev) => ({
-        ...prev,
-        company_name: data.company_name || c.company_name || prev.company_name,
-        company_logo: (data.company_logo !== undefined && data.company_logo !== '') ? data.company_logo : ((c.company_logo !== undefined && c.company_logo !== '') ? c.company_logo : prev.company_logo),
-        primary_color: c.primary_color || prev.primary_color,
-        address: c.address || prev.address,
-        office_lat: c.office_lat !== undefined && c.office_lat !== null ? parseFloat(c.office_lat) : prev.office_lat,
-        office_lng: c.office_lng !== undefined && c.office_lng !== null ? parseFloat(c.office_lng) : prev.office_lng,
-        allowed_radius_meters: c.allowed_radius_meters !== undefined && c.allowed_radius_meters !== null ? parseInt(c.allowed_radius_meters) : prev.allowed_radius_meters,
-        office_timing: c.office_timing || data.office_timing || prev.office_timing,
-        office_start_time: c.office_start_time || data.office_start_time || prev.office_start_time,
-        office_end_time: c.office_end_time || data.office_end_time || prev.office_end_time,
-      }));
+      setCompanyInfo((prev) => {
+        const next = {
+          ...prev,
+          company_name: data.company_name || c.company_name || prev.company_name,
+          company_logo: (data.company_logo !== undefined && data.company_logo !== '') ? data.company_logo : ((c.company_logo !== undefined && c.company_logo !== '') ? c.company_logo : prev.company_logo),
+          primary_color: c.primary_color || prev.primary_color,
+          address: c.address || prev.address,
+          office_lat: c.office_lat !== undefined && c.office_lat !== null ? parseFloat(c.office_lat) : prev.office_lat,
+          office_lng: c.office_lng !== undefined && c.office_lng !== null ? parseFloat(c.office_lng) : prev.office_lng,
+          allowed_radius_meters: c.allowed_radius_meters !== undefined && c.allowed_radius_meters !== null ? parseInt(c.allowed_radius_meters) : prev.allowed_radius_meters,
+          office_timing: c.office_timing || data.office_timing || prev.office_timing,
+          office_start_time: c.office_start_time || data.office_start_time || prev.office_start_time,
+          office_end_time: c.office_end_time || data.office_end_time || prev.office_end_time,
+        };
+        cacheCompanyBranding(next);
+        return next;
+      });
     }
 
     // The cutoff/checkout time actually enforced for this employee - company default,
@@ -420,7 +553,17 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
         : `${API_BASE_URL}/api/attendance/lookup-employee/`;
       fetch(lookupUrl).then(async (response) => {
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || data.detail || 'Your invitation has expired.');
+        if (!response.ok) {
+          const err = new Error(data.error || data.detail || 'Your invitation has expired.');
+          err.status = response.status;
+          throw err;
+        }
+        if (data.already_registered) {
+          setErrorBanner('This account is already registered. Please log in instead of using the invite link.');
+          clearAttendanceInvite();
+          setActiveTab('punch');
+          return;
+        }
         setActiveTab('onboard');
         setPrefilledEmployee(data);
         setRegData(prev => ({
@@ -446,8 +589,16 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
         }
       }).catch(error => {
         setErrorBanner(error.message);
-        clearAttendanceInvite();
-        setActiveTab('punch');
+        // Only a genuinely dead invite (403 - used, expired, or revoked by a newer
+        // invite) should clear the token and send the employee back to the punch
+        // screen. A transient problem (network blip, 401/429/5xx) must leave the
+        // invite token intact so the employee can simply retry/reload the same link.
+        if (error.status === 403) {
+          clearAttendanceInvite();
+          setActiveTab('punch');
+        } else {
+          setActiveTab('onboard');
+        }
       });
       return;
     }
@@ -905,8 +1056,11 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
       try {
         const api = window.faceapi || await loadFaceApi();
         if (api && api.nets) {
-          const cdnUrl = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
-          await api.nets.tinyFaceDetector.loadFromUri(cdnUrl);
+          try {
+            await api.nets.tinyFaceDetector.loadFromUri('/models/');
+          } catch (eLocal) {
+            await api.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
+          }
           setIsModelLoaded(true);
         }
       } catch (err) {
@@ -1111,7 +1265,17 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
         distance: resData.distance
       });
 
-      setHasCheckedIn(!hasCheckedIn);
+      if (resData.type === 'PERMISSION_OUT') {
+        setOnPermissionBreak(true);
+        setPermissionOutTime(resData.permission_out || '');
+        // hasCheckedIn stays true - the day isn't checked out, just paused.
+      } else if (resData.type === 'PERMISSION_IN') {
+        setOnPermissionBreak(false);
+        setPermissionOutTime('');
+      } else {
+        setOnPermissionBreak(false);
+        setHasCheckedIn(!hasCheckedIn);
+      }
 
     } catch (err) {
       const isFetchError = err.message === 'Failed to fetch' || err.name === 'TypeError';
@@ -1147,6 +1311,15 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
       return;
     }
 
+    if (prefilledEmployee?.email_conflict) {
+      setNotificationModal({
+        type: 'error',
+        title: 'Registration Error',
+        message: prefilledEmployee.email_conflict_error || 'This email is already assigned to another attendance account. Contact your administrator.'
+      });
+      return;
+    }
+
     if (regData.password && regData.confirm_password && regData.password !== regData.confirm_password) {
       setNotificationModal({
         type: 'error',
@@ -1158,9 +1331,11 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
 
     const hasMinLen = (regData.password || '').length >= 12;
     const hasUpper = /[A-Z]/.test(regData.password || '');
-    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(regData.password || '');
+    const hasLower = /[a-z]/.test(regData.password || '');
+    const hasDigit = /\d/.test(regData.password || '');
+    const hasSpecial = /[^A-Za-z0-9]/.test(regData.password || '');
 
-    if (!hasMinLen || !hasUpper || !hasSpecial) {
+    if (!hasMinLen || !hasUpper || !hasLower || !hasDigit || !hasSpecial) {
       setNotificationModal({
         type: 'error',
         title: 'Weak Password Policy',
@@ -1538,8 +1713,13 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
       const todayRecord = list.find(r => r.date === todayStr);
       if (todayRecord && todayRecord.check_in) {
         setHasCheckedIn(!todayRecord.check_out);
+        const stillOnBreak = Boolean(todayRecord.permission_out) && !todayRecord.permission_in && !todayRecord.check_out;
+        setOnPermissionBreak(stillOnBreak);
+        setPermissionOutTime(stillOnBreak ? todayRecord.permission_out : '');
       } else {
         setHasCheckedIn(false);
+        setOnPermissionBreak(false);
+        setPermissionOutTime('');
       }
 
       return list;
@@ -1707,61 +1887,16 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
             <div className="relative">
               <button
                 type="button"
-                onClick={() => setNotifMenuOpen(!notifMenuOpen)}
-                title="Notifications"
+                onClick={() => setNotifModalOpen(true)}
+                title="Notifications & Activity Center"
                 className="p-2 rounded-xl text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:text-white dark:hover:bg-neutral-800 border border-neutral-200/70 dark:border-neutral-800 shadow-sm transition-colors relative cursor-pointer"
-                aria-label="Notifications"
+                aria-label="Notifications & Activity Center"
               >
                 <Bell className="w-4 h-4" />
-                {myLeavesList.length > 0 && (
+                {activeNotifications.length > 0 && (
                   <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-neutral-900" />
                 )}
               </button>
-
-              {/* NOTIFICATION POPUP */}
-              {notifMenuOpen && (
-                <div className="absolute right-0 sm:right-0 mt-2 w-[310px] max-w-[calc(100vw-32px)] bg-white dark:bg-[#18181b] text-neutral-900 dark:text-white rounded-2xl border border-neutral-200/80 dark:border-neutral-800 shadow-xl z-50 p-3.5">
-                  <div className="flex justify-between items-center mb-2.5 pb-2 border-b border-neutral-100 dark:border-neutral-800">
-                    <h4 className="text-xs font-bold text-neutral-900 dark:text-white">Notifications</h4>
-                    <span className="text-[10px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 px-2 py-0.5 rounded-full">
-                      {myLeavesList.length} updates
-                    </span>
-                  </div>
-                  <div className="max-h-60 overflow-y-auto space-y-2">
-                    {myLeavesList.length === 0 ? (
-                      <div className="text-xs text-neutral-400 text-center py-4">No notifications yet</div>
-                    ) : (
-                      myLeavesList.slice(0, 5).map((item) => (
-                        <div key={item.id} className="text-xs p-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200/50 dark:border-neutral-700/50">
-                          <div className="flex justify-between items-center gap-2 mb-1">
-                            <span className="font-semibold text-neutral-900 dark:text-white text-xs">
-                              {getRequestTypeLabel(item.request_type)}
-                            </span>
-                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${
-                              item.status === 'APPROVED'
-                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                                : item.status === 'REJECTED'
-                                ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
-                                : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
-                            }`}>
-                              {item.status}
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                            {item.request_type === 'PERMISSION' ? (
-                              <>Date: {item.start_date} ({item.duration_hours || 2} hrs)</>
-                            ) : item.request_type === 'HALF_DAY' ? (
-                              <>Date: {item.start_date} (Half Day)</>
-                            ) : (
-                              <>{item.start_date} to {item.end_date}</>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* USER LOGIN / PROFILE */}
@@ -1887,7 +2022,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                       </span>
                     )}
                     <h3 className="text-sm font-bold text-neutral-900 dark:text-white tracking-tight truncate">
-                      {companyInfo.company_name ? `${companyInfo.company_name} Geofence` : 'Office Location Verification'}
+                      {companyInfo.company_name ? `${companyInfo.company_name} ` : 'Office Location Verification'}
                     </h3>
                   </div>
                   {companyInfo.address && (
@@ -1915,11 +2050,6 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                       You are at the office premises. Attendance punch is enabled.
                       {distanceMeters !== null && ` (${distanceMeters < 1000 ? `${distanceMeters.toFixed(1)}m` : `${(distanceMeters / 1000).toFixed(2)}km`} away)`}
                     </p>
-                    {userCoords && (
-                      <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/70 pl-6 m-0 font-mono">
-                        📍 Your location: {userCoords.lat.toFixed(5)}, {userCoords.lng.toFixed(5)}
-                      </p>
-                    )}
                   </div>
                 ) : (
                   <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200/80 dark:bg-amber-950/30 dark:border-amber-800/50 text-amber-900 dark:text-amber-200 text-xs sm:text-sm font-medium flex flex-col gap-1 transition-all">
@@ -1932,11 +2062,6 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                         ? `Distance: ${distanceMeters < 1000 ? `${distanceMeters.toFixed(1)}m` : `${(distanceMeters / 1000).toFixed(2)}km`} away from office`
                         : 'Turn on location to detect your distance from office'}
                     </p>
-                    {userCoords && (
-                      <p className="text-[11px] text-amber-700/80 dark:text-amber-300/70 pl-6 m-0 font-mono">
-                        📍 Your location: {userCoords.lat.toFixed(5)}, {userCoords.lng.toFixed(5)}
-                      </p>
-                    )}
                   </div>
                 )}
 
@@ -1992,11 +2117,21 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
               )}
 
               {/* ALREADY CHECKED IN TODAY BADGE */}
-              {hasCheckedIn && (
+              {hasCheckedIn && !onPermissionBreak && (
                 <div className="p-3.5 rounded-xl bg-emerald-50/80 border border-emerald-200/80 dark:bg-emerald-950/30 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-xs sm:text-sm font-medium flex items-center justify-between gap-3 transition-all">
                   <div className="flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span>Check-In recorded for today! Next punch will be <strong className="font-semibold text-emerald-700 dark:text-emerald-300">Check-Out</strong> (available after {getDisplayCheckoutTime(companyInfo.office_end_time)}).</span>
+                    <span>Check-In recorded for today! Next punch will be <strong className="font-semibold text-emerald-700 dark:text-emerald-300">Check-Out</strong> (available after {getDisplayCheckoutTime(shiftTiming.end_time || companyInfo.office_end_time)}).</span>
+                  </div>
+                </div>
+              )}
+
+              {/* ON PERMISSION BREAK BADGE */}
+              {onPermissionBreak && (
+                <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200/80 dark:bg-amber-950/30 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-xs sm:text-sm font-medium flex items-center justify-between gap-3 transition-all">
+                  <div className="flex items-center gap-2.5">
+                    <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>On permission since <strong className="font-semibold text-amber-700 dark:text-amber-300">{formatTime12(permissionOutTime)}</strong>. Punch in below when you're back.</span>
                   </div>
                 </div>
               )}
@@ -2004,10 +2139,18 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
               {/* PUNCH ATTENDANCE TRIGGER BUTTONS OR DISABLED BOX */}
               {isWithinZone ? (
                 <div className="flex flex-col gap-3 w-full">
-                  <FaceScanModalCapture 
+                  <FaceScanModalCapture
                     title="Biometric Punch Verification"
-                    description={hasCheckedIn ? "Hold face steady in green oval for automatic check-out." : "Hold face steady in green oval for automatic check-in."}
-                    buttonText={hasCheckedIn ? `Check Out (Regular After ${getDisplayCheckoutTime(companyInfo.office_end_time)})` : "Check In"}
+                    description={
+                      onPermissionBreak
+                        ? "Hold face steady in green oval to punch back in from your permission break."
+                        : hasCheckedIn ? "Hold face steady in green oval for automatic check-out." : "Hold face steady in green oval for automatic check-in."
+                    }
+                    buttonText={
+                      onPermissionBreak
+                        ? "Punch In (Back from Permission) ↩️"
+                        : hasCheckedIn ? `Check Out (Regular After ${getDisplayCheckoutTime(shiftTiming.end_time || companyInfo.office_end_time)})` : "Check In"
+                    }
                     resetOnCapture={true}
                     autoCapture={true}
                     isDarkMode={isDarkMode}
@@ -2023,11 +2166,11 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                     onFaceCaptured={(blob, descriptorArray) => handlePunchAttendance(blob, descriptorArray, false)} 
                   />
 
-                  {hasCheckedIn && (
-                    <FaceScanModalCapture 
+                  {hasCheckedIn && !onPermissionBreak && (
+                    <FaceScanModalCapture
                       title="Early Check-Out With Permission"
-                      description={`Early Check-Out before ${getDisplayCheckoutTime(companyInfo.office_end_time)} under approved permission or emergency leave.`}
-                      buttonText="Early Check-Out (With Permission) ⏱️"
+                      description={`Step out under an approved permission request (returns automatically if time remains before ${getDisplayCheckoutTime(shiftTiming.end_time || companyInfo.office_end_time)}) or an emergency leave.`}
+                      buttonText="Step Out (With Permission) ⏱️"
                       resetOnCapture={true}
                       autoCapture={true}
                       isDarkMode={isDarkMode}
@@ -2075,8 +2218,34 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                 </p>
               </div>
 
+              {/* EMAIL CONFLICT ALERT BANNER (Shown immediately at Step 1) */}
+              {prefilledEmployee?.email_conflict && (
+                <div style={{
+                  padding: '16px 20px',
+                  borderRadius: '14px',
+                  background: isDarkMode ? '#450a0a' : '#fef2f2',
+                  border: '1px solid #ef4444',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '14px'
+                }}>
+                  <AlertCircle style={{ width: '24px', height: '24px', color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '800', color: '#ef4444' }}>
+                      ⚠️ Registration Blocked: Email Already in Use
+                    </h4>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: isDarkMode ? '#fca5a5' : '#991b1b', lineHeight: 1.5 }}>
+                      {prefilledEmployee.email_conflict_error || 'This email is already assigned to another attendance account. Contact your administrator.'}
+                    </p>
+                    <p style={{ margin: '6px 0 0 0', fontSize: '12px', fontWeight: '600', color: isDarkMode ? '#f87171' : '#b91c1c' }}>
+                      Ask your company administrator to assign a unique email to your employee profile in Salary Slip before registering.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* PRE-FILLED PROFILE NOTICE BANNER */}
-              {(prefilledEmployee || regData.full_name || regData.emp_id) && (
+              {(prefilledEmployee || regData.full_name || regData.emp_id) && !prefilledEmployee?.email_conflict && (
                 <div style={{
                   padding: '14px 18px',
                   borderRadius: '14px',
@@ -2182,8 +2351,13 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                       value={regData.email} 
                       onChange={(e) => setRegData({ ...regData, email: e.target.value })} 
                       onBlur={(e) => handleEmpIdLookup(e.target.value)}
-                      style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.textPrimary, fontSize: '13px', boxSizing: 'border-box' }} 
+                      style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', backgroundColor: theme.inputBg, border: `1px solid ${prefilledEmployee?.email_conflict ? '#ef4444' : theme.inputBorder}`, color: theme.textPrimary, fontSize: '13px', boxSizing: 'border-box' }} 
                     />
+                    {prefilledEmployee?.email_conflict && (
+                      <p style={{ margin: '6px 0 0 0', fontSize: '11px', fontWeight: '700', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span>⚠️ {prefilledEmployee.email_conflict_error || 'This email is already assigned to another attendance account.'}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -2268,7 +2442,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                 {/* PASSWORD & CONFIRM PASSWORD WITH EYE TOGGLE */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: theme.textSecondary, marginBottom: '6px' }}>Password * (Min 8 chars, 1 Uppercase, 1 Symbol)</label>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: theme.textSecondary, marginBottom: '6px' }}>Password * (Min 12 chars, 1 Uppercase, 1 Symbol)</label>
                     <div style={{ position: 'relative' }}>
                       <input 
                         type={showRegPassword ? 'text' : 'password'} 
@@ -2361,14 +2535,21 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
 
 
               {/* FACE PHOTO CAPTURE SECTION - CENTERED MODAL CAPTURE */}
-              <FaceScanModalCapture 
+              <FaceScanModalCapture
                 title="Biometric Face Scanner"
                 description="Align face inside center oval for automatic photo capture."
                 buttonText="Capture Profile Photo"
                 autoCapture={true}
                 mode="register"
-                isDarkMode={isDarkMode} 
+                isDarkMode={isDarkMode}
                 allRegisteredDescriptors={allRegisteredDescriptors}
+                disabled={Boolean(prefilledEmployee?.email_conflict || !regData.password || !regData.confirm_password || regData.password !== regData.confirm_password)}
+                disabledMessage={
+                  prefilledEmployee?.email_conflict 
+                    ? (prefilledEmployee?.email_conflict_error || 'This email is already assigned to another attendance account. Contact your administrator.')
+                    : "Set and confirm your password in Step 2 first to unlock face capture."
+                }
+                expectedGender={prefilledEmployee?.gender || null}
                 onFaceCaptured={(blobOrDataUrl, descriptorArray) => {
                   if (descriptorArray && Array.isArray(descriptorArray) && descriptorArray.length === 128) {
                     setRegPhotoDescriptor(descriptorArray);
@@ -2408,7 +2589,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
 
               </div>
 
-              <button type="submit" disabled={isProcessing || faceValidating || !regPhoto} style={{ padding: '14px 0', borderRadius: '12px', backgroundColor: !regPhoto || faceValidating ? (isDarkMode ? '#27272a' : '#e2e8f0') : (isDarkMode ? '#ffffff' : '#0f172a'), color: !regPhoto || faceValidating ? (isDarkMode ? '#71717a' : '#94a3b8') : (isDarkMode ? '#0a0a0a' : '#ffffff'), fontWeight: '800', fontSize: '14px', border: 'none', cursor: !regPhoto || faceValidating ? 'not-allowed' : 'pointer', boxShadow: 'none' }}>
+              <button type="submit" disabled={isProcessing || faceValidating || !regPhoto || Boolean(prefilledEmployee?.email_conflict)} style={{ padding: '14px 0', borderRadius: '12px', backgroundColor: !regPhoto || faceValidating || prefilledEmployee?.email_conflict ? (isDarkMode ? '#27272a' : '#e2e8f0') : (isDarkMode ? '#ffffff' : '#0f172a'), color: !regPhoto || faceValidating || prefilledEmployee?.email_conflict ? (isDarkMode ? '#71717a' : '#94a3b8') : (isDarkMode ? '#0a0a0a' : '#ffffff'), fontWeight: '800', fontSize: '14px', border: 'none', cursor: !regPhoto || faceValidating || prefilledEmployee?.email_conflict ? 'not-allowed' : 'pointer', boxShadow: 'none' }}>
                 {faceValidating ? 'Analyzing Face Biometrics...' : isProcessing ? 'Registering...' : 'Complete Registration'}
               </button>
             </form>
@@ -2582,7 +2763,6 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                               <th style={{ padding: '10px 16px' }}>Check-In</th>
                               <th style={{ padding: '10px 16px' }}>Check-Out</th>
                               <th style={{ padding: '10px 16px' }}>Duration</th>
-                              <th style={{ padding: '10px 16px' }}>Distance</th>
                               <th style={{ padding: '10px 16px', textAlign: 'right' }}>Status</th>
                             </tr>
                           </thead>
@@ -2590,10 +2770,16 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                             {monthlySummary.day_wise_audit.map((item, idx) => (
                               <tr key={idx} style={{ borderBottom: `1px solid ${theme.tableRowBorder}` }}>
                                 <td style={{ padding: '12px 16px', fontWeight: '700', color: theme.textPrimary }}>{formatDisplayDate(item.date)}</td>
-                                <td style={{ padding: '12px 16px', color: theme.textSecondary }}>{item.check_in || '--:--'}</td>
+                                <td style={{ padding: '12px 16px', color: theme.textSecondary }}>
+                                  {item.check_in || '--:--'}
+                                  {item.permission_out && (
+                                    <div style={{ marginTop: '2px', fontSize: '10px', fontWeight: '700', color: '#d97706' }}>
+                                      ⏱️ {item.permission_out} {item.permission_in ? `– ${item.permission_in}` : '(out)'}
+                                    </div>
+                                  )}
+                                </td>
                                 <td style={{ padding: '12px 16px', color: theme.textSecondary }}>{item.check_out || '--:--'}</td>
                                 <td style={{ padding: '12px 16px', color: theme.textMuted }}>{item.duration_hours > 0 ? `${item.duration_hours} hrs` : '--'}</td>
-                                <td style={{ padding: '12px 16px', color: theme.textMuted }}>{item.distance_m ? `${item.distance_m}m` : '--'}</td>
                                 <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                                   <span style={{
                                     padding: '4px 10px',
@@ -4182,6 +4368,221 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
       )}
 
 
+
+      {/* CENTERED NOTIFICATIONS & ACTIVITY CENTER MODAL (EXACT AS SCREENSHOT 2) */}
+      {notifModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => setNotifModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl bg-white dark:bg-[#18181b] rounded-2xl border border-neutral-200/80 dark:border-neutral-800 shadow-2xl overflow-hidden flex flex-col max-h-[88vh] text-neutral-900 dark:text-white animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* MODAL HEADER */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-sm">
+                  <Bell className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-neutral-900 dark:text-white">
+                      Notifications & Activity Center
+                    </h3>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
+                      {activeNotifications.length}
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    View all system events and manage notifications.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setNotifModalOpen(false)}
+                className="p-2 rounded-lg text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                title="Close (Esc)"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* TOOLBAR: SEARCH & FILTER TABS */}
+            <div className="px-5 py-3 border-b border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between shrink-0">
+              {/* Search bar */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                <input
+                  type="text"
+                  value={notifSearchQuery}
+                  onChange={(e) => setNotifSearchQuery(e.target.value)}
+                  placeholder="Search employees, slips, settings... (Ctrl+K)"
+                  className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:border-neutral-400 dark:focus:border-neutral-600 transition-colors"
+                />
+                {notifSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setNotifSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 text-xs cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setNotifFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    notifFilter === 'all'
+                      ? 'bg-neutral-900 text-white dark:bg-white dark:text-black shadow-sm'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  }`}
+                >
+                  All ({activeNotifications.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNotifFilter('permissions')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+                    notifFilter === 'permissions'
+                      ? 'bg-neutral-900 text-white dark:bg-white dark:text-black shadow-sm'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  }`}
+                >
+                  <Clock className="h-3 w-3" />
+                  Permissions ({activeNotifications.filter((i) => i.request_type === 'PERMISSION').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNotifFilter('leaves')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                    notifFilter === 'leaves'
+                      ? 'bg-neutral-900 text-white dark:bg-white dark:text-black shadow-sm'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  }`}
+                >
+                  <CalendarDays className="h-3 w-3" />
+                  Leave Requests ({activeNotifications.filter((i) => i.request_type !== 'PERMISSION').length})
+                </button>
+              </div>
+            </div>
+
+            {/* NOTIFICATION CARDS LIST */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
+              {filteredNotifications.length === 0 ? (
+                <div className="py-16 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mx-auto mb-3 text-neutral-400">
+                    <Bell className="h-6 w-6" />
+                  </div>
+                  <h4 className="text-sm font-bold text-neutral-800 dark:text-neutral-200">No activities found</h4>
+                  <p className="text-xs text-neutral-400 mt-1 max-w-sm mx-auto">
+                    {notifSearchQuery
+                      ? `No notifications matched "${notifSearchQuery}". Try changing your search query.`
+                      : 'There are no active notifications to display in this category.'}
+                  </p>
+                </div>
+              ) : (
+                filteredNotifications.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 hover:border-neutral-300 dark:hover:border-neutral-700 transition-colors p-4"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div className={`p-2 rounded-xl shrink-0 mt-0.5 ${
+                          item.status === 'APPROVED'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400'
+                            : item.status === 'REJECTED'
+                            ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400'
+                            : 'bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400'
+                        }`}>
+                          <CalendarDays className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-sm font-bold text-neutral-900 dark:text-white truncate">
+                              {item.request_type === 'PERMISSION'
+                                ? (item.status === 'APPROVED' ? 'Permission request approved' : item.status === 'REJECTED' ? 'Permission request rejected' : 'Permission request pending')
+                                : (item.status === 'APPROVED' ? 'Leave request approved' : item.status === 'REJECTED' ? 'Leave request rejected' : 'Leave request pending')}
+                            </h4>
+                          </div>
+
+                          <p className="text-xs text-neutral-600 dark:text-neutral-300 mt-0.5">
+                            {(currentUser?.name || 'Employee')} ({currentUser?.emp_id || 'ID'}) · {item.request_type} · {item.start_date}{item.reason ? ` · ${item.reason}` : ''}
+                          </p>
+
+                          <div className="flex items-center gap-3 mt-2 text-[11px] text-neutral-400">
+                            <span>{item.start_date}</span>
+                            <span>•</span>
+                            <span className="capitalize">
+                              {item.request_type === 'PERMISSION' ? 'Permission Request' : 'Leave Request'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Action Buttons */}
+                      <div className="flex items-center gap-1.5 self-end sm:self-start shrink-0 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotifModalOpen(false);
+                            setActiveTab('STATUS');
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-neutral-900 dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 transition-colors cursor-pointer"
+                          title="View"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          View
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteNotification(e, item.id)}
+                          className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* MODAL FOOTER */}
+            <div className="px-5 py-3 border-t border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3 text-xs text-neutral-400">
+                <span>Click any item to view details</span>
+                {activeNotifications.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearAllNotifications}
+                    className="text-xs text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 font-medium cursor-pointer"
+                  >
+                    <Trash2 className="h-3 w-3" /> Clear all notifications
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setNotifModalOpen(false)}
+                className="px-4 py-1.5 rounded-xl bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* OFFICIAL GOOGLE IDENTITY SERVICES ONE-TAP MODAL */}
 

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, RotateCcw, Bot, User, Sparkles } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useTranslation } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { sendChatMessage, type ChatMessage } from '../../services/aiAssistantService';
 
 interface AIAssistantDrawerProps {
@@ -29,8 +30,12 @@ function useIsMobile() {
 export function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawerProps) {
   const { theme } = useTheme();
   const { t } = useTranslation();
+  const { user } = useAuth();
   const isDark = theme === 'dark';
   const isMobile = useIsMobile();
+
+  // Same name shown on the Dashboard greeting ("Welcome back, {name}"), kept in sync here.
+  const dashboardName = user?.full_name || 'Admin';
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
@@ -43,7 +48,7 @@ export function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawerProps) {
       {
         id: 'init-1',
         sender: 'assistant',
-        text: t('ai.greeting'),
+        text: `${t('ai.greeting')}, ${dashboardName}?`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ];
@@ -179,14 +184,14 @@ export function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawerProps) {
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop Overlay */}
+          {/* Backdrop Overlay - plain opacity fade, no blur filter (blur is expensive to animate and was the main source of lag) */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]"
+            className="fixed inset-0 z-50 bg-black/40"
             aria-hidden="true"
           />
 
@@ -197,7 +202,7 @@ export function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawerProps) {
             initial={isMobile ? { y: '100%', opacity: 0 } : { x: '100%' }}
             animate={isMobile ? { y: 0, opacity: 1 } : { x: 0 }}
             exit={isMobile ? { y: '100%', opacity: 0 } : { x: '100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
             className={
               isMobile
                 ? 'fixed left-3 right-3 bottom-3 z-50 max-h-[72vh] rounded-3xl bg-white dark:bg-neutral-900 border border-neutral-200/90 dark:border-neutral-800 shadow-2xl flex flex-col select-none overflow-hidden'
@@ -266,8 +271,11 @@ export function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawerProps) {
                 const isUser = msg.sender === 'user';
 
                 return (
-                  <div
+                  <motion.div
                     key={msg.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
                     className={`flex items-start gap-2 sm:gap-2.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
                   >
                     {/* Avatar Icon */}
@@ -309,7 +317,7 @@ export function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawerProps) {
                         {msg.timestamp}
                       </span>
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
 

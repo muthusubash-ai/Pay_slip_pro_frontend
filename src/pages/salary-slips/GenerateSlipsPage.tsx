@@ -296,31 +296,31 @@ export function GenerateSlipsPage() {
         {selectedEmp && (
           <div className="mb-5 p-4 sm:p-5 rounded-2xl border border-neutral-200 dark:border-neutral-700/80 bg-neutral-50 dark:bg-neutral-900/90 shadow-sm transition-colors">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3.5">
+              <div className="flex items-center gap-3.5 min-w-0">
                 <div className="w-11 h-11 rounded-xl bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 flex items-center justify-center font-bold text-base shadow-sm shrink-0">
                   {selectedEmp.full_name.charAt(0).toUpperCase()}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="font-bold text-neutral-900 dark:text-white text-base">
+                    <h4 className="font-bold text-neutral-900 dark:text-white text-base break-words">
                       {selectedEmp.full_name}
                     </h4>
-                    <span className="text-xs px-2 py-0.5 rounded-md font-mono font-semibold bg-neutral-200/80 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200">
+                    <span className="text-xs px-2 py-0.5 rounded-md font-mono font-semibold bg-neutral-200/80 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 shrink-0">
                       {selectedEmp.employee_code}
                     </span>
                   </div>
-                  <p className="text-xs text-neutral-600 dark:text-neutral-300 mt-0.5">
+                  <p className="text-xs text-neutral-600 dark:text-neutral-300 mt-0.5 break-words">
                     {selectedEmp.department || 'General'} · {selectedEmp.designation || 'Staff'} · {selectedEmp.email}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 sm:border-l sm:border-neutral-200 dark:sm:border-neutral-800 sm:pl-5 border-t sm:border-t-0 pt-3 sm:pt-0 border-neutral-200 dark:border-neutral-800">
-                <div>
+              <div className="flex flex-wrap items-center gap-4 sm:border-l sm:border-neutral-200 dark:sm:border-neutral-800 sm:pl-5 border-t sm:border-t-0 pt-3 sm:pt-0 border-neutral-200 dark:border-neutral-800">
+                <div className="min-w-0">
                   <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-500 dark:text-neutral-400 block mb-0.5">
                     Date of Joining
                   </span>
-                  <span className="text-xs font-bold text-neutral-900 dark:text-emerald-400">
+                  <span className="text-xs font-bold text-neutral-900 dark:text-emerald-400 break-words">
                     {selectedEmp.date_of_joining ? `${selectedEmp.date_of_joining} (${dojFormatted})` : 'Not specified'}
                   </span>
                 </div>

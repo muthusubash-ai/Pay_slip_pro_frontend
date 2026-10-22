@@ -3,6 +3,8 @@ export interface User {
   email: string;
   full_name: string;
   phone?: string | null;
+  /** HR-facing notifications (leave requests, etc.) go here instead of `email` when set. */
+  notification_email?: string | null;
   company_name?: string;
   role: 'admin' | 'hr_manager';
   is_active: boolean;
@@ -40,7 +42,11 @@ export interface Employee {
   /** Optional per-employee shift timing (24-hour "HH:MM"); falls back to the company default when unset. */
   shift_start_time?: string | null;
   shift_end_time?: string | null;
+  /** Optional - lets attendance registration sanity-check the captured face against the recorded gender. */
+  gender?: 'MALE' | 'FEMALE' | null;
   is_active: boolean;
+  /** Set when the employee was deactivated; they're permanently deleted 30 days after this. */
+  deactivated_at?: string | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -106,6 +112,8 @@ export interface PaginatedResponse<T> {
   page: number;
   per_page: number;
   pages: number;
+  active_count?: number;
+  inactive_count?: number;
 }
 
 export interface DashboardStats {
@@ -145,6 +153,11 @@ export interface AttendanceRecord {
   check_out?: string | null;
   duration_hours?: number | null;
   is_late?: boolean;
+  /** The underlying biometric Attendance record id - needed to fix a forgotten check-out. */
+  bio_record_id?: number | null;
+  /** A temporary step-out/return pair during the day under an approved permission request. */
+  permission_out?: string | null;
+  permission_in?: string | null;
   biometric_status?: string | null;
   leave_type?: string | null;
   distance_meters?: number | null;

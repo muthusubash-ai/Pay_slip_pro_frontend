@@ -7,7 +7,7 @@ import { GlassCard } from '../../components/ui/GlassCard';
 import { AnimatedInput } from '../../components/ui/AnimatedInput';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
-import { useEmployee, useUpdateEmployee, useDeleteEmployee } from '../../hooks/useEmployees';
+import { useEmployee, useUpdateEmployee, useDeleteEmployee, useEmployees } from '../../hooks/useEmployees';
 import { DEPARTMENT_OPTIONS, DESIGNATION_OPTIONS } from '../../lib/employeeOptions';
 import { ThemedSelect } from '../../components/ui/ThemedSelect';
 import { BankNamePicker } from '../../components/ui/BankNamePicker';
@@ -21,6 +21,8 @@ export function EmployeeEditPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { data: emp, isLoading } = useEmployee(Number(id));
+  const { data: employeesData } = useEmployees(1, undefined, undefined, undefined, 500);
+  const existingEmployees = employeesData?.items || [];
   const updateEmployee = useUpdateEmployee();
   const deleteEmployee = useDeleteEmployee();
   const [error, setError] = useState('');
@@ -70,6 +72,7 @@ export function EmployeeEditPage() {
     esi: '',
     shift_start_time: '',
     shift_end_time: '',
+    gender: '' as '' | 'MALE' | 'FEMALE',
   });
 
   useEffect(() => {
@@ -96,6 +99,7 @@ export function EmployeeEditPage() {
         esi: String(emp.esi),
         shift_start_time: emp.shift_start_time || '',
         shift_end_time: emp.shift_end_time || '',
+        gender: emp.gender || '',
       });
     }
   }, [emp]);
@@ -119,11 +123,22 @@ export function EmployeeEditPage() {
     setForm((prev) => ({ ...prev, [field]: val }));
   };
 
+  const normalizedEmail = form.email.trim().toLowerCase();
+  const emailConflict = normalizedEmail
+    ? existingEmployees.find(
+        (e) => e.id !== Number(id) && e.email && e.email.trim().toLowerCase() === normalizedEmail
+      )
+    : null;
+
   const handleSubmit = () => {
     setError('');
     const trimmedFullName = form.full_name.trim();
     if (!trimmedFullName || !form.email || !form.date_of_joining) {
       setError('Full name, email, and Date of Joining are required.');
+      return;
+    }
+    if (emailConflict) {
+      setError(`This email is already assigned to employee ${emailConflict.employee_code} (${emailConflict.full_name}). Each employee must have a unique email address.`);
       return;
     }
     if (!/^[a-zA-Z\s.'-]+$/.test(trimmedFullName)) {
@@ -161,18 +176,20 @@ export function EmployeeEditPage() {
           pf_deduction: parseFloat(form.pf_deduction) || 0,
           professional_tax: parseFloat(form.professional_tax) || 0,
           tds: parseFloat(form.tds) || 0,
-          esi: parseFloat(form.esi) || 0,
-          shift_start_time: shiftTimingEnabled ? (form.shift_start_time || undefined) : undefined,
-          shift_end_time: shiftTimingEnabled ? (form.shift_end_time || undefined) : undefined,
+          shift_start_time: shiftTimingEnabled ? (form.shift_start_time || null) : undefined,
+          shift_end_time: shiftTimingEnabled ? (form.shift_end_time || null) : undefined,
+          gender: form.gender || null,
         },
       },
       {
         onSuccess: () => navigate(`/employees/${id}`),
         onError: (err: unknown) => {
-          const msg =
-            err && typeof err === 'object' && 'response' in err
-              ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-              : undefined;
+          const errData = (err as any)?.response?.data;
+          let msg = errData?.detail;
+          if (!msg && errData?.email) {
+            msg = Array.isArray(errData.email) ? errData.email[0] : String(errData.email);
+          }
+          if (!msg && errData?.message) msg = errData.message;
           setError(msg || 'Failed to update employee.');
         },
       }
@@ -195,7 +212,14 @@ export function EmployeeEditPage() {
         <h3 className="text-lg font-semibold mb-4">{t('employees.personalInfo', 'Personal Information')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <AnimatedInput label={`${t('employees.fullName', 'Full Name')} *`} value={form.full_name} onChange={handleChange('full_name', 'alphabets')} />
-          <AnimatedInput label={`${t('employees.email', 'Email')} *`} type="email" value={form.email} onChange={handleChange('email')} />
+          <div>
+            <AnimatedInput label={`${t('employees.email', 'Email')} *`} type="email" value={form.email} onChange={handleChange('email')} />
+            {emailConflict && (
+              <p className="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                <span>⚠️ This email is already assigned to {emailConflict.employee_code} ({emailConflict.full_name}). Each employee must have a unique email.</span>
+              </p>
+            )}
+          </div>
           <AnimatedInput label={t('employees.phone', 'Phone')} value={form.phone} onChange={handleChange('phone', 'phone')} />
           <ThemedSelect
             label={t('employees.department', 'Department')}
@@ -220,6 +244,23 @@ export function EmployeeEditPage() {
             required
             placeholder="Select joining date..."
           />
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 mb-1.5">
+              {t('employees.gender', 'Gender')}
+            </label>
+            <select
+              value={form.gender}
+              onChange={(e) => setForm((prev) => ({ ...prev, gender: e.target.value as '' | 'MALE' | 'FEMALE' }))}
+              className="w-full px-4 py-2.5 rounded-xl border-2 border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white transition-colors text-sm font-medium"
+            >
+              <option value="">{t('employees.genderNotSet', 'Not set')}</option>
+              <option value="MALE">{t('employees.male', 'Male')}</option>
+              <option value="FEMALE">{t('employees.female', 'Female')}</option>
+            </select>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+              {t('employees.genderHint', 'Optional - used to sanity-check the face captured during attendance registration.')}
+            </p>
+          </div>
         </div>
         {form.date_of_joining && form.date_of_joining !== emp.date_of_joining && (
           <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">

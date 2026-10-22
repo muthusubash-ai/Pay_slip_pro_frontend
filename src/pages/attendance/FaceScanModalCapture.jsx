@@ -2,7 +2,86 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Camera, CheckCircle2, AlertCircle, X, RefreshCw, UserCheck } from 'lucide-react';
 import { loadFaceApi } from './faceApiLoader';
 
-const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+const LOCAL_MODEL_URL = '/models/';
+const CDN_MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+
+// Must match the <circle r="..."> below exactly, or the ring's fill amount
+// drifts from the scanProgress percentage it's meant to represent.
+const RING_RADIUS = 100;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+// TensorFlow.js needs a working compute backend before any model can run.
+// Some machines/browsers don't support WebGL, and the WASM backend's binary
+// can fail to load on a dev server that doesn't serve .wasm with the right
+// MIME type (it silently gets an HTML 404 page instead, which then fails to
+// parse as WebAssembly) - without this, every detection call throws "load
+// model before inference" and the scan circle never progresses past 0%.
+// 'cpu' is pure JS, so it always works as a last resort (just slower).
+let tfBackendReadyPromise = null;
+async function ensureTfBackendReady(api) {
+  if (!api || !api.tf) return false;
+  if (tfBackendReadyPromise) return tfBackendReadyPromise;
+  tfBackendReadyPromise = (async () => {
+    const tf = api.tf;
+    for (const backend of ['webgl', 'wasm', 'cpu']) {
+      try {
+        await tf.setBackend(backend);
+        await tf.ready();
+        if (tf.getBackend() === backend) return true;
+      } catch (e) {
+        console.warn(`TensorFlow backend '${backend}' failed to initialize:`, e);
+      }
+    }
+    return false;
+  })();
+  return tfBackendReadyPromise;
+}
+
+async function ensureFaceModelsLoaded(api) {
+  if (!api || !api.nets) return;
+  await ensureTfBackendReady(api);
+  const loadNets = async (url) => {
+    if (!api.nets.tinyFaceDetector.isLoaded) {
+      await api.nets.tinyFaceDetector.loadFromUri(url);
+    }
+    if (api.nets.faceLandmark68TinyNet && !api.nets.faceLandmark68TinyNet.isLoaded) {
+      await api.nets.faceLandmark68TinyNet.loadFromUri(url);
+    }
+    if (api.nets.faceRecognitionNet && !api.nets.faceRecognitionNet.isLoaded) {
+      await api.nets.faceRecognitionNet.loadFromUri(url);
+    }
+  };
+  try {
+    await loadNets(LOCAL_MODEL_URL);
+  } catch (eLocal) {
+    try {
+      await loadNets(CDN_MODEL_URL);
+    } catch (eCdn) {
+      console.warn("Face model loading warning:", eCdn);
+    }
+  }
+}
+
+// Loaded separately (and allowed to silently fail) from the core detection/landmark/
+// recognition models above - this is only a data-integrity nicety for registration,
+// never something that should block the core face-scan flow if it can't load.
+async function ensureAgeGenderModelLoaded(api) {
+  if (!api || !api.nets || !api.nets.ageGenderNet) return false;
+  await ensureTfBackendReady(api);
+  if (api.nets.ageGenderNet.isLoaded) return true;
+  try {
+    await api.nets.ageGenderNet.loadFromUri(LOCAL_MODEL_URL);
+    return true;
+  } catch (eLocal) {
+    try {
+      await api.nets.ageGenderNet.loadFromUri(CDN_MODEL_URL);
+      return true;
+    } catch (eCdn) {
+      console.warn("Age/gender model loading warning:", eCdn);
+      return false;
+    }
+  }
+}
 
 export default function FaceScanModalCapture({ 
   onFaceCaptured,
@@ -15,13 +94,19 @@ export default function FaceScanModalCapture({
   currentUserDescriptor = null,
   currentUserName = "Employee",
   allRegisteredDescriptors = [],
-  mode = "punch"
+  mode = "punch",
+  disabled = false,
+  disabledMessage = "Complete the previous step first.",
+  expectedGender = null
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [capturedImage, setCapturedImage] = useState(null);
   const [scanProgress, setScanProgress] = useState(0);
+  const genderMismatchStreakRef = useRef(0);
+  const genderCheckTickRef = useRef(0);
+  const ageGenderReadyRef = useRef(false);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -29,6 +114,7 @@ export default function FaceScanModalCapture({
   const autoCapturedRef = useRef(false);
   const handleCaptureRef = useRef(null);
   const scanProgressRef = useRef(0);
+  const scanIntervalRef = useRef(null);
 
   const prevFaceRef = useRef(null);
   const regStageRef = useRef(1);
@@ -36,6 +122,10 @@ export default function FaceScanModalCapture({
 
   // Stop camera tracks cleanly
   const stopCamera = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -69,22 +159,15 @@ export default function FaceScanModalCapture({
         if (!api) {
           try { api = await loadFaceApi(); } catch (error) { console.warn("Face scanner library unavailable:", error); }
         }
-        if (api && api.nets) {
-          try {
-            if (!api.nets.tinyFaceDetector.isLoaded) {
-              await api.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-            }
-            if (api.nets.faceLandmark68TinyNet && !api.nets.faceLandmark68TinyNet.isLoaded) {
-              await api.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
-            }
-            if (api.nets.faceRecognitionNet && !api.nets.faceRecognitionNet.isLoaded) {
-              await api.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-            }
-          } catch (e) {
-            console.warn("CDN model load notice:", e);
-          }
+        await ensureFaceModelsLoaded(api);
+
+        genderMismatchStreakRef.current = 0;
+        genderCheckTickRef.current = 0;
+        ageGenderReadyRef.current = false;
+        if (mode === 'register' && expectedGender) {
+          ensureAgeGenderModelLoaded(api).then((ready) => { ageGenderReadyRef.current = ready; });
         }
-        
+
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
         });
@@ -122,12 +205,7 @@ export default function FaceScanModalCapture({
     const api = window.faceapi;
     if (api) {
       try {
-        if (api.nets && api.nets.faceRecognitionNet && !api.nets.faceRecognitionNet.isLoaded) {
-          await api.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-        }
-        if (api.nets && api.nets.faceLandmark68TinyNet && !api.nets.faceLandmark68TinyNet.isLoaded) {
-          await api.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
-        }
+        await ensureFaceModelsLoaded(api);
 
         let detection = null;
         if (api.detectSingleFace) {
@@ -182,6 +260,17 @@ export default function FaceScanModalCapture({
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
+
+    // The video element's native "play" event can fire more than once per
+    // camera session (buffering/resume, re-renders re-attaching the handler,
+    // etc). Without clearing the previous interval first, each firing started
+    // a second, third, ... concurrent interval, all incrementing the same
+    // scanProgressRef at once - so progress rocketed to 100% almost instantly
+    // regardless of the per-tick increment, no matter how small it was set.
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
 
     const api = window.faceapi;
     const displaySize = { width: video.clientWidth || 480, height: video.clientHeight || 360 };
@@ -253,7 +342,7 @@ export default function FaceScanModalCapture({
 
         const deltaX = Math.abs(faceCenterX - viewCenterX);
         const deltaY = Math.abs(faceCenterY - viewCenterY);
-        const isCentered = deltaX <= 100 && deltaY <= 100;
+        const isCentered = deltaX <= 120 && deltaY <= 120;
 
         // Check for face obstruction / mask / hand covering lower face safely
         let isCoveredFace = false;
@@ -279,6 +368,33 @@ export default function FaceScanModalCapture({
               isCoveredFace = true;
             }
           }
+        }
+
+        // GENDER SANITY CHECK (registration only, only when the employee record
+        // has a gender on file). Throttled to every 2nd tick (~150ms, not every
+        // 75ms tick) and only while the face is centered, to keep this cheap.
+        // A mismatch is only acted on after 2 consecutive high-confidence (>=80%)
+        // mismatched reads (~300ms), so one bad-angle frame can't lock
+        // registration, but it still surfaces as soon as the face is read -
+        // not only once the scan ring is already well past halfway.
+        let isGenderMismatch = false;
+        if (mode === 'register' && expectedGender && ageGenderReadyRef.current && isCentered && !isCoveredFace) {
+          genderCheckTickRef.current += 1;
+          if (genderCheckTickRef.current % 2 === 0) {
+            try {
+              const genderResult = await api.detectSingleFace(
+                video,
+                new api.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.2 })
+              ).withAgeAndGender();
+              if (genderResult && genderResult.genderProbability >= 0.8) {
+                const detectedGender = genderResult.gender === 'male' ? 'MALE' : 'FEMALE';
+                genderMismatchStreakRef.current = detectedGender !== expectedGender ? genderMismatchStreakRef.current + 1 : 0;
+              }
+            } catch (e) {}
+          }
+          isGenderMismatch = genderMismatchStreakRef.current >= 2;
+        } else if (mode !== 'register' || !isCentered) {
+          genderMismatchStreakRef.current = 0;
         }
 
         const parseDescriptor = (raw) => {
@@ -338,7 +454,13 @@ export default function FaceScanModalCapture({
           }
         }
 
-        // Capture quality is checked here; identity is verified on the server.
+        // PUNCH MODE: the browser's live descriptor comes from face-api.js (a
+        // TensorFlow.js model), while the stored, authoritative template is a
+        // server-side dlib/face_recognition encoding - a different embedding
+        // space entirely, so comparing the two distances client-side is not
+        // meaningful (and the server deliberately never publishes the real
+        // template to the browser - see RegisteredDescriptorsView). Capture
+        // quality is checked here; identity is verified on the server.
         if (mode === 'punch') {
           isFaceMatched = true;
           hasNoProfilePhoto = false;
@@ -362,13 +484,17 @@ export default function FaceScanModalCapture({
               const distR = Math.abs(rightX - noseTip.x);
               yawRatio = Math.abs(distR - distL) / (distL + distR + 0.0001);
 
-              if (yawRatio <= 0.14) {
+              if (yawRatio <= 0.25) {
                 isStraightHead = true;
               } else if (yawRatio >= 0.12) {
                 isTurnedHead = true;
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            isStraightHead = true;
+          }
+        } else {
+          isStraightHead = true;
         }
 
         if (isCoveredFace) {
@@ -397,6 +523,21 @@ export default function FaceScanModalCapture({
             isCovered: false,
             text: 'This face is already registered in the system.'
           });
+        } else if (isGenderMismatch) {
+          autoCapturedRef.current = false;
+          scanProgressRef.current = 0;
+          regStageRef.current = 1;
+          setRegStep(1);
+          setScanProgress(0);
+          setFaceStatus({
+            valid: false,
+            count: 1,
+            isMismatch: true,
+            isCovered: false,
+            text: expectedGender === 'FEMALE'
+              ? '⚠️ Face does not match the recorded gender (Female) on this profile.'
+              : '⚠️ Face does not match the recorded gender (Male) on this profile.'
+          });
         } else if (hasNoProfilePhoto) {
           autoCapturedRef.current = false;
           scanProgressRef.current = 0;
@@ -424,9 +565,11 @@ export default function FaceScanModalCapture({
             text: '⚠️ Face Mismatch! (Not Matched)'
           });
         } else if (mode === 'register') {
-          // SINGLE SCAN (Straight head looking forward inside circle)
+          // SINGLE SCAN (Straight head looking forward inside circle) - paced so
+          // the ring visibly fills over ~2s instead of completing almost as
+          // soon as the camera opens.
           if (isStraightHead && isCentered) {
-            scanProgressRef.current = Math.min(100, scanProgressRef.current + 2.5);
+            scanProgressRef.current = Math.min(100, scanProgressRef.current + 4.0);
             const p = Math.floor(scanProgressRef.current);
             setScanProgress(p);
 
@@ -477,8 +620,8 @@ export default function FaceScanModalCapture({
             }
           }
         } else if (isCentered) {
-          // Punch Mode (Fast 1-Step Punch)
-          scanProgressRef.current = Math.min(100, scanProgressRef.current + 20.0);
+          // Punch Mode (Fast & Smooth Punch Scan)
+          scanProgressRef.current = Math.min(100, scanProgressRef.current + 12.5);
           const currentProgress = Math.floor(scanProgressRef.current);
           setScanProgress(currentProgress);
 
@@ -520,7 +663,7 @@ export default function FaceScanModalCapture({
       }
     }, 75);
 
-    return () => clearInterval(interval);
+    scanIntervalRef.current = interval;
   };
 
   const closeModal = () => {
@@ -548,13 +691,20 @@ export default function FaceScanModalCapture({
             </div>
             <div>
               <h4 className={`text-sm font-semibold transition-colors ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>{title}</h4>
-              <p className={`text-xs transition-colors ${isDarkMode ? 'text-neutral-400' : 'text-neutral-500'}`}>{description}</p>
+              <p className={`text-xs transition-colors ${isDarkMode ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                {disabled ? disabledMessage : description}
+              </p>
             </div>
           </div>
           <button
             type="button"
-            onClick={() => setIsOpen(true)}
-            className="px-4 py-2.5 bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer"
+            onClick={() => { if (!disabled) setIsOpen(true); }}
+            disabled={disabled}
+            className={`px-4 py-2.5 rounded-xl text-xs font-semibold shadow-sm transition-all ${
+              disabled
+                ? 'bg-neutral-200 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-600 cursor-not-allowed'
+                : 'bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100 cursor-pointer'
+            }`}
           >
             {buttonText}
           </button>
@@ -655,35 +805,55 @@ export default function FaceScanModalCapture({
                     }}
                   />
 
-                  {/* Perfect Circular Biometric Scanning Ring (0% -> 100%) */}
+                  {/* Circular Biometric Scanning Ring (0% -> 100% smooth clockwise fill) */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
                     <div className="relative w-[210px] h-[210px] flex items-center justify-center">
-                      <svg className="absolute inset-0 w-full h-full transform -rotate-90 pointer-events-none">
-                        <circle
-                          cx="105"
-                          cy="105"
-                          r="100"
-                          fill="none"
-                          stroke={
-                            faceStatus.isMismatch || faceStatus.isCovered || faceStatus.count > 1
-                              ? '#ef4444'
-                              : scanProgress > 0
-                              ? '#10b981'
-                              : '#64748b'
-                          }
-                          strokeWidth={scanProgress > 0 ? "5" : "3"}
-                          strokeDasharray={
-                            faceStatus.isMismatch || faceStatus.isCovered || faceStatus.count > 1
-                              ? "none"
-                              : scanProgress > 0
-                              ? "628"
-                              : "8 8"
-                          }
-                          strokeDashoffset={
-                            scanProgress > 0 ? 628 - (628 * scanProgress) / 100 : 0
-                          }
-                          style={{ transition: 'stroke-dashoffset 60ms linear, stroke 0.2s ease' }}
-                        />
+                      <svg 
+                        viewBox="0 0 210 210"
+                        className="absolute inset-0 w-full h-full pointer-events-none overflow-visible"
+                      >
+                        <g transform="rotate(-90 105 105)">
+                          {/* Background Track Guide Ring */}
+                          <circle
+                            cx="105"
+                            cy="105"
+                            r={RING_RADIUS}
+                            fill="none"
+                            stroke={
+                              faceStatus.isMismatch || faceStatus.isCovered || faceStatus.count > 1
+                                ? 'rgba(239, 68, 68, 0.35)'
+                                : scanProgress > 0
+                                ? 'rgba(51, 65, 85, 0.7)'
+                                : 'rgba(100, 116, 139, 0.45)'
+                            }
+                            strokeWidth="4"
+                            strokeDasharray={scanProgress > 0 ? "none" : "6 6"}
+                          />
+
+                          {/* Dynamic Active Progress Ring (fills up proportionally from top 12 o'clock clockwise) */}
+                          {scanProgress > 0 && (
+                            <circle
+                              cx="105"
+                              cy="105"
+                              r={RING_RADIUS}
+                              fill="none"
+                              stroke={
+                                faceStatus.isMismatch || faceStatus.isCovered || faceStatus.count > 1
+                                  ? '#ef4444'
+                                  : '#10b981'
+                              }
+                              strokeWidth="5"
+                              strokeLinecap="round"
+                              strokeDasharray={`${RING_CIRCUMFERENCE}`}
+                              strokeDashoffset={`${RING_CIRCUMFERENCE * (1 - scanProgress / 100)}`}
+                              style={{
+                                strokeDasharray: `${RING_CIRCUMFERENCE}`,
+                                strokeDashoffset: `${RING_CIRCUMFERENCE * (1 - scanProgress / 100)}`,
+                                transition: 'stroke-dashoffset 90ms ease-out, stroke 0.2s ease',
+                              }}
+                            />
+                          )}
+                        </g>
                       </svg>
 
                       {/* Glowing Green Halo on 100% Verification */}
@@ -722,7 +892,8 @@ export default function FaceScanModalCapture({
 
             {/* Modal Bottom Action */}
             {autoCapture ? (
-              <div className={`mt-4 w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-semibold text-sm transition ${
+              <>
+                <div className={`mt-4 w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-semibold text-sm transition ${
                 scanProgress >= 100
                   ? 'bg-emerald-600 text-white shadow-lg animate-pulse'
                   : (faceStatus.isMismatch || faceStatus.isCovered)
@@ -744,6 +915,16 @@ export default function FaceScanModalCapture({
                     : 'Position face inside center circle'}
                 </span>
               </div>
+              {faceStatus.count === 1 && !faceStatus.isMismatch && !faceStatus.isCovered && scanProgress < 100 && (
+                <button
+                  type="button"
+                  onClick={handleCapture}
+                  className="mt-2.5 w-full py-2 px-3 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                >
+                  <Camera size={14} className="text-emerald-400" /> Click to Capture Photo Directly
+                </button>
+              )}
+            </>
             ) : (
               <button
                 type="button"

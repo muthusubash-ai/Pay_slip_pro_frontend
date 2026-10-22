@@ -34,6 +34,7 @@ export function SettingsPage() {
   const queryClient = useQueryClient();
   const [fullName, setFullName] = useState(user?.full_name || '');
   const [phone, setPhone] = useState(user?.phone || '');
+  const [notificationEmail, setNotificationEmail] = useState(user?.notification_email || '');
   const [companyName, setCompanyName] = useState('');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -52,6 +53,7 @@ export function SettingsPage() {
     if (user) {
       setFullName(user.full_name || '');
       setPhone(user.phone || '');
+      setNotificationEmail(user.notification_email || '');
       if (user.company_name && user.company_name !== '-') {
         setCompanyName(user.company_name);
       }
@@ -81,17 +83,24 @@ export function SettingsPage() {
       const trimmedName = fullName.trim();
       const trimmedCompany = companyName.trim();
       const cleanPhone = phone.replace(/\D/g, '');
+      const trimmedNotificationEmail = notificationEmail.trim();
 
       if (cleanPhone && cleanPhone.length !== 10) {
         setProfileMessage({ type: 'error', text: 'Please enter a valid 10-digit mobile number.' });
         setIsSavingProfile(false);
         return;
       }
+      if (trimmedNotificationEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmedNotificationEmail)) {
+        setProfileMessage({ type: 'error', text: 'Please enter a valid notification email address.' });
+        setIsSavingProfile(false);
+        return;
+      }
 
-      // 1. Update user profile via /auth/me (updates full_name, phone, and company_name)
+      // 1. Update user profile via /auth/me (updates full_name, phone, notification_email, and company_name)
       const { data: updatedUserData } = await api.put('/auth/me', {
         full_name: trimmedName,
         phone: cleanPhone || undefined,
+        notification_email: trimmedNotificationEmail,
         company_name: trimmedCompany,
       });
 
@@ -267,6 +276,19 @@ export function SettingsPage() {
               value={user?.role === 'admin' ? t('settings.administrator', 'Administrator') : t('settings.hrManager', 'HR Manager')}
               disabled
             />
+            <div>
+              <AnimatedInput
+                label={t('settings.notificationEmail', 'HR Notification Email')}
+                type="email"
+                placeholder={user?.email || 'hr@company.com'}
+                value={notificationEmail}
+                onChange={(e) => setNotificationEmail(e.target.value)}
+                disabled={!isEditingProfile}
+              />
+              <p className="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                {t('settings.notificationEmailDesc', 'Leave requests and other HR notifications are sent here instead of your login email. Leave blank to use your login email.')}
+              </p>
+            </div>
           </div>
 
           <div className="pt-2 flex flex-wrap items-center justify-end gap-3">

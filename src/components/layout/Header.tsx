@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Bell, Search, X, Users, FileText, CreditCard, ChevronRight, Calendar, CalendarDays, Settings, Menu, Sun, Moon, Languages } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, type MouseEvent as ReactMouseEvent } from 'react';
+import { ArrowLeft, Bell, Search, X, Users, FileText, CreditCard, ChevronRight, Calendar, CalendarDays, Clock, Settings, Menu, Sun, Moon, Languages } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -9,7 +9,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { employeeService } from '../../services/employeeService';
 import { salarySlipService } from '../../services/salarySlipService';
 import type { Employee, SalarySlip } from '../../types';
-import { listEmployeeLeaveRequests, type EmployeeLeaveRequest } from '../../services/leaveRequestService';
+import { listEmployeeLeaveRequests, reviewEmployeeLeaveRequest, type EmployeeLeaveRequest } from '../../services/leaveRequestService';
+import { listMissedCheckouts, type MissedCheckout } from '../../services/missedCheckoutService';
 import { AllActivityModal } from './AllActivityModal';
 import {
   getNotificationOverrides,
@@ -271,16 +272,37 @@ interface NotificationDropdownProps {
   onViewAllActivity: (filter?: 'leaves') => void;
 }
 
-let cachedNotificationData: { employees: Employee[]; slips: SalarySlip[]; leaveRequests: EmployeeLeaveRequest[] } | null = null;
+let cachedNotificationData: { employees: Employee[]; slips: SalarySlip[]; leaveRequests: EmployeeLeaveRequest[]; missedCheckouts: MissedCheckout[] } | null = null;
 
 function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdownProps) {
   const { user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>(() => cachedNotificationData?.employees || []);
   const [slips, setSlips] = useState<SalarySlip[]>(() => cachedNotificationData?.slips || []);
   const [leaveRequests, setLeaveRequests] = useState<EmployeeLeaveRequest[]>(() => cachedNotificationData?.leaveRequests || []);
+  const [missedCheckouts, setMissedCheckouts] = useState<MissedCheckout[]>(() => cachedNotificationData?.missedCheckouts || []);
   const [loading, setLoading] = useState(() => !cachedNotificationData);
   const [overrides, setOverrides] = useState(() => getNotificationOverrides());
+  const [decidingId, setDecidingId] = useState<number | null>(null);
   const navigate = useNavigate();
+
+  const handleDecision = async (e: ReactMouseEvent, requestId: number, action: 'APPROVED' | 'REJECTED') => {
+    e.stopPropagation();
+    setDecidingId(requestId);
+    try {
+      await reviewEmployeeLeaveRequest(requestId, action);
+      setLeaveRequests((prev) => {
+        const next = prev.filter((l) => l.id !== requestId);
+        cachedNotificationData = cachedNotificationData
+          ? { ...cachedNotificationData, leaveRequests: next }
+          : cachedNotificationData;
+        return next;
+      });
+    } catch {
+      // Leave it visible so the admin can retry, or open the full attendance page instead.
+    } finally {
+      setDecidingId(null);
+    }
+  };
 
   const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -303,10 +325,13 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
         const newSlips = slipRes.data.items || [];
         let newLeaveRequests: EmployeeLeaveRequest[] = [];
         try { newLeaveRequests = await listEmployeeLeaveRequests(); } catch { /* Attendance may not be enabled for this account. */ }
-        cachedNotificationData = { employees: newEmps, slips: newSlips, leaveRequests: newLeaveRequests };
+        let newMissedCheckouts: MissedCheckout[] = [];
+        try { newMissedCheckouts = await listMissedCheckouts(); } catch { /* Attendance may not be enabled for this account. */ }
+        cachedNotificationData = { employees: newEmps, slips: newSlips, leaveRequests: newLeaveRequests, missedCheckouts: newMissedCheckouts };
         setEmployees(newEmps);
         setSlips(newSlips);
         setLeaveRequests(newLeaveRequests);
+        setMissedCheckouts(newMissedCheckouts);
       } catch {
         // ignore
       } finally {
@@ -331,6 +356,7 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
     color: string;
     path: string;
     kind?: 'leave';
+    leaveRequestId?: number;
   }
 
   const notifications: NotificationItem[] = [];
@@ -414,6 +440,38 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
       color: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400',
       path: leavePath,
       kind: 'leave',
+      leaveRequestId: leave.id,
+    });
+  });
+
+  missedCheckouts.forEach((mc) => {
+    const id = `missed-checkout-${mc.id}`;
+    const ov = overrides[id];
+    if (ov?.dismissed) return;
+
+    const parts = mc.date ? mc.date.split('-') : [];
+    const params = new URLSearchParams();
+    if (mc.employee_id) params.set('employee_id', String(mc.employee_id));
+    if (mc.emp_id) params.set('code', mc.emp_id);
+    if (mc.employee_name) params.set('name', mc.employee_name);
+    if (parts.length >= 2) {
+      params.set('month', String(parseInt(parts[1], 10)));
+      params.set('year', parts[0]);
+    }
+    // Opens straight to the "Set Out Time" control for this exact record, not just
+    // the employee's calendar - the Biometric Timesheet is collapsed by default.
+    params.set('checkout_id', String(mc.id));
+    const path = `/attendance${params.toString() ? `?${params.toString()}` : ''}`;
+
+    notifications.push({
+      id,
+      icon: Clock,
+      title: 'Missed punch-out',
+      desc: `${mc.employee_name} · checked in ${mc.check_in || ''} · no check-out on ${mc.date}`,
+      time: formatTimeAgo(mc.date),
+      timestamp: mc.date ? new Date(mc.date).getTime() : 0,
+      color: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400',
+      path,
     });
   });
 
@@ -538,10 +596,12 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
           </div>
         ) : (
           displayNotifications.map((notif) => (
-            <button
+            <div
               key={notif.id}
-              type="button"
+              role="button"
+              tabIndex={0}
               onClick={() => goTo(notif.path)}
+              onKeyDown={(e) => { if (e.key === 'Enter') goTo(notif.path); }}
               className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/60 transition-colors text-left border-b border-neutral-50 dark:border-neutral-800/60 last:border-0 cursor-pointer group"
             >
               <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -553,15 +613,31 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
                   <p className="text-[11px] text-neutral-400 dark:text-neutral-400 truncate">{notif.desc}</p>
                 </div>
               </div>
-              <div className="flex flex-col items-end shrink-0 gap-1">
-                <span className="text-[10px] text-neutral-400">{notif.time}</span>
-                {notif.kind === 'leave' && (
-                  <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.5 rounded group-hover:bg-amber-100 dark:group-hover:bg-amber-900/60 transition-colors">
-                    View &rarr;
-                  </span>
-                )}
-              </div>
-            </button>
+              {notif.kind === 'leave' && notif.leaveRequestId ? (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    disabled={decidingId === notif.leaveRequestId}
+                    onClick={(e) => handleDecision(e, notif.leaveRequestId as number, 'APPROVED')}
+                    className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-2 py-1 rounded-md transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    type="button"
+                    disabled={decidingId === notif.leaveRequestId}
+                    onClick={(e) => handleDecision(e, notif.leaveRequestId as number, 'REJECTED')}
+                    className="text-[10px] font-bold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 px-2 py-1 rounded-md transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    Reject
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-end shrink-0 gap-1">
+                  <span className="text-[10px] text-neutral-400">{notif.time}</span>
+                </div>
+              )}
+            </div>
           ))
         )}
       </div>
@@ -618,13 +694,26 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
       const empTime = latestEmp ? new Date(latestEmp.created_at || latestEmp.date_of_joining).getTime() : 0;
       const slipTime = latestSlip ? new Date(latestSlip.emailed_at || latestSlip.generated_at).getTime() : 0;
       let latestLeaveTime = 0;
+      let requests: EmployeeLeaveRequest[] = [];
       try {
-        const requests = await listEmployeeLeaveRequests();
-        cachedNotificationData = { employees: empItems, slips: slipItems, leaveRequests: requests };
+        requests = await listEmployeeLeaveRequests();
         latestLeaveTime = requests.filter((leave) => leave.status === 'PENDING').reduce(
           (latest, leave) => Math.max(latest, new Date(leave.created_at).getTime() || 0), 0,
         );
       } catch { /* Attendance can be unavailable for this user. */ }
+
+      let latestMissedCheckoutTime = 0;
+      let missedCheckouts: MissedCheckout[] = [];
+      try {
+        // This is also the lazy trigger that detects a forgotten punch-out and
+        // sends the one-time HR + employee emails (no cron in this project).
+        missedCheckouts = await listMissedCheckouts();
+        latestMissedCheckoutTime = missedCheckouts.reduce(
+          (latest, mc) => Math.max(latest, mc.date ? new Date(mc.date).getTime() : 0), 0,
+        );
+      } catch { /* Attendance can be unavailable for this user. */ }
+
+      cachedNotificationData = { employees: empItems, slips: slipItems, leaveRequests: requests, missedCheckouts };
 
       let latestPlanAlertTime = 0;
       if (user?.plan && user.plan !== 'starter' && user.plan_expires_at) {
@@ -635,7 +724,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
         }
       }
 
-      const maxTime = Math.max(empTime, slipTime, latestPlanAlertTime, latestLeaveTime);
+      const maxTime = Math.max(empTime, slipTime, latestPlanAlertTime, latestLeaveTime, latestMissedCheckoutTime);
 
       setHasUnread(hasUnreadItems(maxTime));
     } catch {

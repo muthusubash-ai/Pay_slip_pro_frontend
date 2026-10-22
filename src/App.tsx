@@ -6,6 +6,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { AppLayout } from './components/layout/AppLayout';
 import { PageLoader } from './components/layout/PageLoader';
 import { PlanRoute } from './components/layout/PlanRoute';
@@ -61,6 +62,7 @@ export default function App() {
           <ThemeProvider>
             <LanguageProvider>
               <AuthProvider>
+                <ErrorBoundary>
                 <Suspense fallback={<PageLoader />}>
                   <Routes>
                   {/* Standalone Biometric & Attendance Kiosk Portal (Independent Full Page) */}
@@ -96,6 +98,7 @@ export default function App() {
                   </Route>
                   </Routes>
                 </Suspense>
+                </ErrorBoundary>
               </AuthProvider>
             </LanguageProvider>
           </ThemeProvider>

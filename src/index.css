@@ -268,14 +268,22 @@ html.dark .biometric-portal-light input[type="time"]::-webkit-calendar-picker-in
   color: #71717a !important;
 }
 
-.biometric-portal-dark input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.85);
-  cursor: pointer;
+.biometric-portal-dark input[type="date"]::-webkit-calendar-picker-indicator,
+.biometric-portal-dark input[type="time"]::-webkit-calendar-picker-indicator,
+html.dark input[type="date"]::-webkit-calendar-picker-indicator,
+html.dark input[type="time"]::-webkit-calendar-picker-indicator,
+.dark input[type="date"]::-webkit-calendar-picker-indicator,
+.dark input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: brightness(0) invert(1) !important;
+  opacity: 0.95 !important;
+  cursor: pointer !important;
 }
 
-.biometric-portal-dark input[type="time"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.85);
-  cursor: pointer;
+.biometric-portal-light input[type="date"]::-webkit-calendar-picker-indicator,
+.biometric-portal-light input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: brightness(0) invert(0.25) !important;
+  opacity: 0.75 !important;
+  cursor: pointer !important;
 }
 
 html.dark .hover\:bg-neutral-50:hover,

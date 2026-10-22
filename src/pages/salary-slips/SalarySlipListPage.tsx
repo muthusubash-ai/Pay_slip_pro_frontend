@@ -141,15 +141,15 @@ export function SalarySlipListPage() {
           </div>
 
           {/* Action & Filter Summary */}
-          <div className="flex items-center gap-3 pt-1 sm:pt-0">
+          <div className="flex flex-wrap items-center gap-3 pt-1 sm:pt-0">
             {isFiltering && (
               <button
                 type="button"
                 onClick={handleResetFilters}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors shadow-sm cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors shadow-sm cursor-pointer whitespace-nowrap"
                 title={t('salary.resetFilters', 'Reset Filters')}
               >
-                <RotateCcw className="h-3.5 w-3.5" />
+                <RotateCcw className="h-3.5 w-3.5 shrink-0" />
                 <span>{t('salary.resetFilters', 'Reset Filters')}</span>
               </button>
             )}
@@ -246,7 +246,7 @@ export function SalarySlipListPage() {
                         <button
                           type="button"
                           onClick={(e) => handleDelete(e, slip.id, slip.employee?.full_name || 'Unknown')}
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
+                          className="p-2.5 shrink-0 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
                           title="Delete salary slip"
                         >
                           <Trash2 className="h-4 w-4" />

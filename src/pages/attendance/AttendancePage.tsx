@@ -9,6 +9,7 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { useEmployees } from '../../hooks/useEmployees';
 import { useMonthlyAttendance, useBulkMarkLeaves, useLeaveSummary, useAttendanceReadiness } from '../../hooks/useAttendance';
 import { listEmployeeLeaveRequests, reviewEmployeeLeaveRequest } from '../../services/leaveRequestService';
+import { updateAttendanceCheckout } from '../../services/missedCheckoutService';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { hasMinimumPlan } from '../../lib/plans';
@@ -100,6 +101,9 @@ export function AttendancePage() {
   const [companyWeekOffDates, setCompanyWeekOffDates] = useState<Set<string>>(new Set());
   const [showBiometricTimesheet, setShowBiometricTimesheet] = useState<boolean>(false);
   const [leaveActionBusy, setLeaveActionBusy] = useState<number | null>(null);
+  const [editingCheckoutId, setEditingCheckoutId] = useState<number | null>(null);
+  const [checkoutTimeInput, setCheckoutTimeInput] = useState('');
+  const [checkoutActionBusy, setCheckoutActionBusy] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [quotaWarning, setQuotaWarning] = useState('');
@@ -113,7 +117,10 @@ export function AttendancePage() {
   });
   const permissionAllowance = company?.permission_days_per_month ?? 3;
 
-  const { data: empData, isLoading: empLoading } = useEmployees(1, undefined, undefined, undefined, 200);
+  // 'all' (not just active) so a deactivated employee's historical attendance stays
+  // reachable here - same as how a deactivated employee's past salary slips still
+  // show up in the Salary Slips list rather than disappearing on deactivation.
+  const { data: empData, isLoading: empLoading } = useEmployees(1, undefined, undefined, undefined, 200, 'all');
   const employees = empData?.items || [];
   const selectedEmp = employees.find((employee) => employee.id === selectedEmployee);
   const joiningDate = selectedEmp?.date_of_joining || '';
@@ -201,6 +208,19 @@ export function AttendancePage() {
     }
   }, [searchParams, employees, selectedEmployee]);
 
+  // Arriving from a "Missed punch-out" notification (?checkout_id=...) - open the
+  // Biometric Timesheet (collapsed by default) and jump straight into the
+  // "Set Out Time" editor for that exact record, instead of just landing on the
+  // employee's calendar and leaving HR to find it themselves.
+  useEffect(() => {
+    const paramCheckoutId = searchParams.get('checkout_id');
+    if (!paramCheckoutId) return;
+    const numId = parseInt(paramCheckoutId, 10);
+    if (isNaN(numId)) return;
+    setShowBiometricTimesheet(true);
+    setEditingCheckoutId(numId);
+  }, [searchParams]);
+
   // Listen for global attendance updates (from modal or another tab) to refresh real-time without reloading
   useEffect(() => {
     const handleAttendanceUpdated = () => {
@@ -238,6 +258,26 @@ export function AttendancePage() {
       setError('Unable to update leave request. Please try again.');
     } finally {
       setLeaveActionBusy(null);
+    }
+  };
+
+  // HR correcting a forgotten punch-out directly from the Biometric Timesheet
+  const handleSaveCheckoutTime = async (bioRecordId: number) => {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(checkoutTimeInput)) {
+      setError('Enter the check-out time in HH:MM (24-hour) format.');
+      return;
+    }
+    setCheckoutActionBusy(true);
+    setError('');
+    try {
+      await updateAttendanceCheckout(bioRecordId, checkoutTimeInput);
+      await refetchAttendance();
+      setEditingCheckoutId(null);
+      setSuccess('Check-out time updated.');
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || 'Unable to update check-out time. Please try again.');
+    } finally {
+      setCheckoutActionBusy(false);
     }
   };
 
@@ -589,7 +629,7 @@ export function AttendancePage() {
                 </option>
                 {employees.map((emp) => (
                   <option key={emp.id} value={emp.id} className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
-                    {emp.full_name} ({emp.employee_code})
+                    {emp.full_name} ({emp.employee_code}){!emp.is_active ? ' - Deactivated' : ''}
                   </option>
                 ))}
               </select>
@@ -965,9 +1005,52 @@ export function AttendancePage() {
                             <td className="py-2.5 px-3 text-neutral-500 dark:text-neutral-400 font-medium">{dayName}</td>
                             <td className="py-2.5 px-3 font-mono font-medium text-emerald-600 dark:text-emerald-400">
                               {bio?.check_in ? `🟢 ${bio.check_in}` : <span className="text-neutral-400">—</span>}
+                              {bio?.permission_out && (
+                                <div className="mt-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                                  ⏱️ Permission: {bio.permission_out} {bio.permission_in ? `– ${bio.permission_in}` : '(not back yet)'}
+                                </div>
+                              )}
                             </td>
                             <td className="py-2.5 px-3 font-mono font-medium text-rose-600 dark:text-rose-400">
-                              {bio?.check_out ? `🔴 ${bio.check_out}` : <span className="text-neutral-400">—</span>}
+                              {bio?.check_out ? (
+                                `🔴 ${bio.check_out}`
+                              ) : bio?.check_in && bio?.bio_record_id ? (
+                                editingCheckoutId === bio.bio_record_id ? (
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="time"
+                                      value={checkoutTimeInput}
+                                      onChange={(e) => setCheckoutTimeInput(e.target.value)}
+                                      className="w-[88px] rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-1.5 py-0.5 text-[11px] text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white"
+                                    />
+                                    <button
+                                      type="button"
+                                      disabled={checkoutActionBusy}
+                                      onClick={() => handleSaveCheckoutTime(bio.bio_record_id as number)}
+                                      className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-bold cursor-pointer"
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingCheckoutId(null)}
+                                      className="px-2 py-0.5 rounded border border-neutral-300 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 text-[11px] font-semibold cursor-pointer"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingCheckoutId(bio.bio_record_id as number); setCheckoutTimeInput(''); setError(''); }}
+                                    className="px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[11px] font-semibold cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/60"
+                                  >
+                                    ⚠️ Set Out Time
+                                  </button>
+                                )
+                              ) : (
+                                <span className="text-neutral-400">—</span>
+                              )}
                             </td>
                             <td className="py-2.5 px-3 font-bold text-neutral-800 dark:text-neutral-200">
                               {bio?.duration_hours !== null && bio?.duration_hours !== undefined ? (

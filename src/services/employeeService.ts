@@ -7,6 +7,7 @@ interface EmployeeFilters {
   search?: string;
   department?: string;
   sort?: string;
+  status?: 'active' | 'inactive' | 'all';
 }
 
 interface EmployeeCreateData {
@@ -32,8 +33,9 @@ interface EmployeeCreateData {
   esi?: number;
   /** Optional per-employee shift timing (24-hour "HH:MM"); only used when the company
    * has enabled Company.enable_employee_shift_timing. */
-  shift_start_time?: string;
-  shift_end_time?: string;
+  shift_start_time?: string | null;
+  shift_end_time?: string | null;
+  gender?: 'MALE' | 'FEMALE' | null;
   send_invitation?: boolean;
 }
 
@@ -65,6 +67,12 @@ export const employeeService = {
 
   delete: (id: number) =>
     api.delete(`/employees/${id}`),
+
+  permanentDelete: (id: number) =>
+    api.delete<{ detail: string }>(`/employees/${id}/permanent`),
+
+  reactivate: (id: number, data?: { email?: string }) =>
+    api.post<Employee>(`/employees/${id}/reactivate`, data || {}),
 
   lookupIfsc: (code: string) =>
     api.get<IfscDetails>('/banks/ifsc', { params: { code } }),

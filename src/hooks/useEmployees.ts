@@ -2,11 +2,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { employeeService } from '../services/employeeService';
 import { useAuth } from '../context/AuthContext';
 
-export function useEmployees(page = 1, search?: string, department?: string, sort?: string, per_page?: number) {
+export function useEmployees(page = 1, search?: string, department?: string, sort?: string, per_page?: number, status: 'active' | 'inactive' | 'all' = 'active') {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ['employees', page, search, department, sort, per_page],
-    queryFn: () => employeeService.list({ page, search, department, sort, per_page }).then((r) => r.data),
+    queryKey: ['employees', page, search, department, sort, per_page, status],
+    queryFn: () => employeeService.list({ page, search, department, sort, per_page, status }).then((r) => r.data),
     enabled: !!user,
   });
 }
@@ -62,5 +62,29 @@ export function useDeleteEmployee() {
 export function useSendEmployeeInvite() {
   return useMutation({
     mutationFn: (id: number) => employeeService.sendInvite(id),
+  });
+}
+
+export function useReactivateEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, email }: { id: number; email?: string }) => employeeService.reactivate(id, { email }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['employees'] });
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      qc.invalidateQueries({ queryKey: ['department-breakdown'] });
+    },
+  });
+}
+
+export function usePermanentDeleteEmployee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: employeeService.permanentDelete,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['employees'] });
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      qc.invalidateQueries({ queryKey: ['department-breakdown'] });
+    },
   });
 }

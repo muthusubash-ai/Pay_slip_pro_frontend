@@ -66,18 +66,18 @@ export function SalarySlipDetailPage() {
             {t('salary.title', 'Salary Slip')} — {monthLabel} {slip.year}
           </h2>
         </div>
-        <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-3 sm:flex">
-          <GradientButton onClick={() => downloadPdf.mutate(Number(id))} isLoading={downloadPdf.isPending}>
-            <Download className="h-4 w-4 mr-2" />{t('salary.downloadPdf', 'Download PDF')}
+        <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
+          <GradientButton className="w-full sm:w-auto" onClick={() => downloadPdf.mutate(Number(id))} isLoading={downloadPdf.isPending}>
+            <Download className="h-4 w-4 mr-2 shrink-0" /><span className="whitespace-nowrap">{t('salary.downloadPdf', 'Download PDF')}</span>
           </GradientButton>
-          <GradientButton variant="secondary" onClick={handleEmail} isLoading={emailSlip.isPending}>
-            <Mail className="h-4 w-4 mr-2" />{t('salary.sendEmail', 'Email')}
+          <GradientButton className="w-full sm:w-auto" variant="secondary" onClick={handleEmail} isLoading={emailSlip.isPending}>
+            <Mail className="h-4 w-4 mr-2 shrink-0" /><span className="whitespace-nowrap">{t('salary.sendEmail', 'Email')}</span>
           </GradientButton>
           <button
             onClick={handleDelete}
-            className="flex items-center justify-center gap-2 rounded-xl border-2 border-gray-300 dark:border-neutral-700 px-4 py-2 font-medium text-black dark:text-neutral-200 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-800"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl border-2 border-gray-300 dark:border-neutral-700 px-4 py-2.5 sm:py-3 font-medium text-black dark:text-neutral-200 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-800 cursor-pointer"
           >
-            <Trash2 className="h-4 w-4" />{t('salary.deleteSlip', 'Delete')}
+            <Trash2 className="h-4 w-4 shrink-0" /><span className="whitespace-nowrap">{t('salary.deleteSlip', 'Delete')}</span>
           </button>
         </div>
       </div>

@@ -6,7 +6,7 @@ import { GlassCard } from '../../components/ui/GlassCard';
 import { AnimatedInput } from '../../components/ui/AnimatedInput';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { ArrowLeft, ChevronDown, Landmark, Mail } from 'lucide-react';
-import { useCreateEmployee } from '../../hooks/useEmployees';
+import { useCreateEmployee, useEmployees } from '../../hooks/useEmployees';
 import { DEPARTMENT_OPTIONS, DESIGNATION_OPTIONS } from '../../lib/employeeOptions';
 import { ThemedSelect } from '../../components/ui/ThemedSelect';
 import { ThemedDatePicker } from '../../components/ui/ThemedDatePicker';
@@ -18,8 +18,11 @@ import { useTranslation } from '../../context/LanguageContext';
 export function EmployeeCreatePage() {
   const navigate = useNavigate();
   const createEmployee = useCreateEmployee();
+  const { data: employeesData } = useEmployees(1, undefined, undefined, undefined, 500);
+  const existingEmployees = employeesData?.items || [];
   const { t } = useTranslation();
   const [error, setError] = useState('');
+  const [emailWarning, setEmailWarning] = useState<{ employeeId: number } | null>(null);
   const [showBankDetails, setShowBankDetails] = useState(false);
   const { data: company } = useQuery({
     queryKey: ['company'],
@@ -50,6 +53,7 @@ export function EmployeeCreatePage() {
     esi: '',
     shift_start_time: '',
     shift_end_time: '',
+    gender: '' as '' | 'MALE' | 'FEMALE',
   });
 
   const handleChange = (
@@ -71,11 +75,33 @@ export function EmployeeCreatePage() {
     setForm((prev) => ({ ...prev, [field]: val }));
   };
 
+  const normalizedEmail = form.email.trim().toLowerCase();
+  const emailConflict = normalizedEmail
+    ? existingEmployees.find(
+        (emp) => emp.email && emp.email.trim().toLowerCase() === normalizedEmail
+      )
+    : null;
+
+  const normalizedCode = form.employee_code.trim().toUpperCase();
+  const codeConflict = normalizedCode
+    ? existingEmployees.find(
+        (emp) => emp.employee_code && emp.employee_code.trim().toUpperCase() === normalizedCode
+      )
+    : null;
+
   const handleSubmit = () => {
     setError('');
     const trimmedFullName = form.full_name.trim();
     if (!form.employee_code || !trimmedFullName || !form.email || !form.date_of_joining) {
       setError('Please fill in all required fields.');
+      return;
+    }
+    if (codeConflict) {
+      setError(`Employee code '${form.employee_code}' already exists. Please choose a different code.`);
+      return;
+    }
+    if (emailConflict) {
+      setError(`This email is already assigned to employee ${emailConflict.employee_code} (${emailConflict.full_name}). Each employee must have a unique email address.`);
       return;
     }
     if (!/^[a-zA-Z\s.'-]+$/.test(trimmedFullName)) {
@@ -115,17 +141,27 @@ export function EmployeeCreatePage() {
         esi: parseFloat(form.esi) || 0,
         shift_start_time: shiftTimingEnabled ? (form.shift_start_time || undefined) : undefined,
         shift_end_time: shiftTimingEnabled ? (form.shift_end_time || undefined) : undefined,
+        gender: form.gender || undefined,
         send_invitation: true,
       },
       {
-        onSuccess: () => {
+        onSuccess: (response) => {
+          if (response.data.email_sent === false) {
+            setEmailWarning({ employeeId: response.data.id });
+            return;
+          }
           navigate('/employees');
         },
         onError: (err: unknown) => {
-          const msg =
-            err && typeof err === 'object' && 'response' in err
-              ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-              : undefined;
+          const errData = (err as any)?.response?.data;
+          let msg = errData?.detail;
+          if (!msg && errData?.email) {
+            msg = Array.isArray(errData.email) ? errData.email[0] : String(errData.email);
+          }
+          if (!msg && errData?.employee_code) {
+            msg = Array.isArray(errData.employee_code) ? errData.employee_code[0] : String(errData.employee_code);
+          }
+          if (!msg && errData?.message) msg = errData.message;
           setError(msg || 'Failed to create employee.');
         },
       }
@@ -145,12 +181,36 @@ export function EmployeeCreatePage() {
         <div className="bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800 text-red-700 dark:text-rose-300 px-4 py-3 rounded-xl text-sm">{error}</div>
       )}
 
+      {emailWarning && (
+        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-xl text-sm flex flex-wrap items-center justify-between gap-3">
+          <span>Employee created, but the invitation email could not be sent. Check SMTP settings and retry from the employee's page.</span>
+          <div className="flex gap-2 shrink-0">
+            <Link to={`/employees/${emailWarning.employeeId}`} className="font-semibold underline whitespace-nowrap">Open Employee</Link>
+            <button type="button" onClick={() => navigate('/employees')} className="font-semibold underline whitespace-nowrap">Continue</button>
+          </div>
+        </div>
+      )}
+
       <GlassCard>
         <h3 className="text-lg font-semibold mb-4 text-neutral-900 dark:text-white">{t('employees.personalInfo', 'Personal Information')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AnimatedInput label={`${t('employees.employeeCode', 'Employee Code')} *`} placeholder="EMP001" value={form.employee_code} onChange={handleChange('employee_code', 'alphanumeric')} />
+          <div>
+            <AnimatedInput label={`${t('employees.employeeCode', 'Employee Code')} *`} placeholder="EMP001" value={form.employee_code} onChange={handleChange('employee_code', 'alphanumeric')} />
+            {codeConflict && (
+              <p className="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                <span>⚠️ Employee code '{form.employee_code}' already exists.</span>
+              </p>
+            )}
+          </div>
           <AnimatedInput label={`${t('employees.fullName', 'Full Name')} *`} placeholder="John Doe" value={form.full_name} onChange={handleChange('full_name', 'alphabets')} />
-          <AnimatedInput label={`${t('employees.email', 'Email')} *`} type="email" placeholder="john@company.com" value={form.email} onChange={handleChange('email')} />
+          <div>
+            <AnimatedInput label={`${t('employees.email', 'Email')} *`} type="email" placeholder="john@company.com" value={form.email} onChange={handleChange('email')} />
+            {emailConflict && (
+              <p className="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                <span>⚠️ This email is already assigned to {emailConflict.employee_code} ({emailConflict.full_name}). Each employee must have a unique email.</span>
+              </p>
+            )}
+          </div>
           <AnimatedInput label={t('employees.phone', 'Phone')} placeholder="+91 9876543210" value={form.phone} onChange={handleChange('phone', 'phone')} />
           <ThemedSelect
             label={t('employees.department', 'Department')}
@@ -175,6 +235,23 @@ export function EmployeeCreatePage() {
             required
             placeholder="Select joining date..."
           />
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 mb-1.5">
+              {t('employees.gender', 'Gender')}
+            </label>
+            <select
+              value={form.gender}
+              onChange={(e) => setForm((prev) => ({ ...prev, gender: e.target.value as '' | 'MALE' | 'FEMALE' }))}
+              className="w-full px-4 py-2.5 rounded-xl border-2 border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white transition-colors text-sm font-medium"
+            >
+              <option value="">{t('employees.genderNotSet', 'Not set')}</option>
+              <option value="MALE">{t('employees.male', 'Male')}</option>
+              <option value="FEMALE">{t('employees.female', 'Female')}</option>
+            </select>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+              {t('employees.genderHint', 'Optional - used to sanity-check the face captured during attendance registration.')}
+            </p>
+          </div>
         </div>
       </GlassCard>
 

@@ -328,6 +328,31 @@ export function CompanySettingsPage() {
       setError('Enter a valid 6-digit Indian PIN code.');
       return;
     }
+    const payDay = parseInt(form.pay_day, 10);
+    if (form.pay_day && (!Number.isFinite(payDay) || payDay < 1 || payDay > 31)) {
+      setError('Pay Day of Month must be a number between 1 and 31.');
+      return;
+    }
+    const fyStart = parseInt(form.financial_year_start, 10);
+    if (form.financial_year_start && (!Number.isFinite(fyStart) || fyStart < 1 || fyStart > 12)) {
+      setError('Financial Year Start must be a month number between 1 and 12.');
+      return;
+    }
+    const lat = parseFloat(form.office_lat);
+    if (form.office_lat && (!Number.isFinite(lat) || lat < -90 || lat > 90)) {
+      setError('Office Latitude must be a valid number between -90 and 90.');
+      return;
+    }
+    const lng = parseFloat(form.office_lng);
+    if (form.office_lng && (!Number.isFinite(lng) || lng < -180 || lng > 180)) {
+      setError('Office Longitude must be a valid number between -180 and 180.');
+      return;
+    }
+    const radius = parseInt(form.allowed_radius_meters, 10);
+    if (form.allowed_radius_meters && (!Number.isFinite(radius) || radius < 1 || radius > 50000)) {
+      setError('Allowed Radius must be a number between 1 and 50000 meters.');
+      return;
+    }
     updateCompany.mutate(
       {
         company_name: form.company_name || undefined,

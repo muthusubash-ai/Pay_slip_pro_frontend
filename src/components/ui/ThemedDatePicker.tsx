@@ -39,7 +39,7 @@ export function ThemedDatePicker({
   const [viewYear, setViewYear] = useState(initialYear);
   const [viewMonth, setViewMonth] = useState(initialMonth);
 
-  // Synchronize view when value changes from outside
+  // Synchronize view when opening or when value changes from outside
   useEffect(() => {
     if (value) {
       const d = new Date(value + 'T00:00:00');
@@ -47,8 +47,12 @@ export function ThemedDatePicker({
         setViewYear(d.getFullYear());
         setViewMonth(d.getMonth());
       }
+    } else if (isOpen) {
+      const now = new Date();
+      setViewYear(now.getFullYear());
+      setViewMonth(now.getMonth());
     }
-  }, [value]);
+  }, [isOpen, value]);
 
   // Click outside listener
   useEffect(() => {
@@ -87,11 +91,48 @@ export function ThemedDatePicker({
     }
   };
 
+  const handleYearChange = (newYear: number) => {
+    setViewYear(newYear);
+    if (value) {
+      const d = new Date(value + 'T00:00:00');
+      const curDay = !isNaN(d.getTime()) ? d.getDate() : 1;
+      const maxDays = new Date(newYear, viewMonth + 1, 0).getDate();
+      const targetDay = Math.min(curDay, maxDays);
+      const m = String(viewMonth + 1).padStart(2, '0');
+      const dayStr = String(targetDay).padStart(2, '0');
+      onChange(`${newYear}-${m}-${dayStr}`);
+    }
+  };
+
+  const handleMonthChange = (newMonth: number) => {
+    setViewMonth(newMonth);
+    if (value) {
+      const d = new Date(value + 'T00:00:00');
+      const curDay = !isNaN(d.getTime()) ? d.getDate() : 1;
+      const maxDays = new Date(viewYear, newMonth + 1, 0).getDate();
+      const targetDay = Math.min(curDay, maxDays);
+      const m = String(newMonth + 1).padStart(2, '0');
+      const dayStr = String(targetDay).padStart(2, '0');
+      onChange(`${viewYear}-${m}-${dayStr}`);
+    }
+  };
+
   const handleSelectDay = (day: number) => {
     const m = String(viewMonth + 1).padStart(2, '0');
     const d = String(day).padStart(2, '0');
     const formatted = `${viewYear}-${m}-${d}`;
     onChange(formatted);
+    setIsOpen(false);
+  };
+
+  const handleDone = () => {
+    const d = value ? new Date(value + 'T00:00:00') : null;
+    const curDay = d && !isNaN(d.getTime()) ? d.getDate() : 1;
+    const maxDays = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const targetDay = Math.min(curDay, maxDays);
+    const m = String(viewMonth + 1).padStart(2, '0');
+    const dayStr = String(targetDay).padStart(2, '0');
+    onChange(`${viewYear}-${m}-${dayStr}`);
     setIsOpen(false);
   };
 
@@ -141,7 +182,9 @@ export function ThemedDatePicker({
   // Year options list for fast switching
   const yearOptions: number[] = [];
   const currentYear = new Date().getFullYear();
-  for (let y = currentYear + 5; y >= currentYear - 60; y--) {
+  const maxYear = Math.max(currentYear + 10, viewYear + 5);
+  const minYear = Math.min(currentYear - 60, viewYear - 10);
+  for (let y = maxYear; y >= minYear; y--) {
     yearOptions.push(y);
   }
 
@@ -230,7 +273,7 @@ export function ThemedDatePicker({
                 {/* Month Dropdown */}
                 <select
                   value={viewMonth}
-                  onChange={(e) => setViewMonth(Number(e.target.value))}
+                  onChange={(e) => handleMonthChange(Number(e.target.value))}
                   className="px-2 py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-xs font-bold text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white cursor-pointer"
                 >
                   {monthNames.map((name, i) => (
@@ -243,7 +286,7 @@ export function ThemedDatePicker({
                 {/* Year Dropdown */}
                 <select
                   value={viewYear}
-                  onChange={(e) => setViewYear(Number(e.target.value))}
+                  onChange={(e) => handleYearChange(Number(e.target.value))}
                   className="px-2 py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-xs font-bold text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white cursor-pointer"
                 >
                   {yearOptions.map((y) => (
@@ -333,8 +376,8 @@ export function ThemedDatePicker({
 
               <button
                 type="button"
-                onClick={() => setIsOpen(false)}
-                className="px-3 py-1 rounded-lg bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 text-xs font-bold hover:opacity-90 transition-opacity"
+                onClick={handleDone}
+                className="px-3 py-1 rounded-lg bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer"
               >
                 Done
               </button>
