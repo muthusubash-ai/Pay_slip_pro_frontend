@@ -14,7 +14,8 @@ import {
   Landmark,
   Edit3,
   Clock,
-  Crown
+  Crown,
+  Lock
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../context/LanguageContext';
@@ -379,16 +380,20 @@ export function SettingsPage() {
             </p>
           </div>
 
-          {currentPlan !== 'starter' && (
-            <Link
-              to="/settings/company"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-800 hover:text-black dark:text-neutral-200 dark:hover:text-white underline underline-offset-4 transition-colors"
-            >
-              <Building2 className="h-3.5 w-3.5" />
-              Customize Company Branding & Details
-              <ExternalLink className="h-3 w-3" />
-            </Link>
-          )}
+          <Link
+            to="/settings/company"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-800 hover:text-black dark:text-neutral-200 dark:hover:text-white underline underline-offset-4 transition-colors"
+          >
+            <Building2 className="h-3.5 w-3.5" />
+            <span>Customize Company Branding & Details</span>
+            {currentPlan === 'starter' && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 no-underline">
+                <Lock className="h-2.5 w-2.5" />
+                Locked (Pro)
+              </span>
+            )}
+            <ExternalLink className="h-3 w-3" />
+          </Link>
         </div>
 
         {/* Plan Cards Catalog matching Login / Landing Page */}

@@ -64,7 +64,6 @@ export const PLAN_CATALOG: PlanDetails[] = [
       'Everything in Professional',
       'Unlimited employee records',
       'Department-wise payroll insights',
-      'Advanced attendance summaries',
     ],
     cta: 'Choose Enterprise',
     popular: false,

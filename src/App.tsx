@@ -92,7 +92,7 @@ export default function App() {
                     <Route path="salary-slips" element={<SalarySlipListPage />} />
                     <Route path="salary-slips/generate" element={<GenerateSlipsPage />} />
                     <Route path="salary-slips/:id" element={<SalarySlipDetailPage />} />
-                    <Route path="settings/company" element={<PlanRoute minimumPlan="professional"><CompanySettingsPage /></PlanRoute>} />
+                    <Route path="settings/company" element={<PlanRoute minimumPlan="starter"><CompanySettingsPage /></PlanRoute>} />
                     <Route path="admin" element={<PlanRoute minimumPlan="enterprise" adminOnly><AdminDashboardPage /></PlanRoute>} />
                     <Route path="admin/users" element={<PlanRoute minimumPlan="enterprise" adminOnly><AdminUsersPage /></PlanRoute>} />
                   </Route>

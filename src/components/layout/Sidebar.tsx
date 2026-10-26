@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, CalendarDays, Settings, Building2, PanelLeftClose, ShieldCheck, X, User, LogOut, ChevronUp } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, CalendarDays, Settings, Building2, PanelLeftClose, ShieldCheck, X, User, LogOut, ChevronUp, Lock } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -13,7 +13,7 @@ const navItems: Array<{ to: string; label: string; translationKey: string; icon:
   { to: '/attendance', label: 'Attendance', translationKey: 'nav.attendance', icon: CalendarDays, minimumPlan: 'starter' },
   { to: '/salary-slips', label: 'Salary Slips', translationKey: 'nav.salarySlips', icon: FileText, minimumPlan: 'starter' },
   { to: '/settings', label: 'Settings', translationKey: 'nav.settings', icon: Settings, minimumPlan: 'starter' },
-  { to: '/settings/company', label: 'Company Settings', translationKey: 'nav.companySettings', icon: Building2, minimumPlan: 'professional' },
+  { to: '/settings/company', label: 'Company Settings', translationKey: 'nav.companySettings', icon: Building2, minimumPlan: 'starter' },
 ];
 
 interface SidebarProps {
@@ -275,6 +275,25 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                 >
                   {label}
                 </span>
+                {item.to === '/settings/company' && !hasMinimumPlan(user, 'professional') && (
+                  <span
+                    className={cn(
+                      'ml-auto items-center gap-1 text-[10px] font-extrabold tracking-wider px-1.5 py-0.5 rounded transition-all shrink-0',
+                      isActive
+                        ? isDark ? 'bg-black/15 text-black' : 'bg-white/25 text-white'
+                        : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30',
+                      isCollapsed ? 'hidden' : 'inline-flex'
+                    )}
+                  >
+                    <Lock className="w-2.5 h-2.5" />
+                    PRO
+                  </span>
+                )}
+                {item.to === '/settings/company' && !hasMinimumPlan(user, 'professional') && isCollapsed && (
+                  <span className="absolute top-2 right-2 p-0.5 rounded-full bg-amber-500 text-white shadow-xs">
+                    <Lock className="w-2 h-2" />
+                  </span>
+                )}
                 {isActive && (
                   <div
                     className={cn(

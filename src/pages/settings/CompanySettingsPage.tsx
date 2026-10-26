@@ -1,15 +1,30 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Upload, Trash2, Check, AlertTriangle, X, CheckCircle, Navigation, ExternalLink, Info } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  Upload, 
+  Trash2, 
+  Check, 
+  AlertTriangle, 
+  X, 
+  CheckCircle, 
+  Navigation, 
+  ExternalLink, 
+  Info,
+  Lock
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { AnimatedInput } from '../../components/ui/AnimatedInput';
 import { GradientButton } from '../../components/ui/GradientButton';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
+import { PlanUpgradeModal } from '../../components/ui/PlanUpgradeModal';
 import { companyService } from '../../services/companyService';
+import { paymentService } from '../../services/paymentService';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../context/LanguageContext';
+import { hasMinimumPlan } from '../../lib/plans';
 import { AddressSuggestionField } from '../../components/ui/AddressSuggestionField';
 import { PinCodeLookupField } from '../../components/ui/PinCodeLookupField';
 import { CityPicker } from '../../components/ui/CityPicker';
@@ -27,7 +42,7 @@ const WEEKDAY_OPTIONS = [
 ];
 
 export function CompanySettingsPage() {
-  const { user } = useAuth();
+  const { user, updateUser, refetchUser } = useAuth();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -37,6 +52,33 @@ export function CompanySettingsPage() {
     queryFn: () => companyService.get().then((r) => r.data),
     enabled: !!user,
   });
+
+  const isLocked = !hasMinimumPlan(user, 'professional') || Boolean(company?.is_locked);
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  const [celebrationPlan, setCelebrationPlan] = useState<'professional' | 'enterprise' | null>(null);
+
+  const handleInitiateUpgrade = (plan: 'professional' | 'enterprise' = 'professional') => {
+    if (!user) return;
+    setError('');
+    setIsUpgrading(true);
+    paymentService.startPaymentFlow(
+      plan,
+      { name: user.full_name, email: user.email, contact: user.phone || undefined },
+      async (newPlan, updatedUserData) => {
+        setIsUpgrading(false);
+        const upgraded = updatedUserData || { ...user, plan: newPlan as 'professional' | 'enterprise' };
+        updateUser(upgraded);
+        await refetchUser();
+        queryClient.invalidateQueries({ queryKey: ['company'] });
+        setCelebrationPlan(newPlan as 'professional' | 'enterprise');
+        setSuccess('🎉 Plan upgraded successfully! Company Settings are now unlocked.');
+      },
+      (err) => {
+        setIsUpgrading(false);
+        setError(err || 'Payment was cancelled or failed.');
+      }
+    );
+  };
 
   const updateCompany = useMutation({
     mutationFn: companyService.update,
@@ -120,18 +162,20 @@ export function CompanySettingsPage() {
       setWeeklyOffDays(company.weekly_off_days || []);
       setEnableEmployeeShiftTiming(Boolean(company.enable_employee_shift_timing));
 
-      // If company has no name or default "My Company" or no address/city filled,
-      // enable edit mode by default so new user can immediately edit without searching for edit button
-      const isNewOrIncomplete =
-        !company.company_name ||
-        company.company_name === 'My Company' ||
-        (!company.address && !company.city);
+      if (isLocked) {
+        setIsEditing(false);
+      } else {
+        const isNewOrIncomplete =
+          !company.company_name ||
+          company.company_name === 'My Company' ||
+          (!company.address && !company.city);
 
-      setIsEditing(isNewOrIncomplete);
+        setIsEditing(isNewOrIncomplete);
+      }
     } else {
-      setIsEditing(true);
+      setIsEditing(!isLocked);
     }
-  }, [company]);
+  }, [company, isLocked]);
 
   // Auto-dismiss success notification after 2 seconds
   useEffect(() => {
@@ -212,12 +256,17 @@ export function CompanySettingsPage() {
   };
 
   const toggleWeeklyOffDay = (day: number) => {
+    if (isLocked || !isEditing) return;
     setWeeklyOffDays((prev) =>
       prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort()
     );
   };
 
   const handleDetectLocation = () => {
+    if (isLocked) {
+      handleInitiateUpgrade('professional');
+      return;
+    }
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser.');
       return;
@@ -242,6 +291,10 @@ export function CompanySettingsPage() {
   };
 
   const handleSubmit = () => {
+    if (isLocked) {
+      handleInitiateUpgrade('professional');
+      return;
+    }
     setError('');
     setSuccess('');
     if (form.zip_code && !/^\d{6}$/.test(form.zip_code)) {
@@ -315,6 +368,10 @@ export function CompanySettingsPage() {
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isLocked) {
+      handleInitiateUpgrade('professional');
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -357,20 +414,37 @@ export function CompanySettingsPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-6 pb-12">
-      {/* Header with Top Edit Button */}
+      {/* Header with Top Edit/Upgrade Button */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-start gap-2">
           <Link to="/settings" className="mt-0.5 rounded-lg p-1.5 text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-white" aria-label="Back to settings" title="Back to settings">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h2 className="text-xl font-bold text-neutral-900 dark:text-white sm:text-2xl">{t('company.title', 'Company Settings')}</h2>
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-xl font-bold text-neutral-900 dark:text-white sm:text-2xl">{t('company.title', 'Company Settings')}</h2>
+              {isLocked && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                  <Lock className="w-3 h-3" />
+                  Locked (Pro)
+                </span>
+              )}
+            </div>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
               {t('company.subtitle', 'Configure your company profile, branding logo, and statutory details for salary slips')}
             </p>
           </div>
         </div>
-        {!isEditing && (
+        {isLocked ? (
+          <GradientButton
+            onClick={() => handleInitiateUpgrade('professional')}
+            isLoading={isUpgrading}
+            className="w-full sm:w-auto shadow-sm"
+          >
+            <Lock className="w-3.5 h-3.5 mr-1.5" />
+            Upgrade to Edit Settings
+          </GradientButton>
+        ) : !isEditing ? (
           <GradientButton
             variant="secondary"
             onClick={() => setIsEditing(true)}
@@ -378,7 +452,7 @@ export function CompanySettingsPage() {
           >
             {t('company.editSettings', 'Edit Settings')}
           </GradientButton>
-        )}
+        ) : null}
       </div>
 
       {/* Top Status Alerts with Auto-Dismiss and Animations */}
@@ -431,9 +505,16 @@ export function CompanySettingsPage() {
 
       {/* Logo Section */}
       <GlassCard>
-        <h3 className="text-lg font-semibold mb-4 text-neutral-900 dark:text-white">
-          {t('company.companyLogo', 'Company Logo')}
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
+            {t('company.companyLogo', 'Company Logo')}
+          </h3>
+          {isLocked && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+              <Lock className="w-3 h-3" /> Locked (Pro)
+            </span>
+          )}
+        </div>
 
         {/* In-Card Logo Notifications */}
         <AnimatePresence mode="wait">
@@ -501,17 +582,34 @@ export function CompanySettingsPage() {
               className="hidden"
             />
             <GradientButton
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                if (isLocked) {
+                  handleInitiateUpgrade('professional');
+                } else {
+                  fileInputRef.current?.click();
+                }
+              }}
               isLoading={uploadLogo.isPending}
-              disabled={!isEditing}
+              disabled={!isLocked && !isEditing}
             >
-              <Upload className="h-4 w-4 mr-2" />
-              {company?.logo_data ? t('company.uploadLogo', 'Change Logo') : t('company.uploadLogo', 'Upload Logo')}
+              {isLocked ? <Lock className="h-4 w-4 mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+              {isLocked
+                ? 'Upgrade to Upload Logo'
+                : company?.logo_data
+                ? t('company.uploadLogo', 'Change Logo')
+                : t('company.uploadLogo', 'Upload Logo')}
             </GradientButton>
             {company?.logo_data && (
               <button
-                onClick={() => { setLogoSuccess(''); deleteLogo.mutate(); }}
-                disabled={!isEditing}
+                onClick={() => {
+                  if (isLocked) {
+                    handleInitiateUpgrade('professional');
+                    return;
+                  }
+                  setLogoSuccess('');
+                  deleteLogo.mutate();
+                }}
+                disabled={!isEditing && !isLocked}
                 className="flex items-center gap-1 text-sm text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors disabled:opacity-50"
               >
                 <Trash2 className="h-3.5 w-3.5" /> {t('company.deleteLogo', 'Delete Logo')}
@@ -788,60 +886,81 @@ export function CompanySettingsPage() {
       </GlassCard>
 
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-        {!isEditing && (
+        {isLocked ? (
           <GradientButton
-            variant="secondary"
-            onClick={() => setIsEditing(true)}
+            onClick={() => handleInitiateUpgrade('professional')}
+            isLoading={isUpgrading}
+            className="w-full sm:w-auto shadow-md shadow-amber-500/15"
           >
-            {t('common.edit', 'Edit')}
+            Upgrade to Professional Plan to Edit Settings
           </GradientButton>
+        ) : (
+          <>
+            {!isEditing && (
+              <GradientButton
+                variant="secondary"
+                onClick={() => setIsEditing(true)}
+              >
+                {t('common.edit', 'Edit')}
+              </GradientButton>
+            )}
+            {isEditing && (
+              <GradientButton
+                variant="secondary"
+                onClick={() => {
+                  setIsEditing(false);
+                  if (company) {
+                    setForm({
+                      company_name: company.company_name || '',
+                      pay_day: String(company.pay_day || 1),
+                      address: company.address || '',
+                      city: company.city || '',
+                      state: company.state || '',
+                      zip_code: company.zip_code || '',
+                      pf_number: company.pf_number || '',
+                      tan_number: company.tan_number || '',
+                      financial_year_start: String(company.financial_year_start || 4),
+                      office_lat: String(company.office_lat ?? 8.7892563),
+                      office_lng: String(company.office_lng ?? 78.117146),
+                      allowed_radius_meters: String(company.allowed_radius_meters ?? 70),
+                      permission_days_per_month: String(company.permission_days_per_month ?? 3),
+                      office_timing: company.office_timing || '09:30 AM - 06:00 PM',
+                      office_start_time: company.office_start_time || '09:30',
+                      office_end_time: company.office_end_time || '18:00',
+                    });
+                    setWeeklyOffDays(company.weekly_off_days || []);
+                    setEnableEmployeeShiftTiming(Boolean(company.enable_employee_shift_timing));
+                  }
+                }}
+              >
+                {t('common.cancel', 'Cancel')}
+              </GradientButton>
+            )}
+            <GradientButton
+              onClick={handleSubmit}
+              isLoading={updateCompany.isPending}
+              disabled={!isEditing || isSaved}
+            >
+              {isSaved ? (
+                <span className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-green-400" /> {t('common.saveComplete', 'Save Complete')}
+                </span>
+              ) : (
+                t('company.saveSettings', 'Save Settings')
+              )}
+            </GradientButton>
+          </>
         )}
-        {isEditing && (
-          <GradientButton
-            variant="secondary"
-            onClick={() => {
-              setIsEditing(false);
-              if (company) {
-                setForm({
-                  company_name: company.company_name || '',
-                  pay_day: String(company.pay_day || 1),
-                  address: company.address || '',
-                  city: company.city || '',
-                  state: company.state || '',
-                  zip_code: company.zip_code || '',
-                  pf_number: company.pf_number || '',
-                  tan_number: company.tan_number || '',
-                  financial_year_start: String(company.financial_year_start || 4),
-                  office_lat: String(company.office_lat ?? 8.7892563),
-                  office_lng: String(company.office_lng ?? 78.117146),
-                  allowed_radius_meters: String(company.allowed_radius_meters ?? 70),
-                  permission_days_per_month: String(company.permission_days_per_month ?? 3),
-                  office_timing: company.office_timing || '09:30 AM - 06:00 PM',
-                  office_start_time: company.office_start_time || '09:30',
-                  office_end_time: company.office_end_time || '18:00',
-                });
-                setWeeklyOffDays(company.weekly_off_days || []);
-                setEnableEmployeeShiftTiming(Boolean(company.enable_employee_shift_timing));
-              }
-            }}
-          >
-            {t('common.cancel', 'Cancel')}
-          </GradientButton>
-        )}
-        <GradientButton
-          onClick={handleSubmit}
-          isLoading={updateCompany.isPending}
-          disabled={!isEditing || isSaved}
-        >
-          {isSaved ? (
-            <span className="flex items-center gap-2">
-              <Check className="h-4 w-4 text-green-400" /> {t('common.saveComplete', 'Save Complete')}
-            </span>
-          ) : (
-            t('company.saveSettings', 'Save Settings')
-          )}
-        </GradientButton>
       </div>
+
+      {celebrationPlan && (
+        <PlanUpgradeModal
+          isOpen={Boolean(celebrationPlan)}
+          plan={celebrationPlan}
+          onConfirm={() => setCelebrationPlan(null)}
+          onClose={() => setCelebrationPlan(null)}
+        />
+      )}
     </motion.div>
   );
 }

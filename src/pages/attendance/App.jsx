@@ -2906,7 +2906,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                       }}
                     >
                       <span>
-                        {leaveForm.request_type === 'CASUAL' ? '🌴 Casual Leave' : leaveForm.request_type === 'SICK' ? '🏥 Sick Leave' : leaveForm.request_type === 'HALF_DAY' ? '🌗 Half Day Leave' : '⏱️ Permission Request'}
+                        {leaveForm.request_type === 'CASUAL' ? 'Casual Leave' : leaveForm.request_type === 'SICK' ? 'Sick Leave' : leaveForm.request_type === 'HALF_DAY' ? 'Half Day Leave' : 'Permission Request'}
                       </span>
                       <ChevronDown style={{ width: '15px', height: '15px', color: theme.textSecondary, transition: 'transform 0.2s', transform: leaveTypeDropdownOpen ? 'rotate(180deg)' : 'none' }} />
                     </button>
@@ -2926,10 +2926,10 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                         overflow: 'hidden'
                       }}>
                         {[
-                          { label: 'Casual Leave', value: 'CASUAL', icon: '🌴', desc: 'Planned / personal leave' },
-                          { label: 'Sick Leave', value: 'SICK', icon: '🏥', desc: 'Medical / illness leave' },
-                          { label: 'Half Day Leave', value: 'HALF_DAY', icon: '🌗', desc: '0.5 Day (Morning / Afternoon)' },
-                          { label: 'Permission Request', value: 'PERMISSION', icon: '⏱️', desc: 'Short permission (1-3 hours)' }
+                          { label: 'Casual Leave', value: 'CASUAL', desc: 'Planned / personal leave' },
+                          { label: 'Sick Leave', value: 'SICK', desc: 'Medical / illness leave' },
+                          { label: 'Half Day Leave', value: 'HALF_DAY', desc: '0.5 Day (Morning / Afternoon)' },
+                          { label: 'Permission Request', value: 'PERMISSION', desc: 'Short permission (1-3 hours)' }
                         ].map((opt) => {
                           const isSelected = leaveForm.request_type === opt.value;
                           return (
@@ -2958,10 +2958,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                               }}
                             >
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <span>{opt.icon}</span>
-                                  <span>{opt.label}</span>
-                                </span>
+                                <span>{opt.label}</span>
                                 <span style={{ fontSize: '11px', color: theme.textMuted, fontWeight: '500' }}>{opt.desc}</span>
                               </div>
                               {isSelected && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isDarkMode ? '#ffffff' : '#0f172a' }} />}
