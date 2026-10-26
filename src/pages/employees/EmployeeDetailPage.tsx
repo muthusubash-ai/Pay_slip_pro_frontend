@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
-import { ArrowLeft, Edit, Trash2, Mail, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Mail, CheckCircle2, AlertCircle, Copy, Check, ExternalLink } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { GradientButton } from '../../components/ui/GradientButton';
@@ -25,6 +25,8 @@ export function EmployeeDetailPage() {
   const deleteEmployee = useDeleteEmployee();
   const sendInvite = useSendEmployeeInvite();
   const [inviteMsg, setInviteMsg] = useState('');
+  const [inviteUrl, setInviteUrl] = useState('');
+  const [copied, setCopied] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [deleteError, setDeleteError] = useState('');
 
@@ -50,14 +52,17 @@ export function EmployeeDetailPage() {
     setInviteError('');
     sendInvite.mutate(Number(id), {
       onSuccess: (res) => {
-        setInviteMsg(res.data.detail || 'Invitation email sent successfully.');
+        setInviteMsg(res.data.detail || 'Invitation processed successfully.');
+        if (res.data.invite_url) {
+          setInviteUrl(res.data.invite_url);
+        }
       },
       onError: (err: unknown) => {
         const msg =
           err && typeof err === 'object' && 'response' in err
             ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
             : undefined;
-        setInviteError(msg || 'Failed to send invitation email.');
+        setInviteError(msg || 'Failed to send invitation.');
       },
     });
   };
@@ -106,6 +111,59 @@ export function EmployeeDetailPage() {
         <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 px-4 py-3 rounded-xl text-sm">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
           <span>{inviteMsg}</span>
+        </div>
+      )}
+
+      {inviteUrl && (
+        <div className="bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 p-4 rounded-2xl space-y-3 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+              <span>🔗</span> Direct Biometric Registration Link
+            </span>
+            <span className="text-xs bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-full font-medium">
+              Valid for 72 hours
+            </span>
+          </div>
+          <p className="text-xs text-indigo-700 dark:text-indigo-300">
+            Share this link directly with {emp?.full_name} via WhatsApp or chat if they didn't receive the email:
+          </p>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <input
+              type="text"
+              readOnly
+              value={inviteUrl}
+              className="flex-1 text-xs font-mono bg-white dark:bg-zinc-900 border border-indigo-200 dark:border-indigo-700/60 rounded-xl px-3 py-2.5 text-gray-800 dark:text-gray-200 select-all"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(inviteUrl);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2500);
+              }}
+              className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+            >
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              <span>{copied ? 'Copied!' : 'Copy Link'}</span>
+            </button>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`Hello ${emp?.full_name}, here is your Attendance & Biometric portal setup link: ${inviteUrl}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+            >
+              <span>WhatsApp</span>
+            </a>
+            <a
+              href={inviteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-2.5 bg-white dark:bg-zinc-800 border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-zinc-700 text-xs font-semibold rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer"
+              title="Open Registration Page"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          </div>
         </div>
       )}
 

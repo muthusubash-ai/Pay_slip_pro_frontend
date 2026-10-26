@@ -313,13 +313,18 @@ export default function FaceScanModalCapture({
         const deltaX = Math.abs(faceCenterX - viewCenterX);
         const deltaY = Math.abs(faceCenterY - viewCenterY);
         const isCentered = deltaX <= 120 && deltaY <= 120;
+        const faceW = box.width || 100;
+        const faceH = box.height || 100;
+        const isTooFar = faceW < 90 || faceH < 90;
 
-        // Check for face obstruction / mask / hand covering lower face safely
+        // Check for face obstruction / mask / sunglasses / hand covering face
         let isCoveredFace = false;
         if (det.landmarks && det.landmarks.positions && det.landmarks.positions.length >= 68) {
           const mouth = typeof det.landmarks.getMouth === 'function' ? det.landmarks.getMouth() : null;
           const nose = typeof det.landmarks.getNose === 'function' ? det.landmarks.getNose() : null;
-          if (!mouth || mouth.length < 6 || !nose || nose.length < 3) {
+          const leftEye = typeof det.landmarks.getLeftEye === 'function' ? det.landmarks.getLeftEye() : null;
+          const rightEye = typeof det.landmarks.getRightEye === 'function' ? det.landmarks.getRightEye() : null;
+          if (!mouth || mouth.length < 6 || !nose || nose.length < 3 || !leftEye || leftEye.length < 4 || !rightEye || rightEye.length < 4) {
             isCoveredFace = true;
           } else {
             let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -331,8 +336,6 @@ export default function FaceScanModalCapture({
             });
             const mouthW = maxX - minX;
             const mouthH = maxY - minY;
-            const faceW = box.width || 100;
-            const faceH = box.height || 100;
 
             if (mouthW < faceW * 0.10 || mouthH < faceH * 0.015) {
               isCoveredFace = true;
@@ -458,7 +461,7 @@ export default function FaceScanModalCapture({
             count: 1,
             isMismatch: true,
             isCovered: true,
-            text: '⚠️ Lower face covered! Remove mask, cloth, or hand.'
+            text: '⚠️ Face covered! Ensure eyes, nose, and mouth are clearly visible.'
           });
         } else if (isDuplicateFace) {
           autoCapturedRef.current = false;
@@ -501,10 +504,15 @@ export default function FaceScanModalCapture({
             text: '⚠️ Face Mismatch! (Not Matched)'
           });
         } else if (mode === 'register') {
-          // SINGLE SCAN (Straight head looking forward inside circle) - paced so
-          // the ring visibly fills over ~2s instead of completing almost as
-          // soon as the camera opens.
-          if (isStraightHead && isCentered) {
+          if (isTooFar) {
+            setFaceStatus({
+              valid: false,
+              count: 1,
+              isMismatch: false,
+              isCovered: false,
+              text: '🔍 Move closer to the camera'
+            });
+          } else if (isStraightHead && isCentered) {
             scanProgressRef.current = Math.min(100, scanProgressRef.current + 4.0);
             const p = Math.floor(scanProgressRef.current);
             setScanProgress(p);
@@ -516,7 +524,7 @@ export default function FaceScanModalCapture({
                 count: 1,
                 isMismatch: false,
                 isCovered: false,
-                text: '✓ Face Biometric Scan Complete (100%) — Registering...'
+                text: '✓ High-Accuracy Biometric Scan Complete (100%) — Registering...'
               });
 
               if (autoCapture && !autoCapturedRef.current) {
@@ -543,7 +551,7 @@ export default function FaceScanModalCapture({
                 count: 1,
                 isMismatch: false,
                 isCovered: false,
-                text: `⏸️ Scan Paused (${currentP}%): Align head straight inside circle`
+                text: `⏸️ Scan Paused (${currentP}%): Look straight towards camera`
               });
             } else {
               setFaceStatus({
@@ -551,45 +559,69 @@ export default function FaceScanModalCapture({
                 count: 1,
                 isMismatch: false,
                 isCovered: false,
-                text: 'Align head straight inside the circle to start scan'
+                text: 'Align head straight inside circle to start scan'
               });
             }
           }
-        } else if (isCentered) {
-          // Punch Mode (Fast & Smooth Punch Scan)
-          scanProgressRef.current = Math.min(100, scanProgressRef.current + 12.5);
-          const currentProgress = Math.floor(scanProgressRef.current);
-          setScanProgress(currentProgress);
-
-          const statusText = currentProgress < 100
-            ? `Preparing photo... ${currentProgress}%`
-            : 'Photo captured. Verifying attendance...';
-
-          setFaceStatus({
-            valid: currentProgress >= 100,
-            count: 1,
-            isMismatch: false,
-            isCovered: false,
-            text: statusText
-          });
-
-          if (currentProgress >= 100 && autoCapture && !autoCapturedRef.current) {
-            autoCapturedRef.current = true;
-            setTimeout(() => {
-              if (handleCaptureRef.current) handleCaptureRef.current();
-            }, 120);
-          }
         } else {
-          autoCapturedRef.current = false;
-          scanProgressRef.current = 0;
-          setScanProgress(0);
-          setFaceStatus({
-            valid: false,
-            count: 1,
-            isMismatch: false,
-            isCovered: false,
-            text: 'Position face inside the center circle'
-          });
+          // Punch Mode (Strict Frontal Gaze & Proximity Check for High Security)
+          if (!isCentered) {
+            autoCapturedRef.current = false;
+            scanProgressRef.current = 0;
+            setScanProgress(0);
+            setFaceStatus({
+              valid: false,
+              count: 1,
+              isMismatch: false,
+              isCovered: false,
+              text: 'Position face inside the center circle'
+            });
+          } else if (isTooFar) {
+            autoCapturedRef.current = false;
+            scanProgressRef.current = 0;
+            setScanProgress(0);
+            setFaceStatus({
+              valid: false,
+              count: 1,
+              isMismatch: false,
+              isCovered: false,
+              text: '🔍 Move closer to the camera'
+            });
+          } else if (!isStraightHead) {
+            autoCapturedRef.current = false;
+            scanProgressRef.current = 0;
+            setScanProgress(0);
+            setFaceStatus({
+              valid: false,
+              count: 1,
+              isMismatch: false,
+              isCovered: false,
+              text: 'Look straight towards the camera to verify'
+            });
+          } else {
+            scanProgressRef.current = Math.min(100, scanProgressRef.current + 10.0);
+            const currentProgress = Math.floor(scanProgressRef.current);
+            setScanProgress(currentProgress);
+
+            const statusText = currentProgress < 100
+              ? `Verifying face biometric... ${currentProgress}%`
+              : '✓ Face verified. Submitting attendance...';
+
+            setFaceStatus({
+              valid: currentProgress >= 100,
+              count: 1,
+              isMismatch: false,
+              isCovered: false,
+              text: statusText
+            });
+
+            if (currentProgress >= 100 && autoCapture && !autoCapturedRef.current) {
+              autoCapturedRef.current = true;
+              setTimeout(() => {
+                if (handleCaptureRef.current) handleCaptureRef.current();
+              }, 120);
+            }
+          }
         }
       } else {
         autoCapturedRef.current = false;

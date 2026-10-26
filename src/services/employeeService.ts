@@ -60,7 +60,7 @@ export const employeeService = {
     api.post<Employee & { email_sent?: boolean }>('/employees/', data),
 
   sendInvite: (id: number) =>
-    api.post<{ detail: string }>(`/employees/${id}/send-invite`),
+    api.post<{ detail: string; invite_url?: string; email_sent?: boolean; token?: string }>(`/employees/${id}/send-invite`),
 
   update: (id: number, data: Partial<EmployeeCreateData>) =>
     api.put<Employee>(`/employees/${id}`, data),
