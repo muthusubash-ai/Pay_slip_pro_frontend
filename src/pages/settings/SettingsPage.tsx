@@ -51,7 +51,13 @@ export function SettingsPage() {
   });
 
   useEffect(() => {
-    if (user) {
+    // AuthContext refreshes `user` from the server every 10s (and on window
+    // focus) with a brand-new object, which would otherwise re-run this and
+    // wipe out whatever the user is mid-typing. Skip the resync while the
+    // form is open for editing - it only needs to reflect the saved values
+    // when the form isn't actively being edited (initial load, or right
+    // after Cancel/Save).
+    if (user && !isEditingProfile) {
       setFullName(user.full_name || '');
       setPhone(user.phone || '');
       setNotificationEmail(user.notification_email || '');
@@ -59,7 +65,7 @@ export function SettingsPage() {
         setCompanyName(user.company_name);
       }
     }
-  }, [user]);
+  }, [user, isEditingProfile]);
 
   useEffect(() => {
     if (company?.company_name) {

@@ -2588,7 +2588,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                     Biometric Face Capture (Required)
                   </h4>
                   <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: theme.textSecondary }}>
-                    Capture your face photo to enable AI facial recognition attendance punching.
+                    Capture your face photo to enable facial recognition attendance punching.
                   </p>
                 </div>
 

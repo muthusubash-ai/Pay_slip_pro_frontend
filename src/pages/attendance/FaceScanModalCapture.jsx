@@ -774,7 +774,7 @@ export default function FaceScanModalCapture({
               {loading && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 gap-2 z-30 bg-slate-950">
                   <RefreshCw className="animate-spin text-neutral-300" size={28} />
-                  <span className="text-xs">Accessing webcam & Face AI...</span>
+                  <span className="text-xs">Accessing webcam & face scanner...</span>
                 </div>
               )}
 
