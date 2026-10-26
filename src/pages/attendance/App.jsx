@@ -554,6 +554,31 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
     }
   };
 
+  const handleRegisterNew = async () => {
+    if (currentUser) {
+      try { await fetch(`${API_BASE_URL}/api/attendance/logout/`, { method: 'POST', credentials: 'include' }); } catch (e) {}
+      try { localStorage.removeItem('attendance_current_user'); } catch (e) {}
+      setCurrentUser(null);
+      setHistoryList([]);
+    }
+    setPrefilledEmployee(null);
+    setRegData({ full_name: '', emp_id: '', email: '', password: '', confirm_password: '', designation: '', joining_date: '', phone_number: '' });
+    setRegPhoto(null);
+    setRegPhotoPreview(null);
+    setRegPhotoDescriptor(null);
+    setErrorBanner('');
+    setAuthMode('login');
+    setActiveTab('onboard');
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', 'onboard');
+        window.history.pushState({}, document.title, url.toString());
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (e) {}
+    }
+  };
+
   // Dynamic Biometric Portal Favicon & Title
   useEffect(() => {
     const originalTitle = document.title;
@@ -671,27 +696,19 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
     }).catch(() => {});
   }, []);
 
-  // Guarantee that an authenticated user is never kept on the registration onboarding tab
+  // If initialTab changes from external navigation/routing, sync activeTab
   useEffect(() => {
-    if (currentUser) {
-      if (activeTab === 'onboard') {
-        setActiveTab('punch');
-      }
-      return;
-    }
-    if (hasAttendanceInvite()) {
-      setActiveTab('onboard');
-      return;
-    }
-    const searchTab = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tab') : null;
-    if (searchTab && ['punch', 'history', 'leave', 'status'].includes(searchTab)) {
-      setActiveTab(searchTab);
-      return;
-    }
     if (initialTab && initialTab !== 'onboard') {
       setActiveTab(initialTab);
     }
-  }, [initialTab, currentUser, activeTab]);
+  }, [initialTab]);
+
+  // Guarantee that an authenticated user is not kept on the registration onboarding tab
+  useEffect(() => {
+    if (currentUser && activeTab === 'onboard') {
+      setActiveTab('punch');
+    }
+  }, [currentUser, activeTab]);
 
   // Synchronize theme with Pay Slip Pro global theme state
   useEffect(() => {
@@ -1993,6 +2010,18 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                       <span>View & Edit Profile</span>
                     </button>
 
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        handleRegisterNew();
+                      }}
+                      className="w-full px-3 py-2 flex items-center gap-2 text-xs font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-xl transition-colors cursor-pointer text-left"
+                    >
+                      <UserPlus className="w-3.5 h-3.5 text-neutral-500" />
+                      <span>Register New Employee</span>
+                    </button>
+
                     <div className="h-px bg-neutral-100 dark:bg-neutral-800 my-1" />
 
                     <button
@@ -2022,7 +2051,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
 
                 <button
                   type="button"
-                  onClick={() => setActiveTab('onboard')}
+                  onClick={handleRegisterNew}
                   className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100 font-semibold text-xs shadow-sm transition-colors cursor-pointer"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
@@ -3763,8 +3792,8 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                 <button
                   type="button"
                   onClick={() => {
-                    setAuthMode('app');
-                    setActiveTab('onboard');
+                    setAuthMode('login');
+                    handleRegisterNew();
                   }}
                   style={{
                     background: 'none',
