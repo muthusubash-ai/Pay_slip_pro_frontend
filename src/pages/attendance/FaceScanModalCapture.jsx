@@ -62,26 +62,6 @@ async function ensureFaceModelsLoaded(api) {
   }
 }
 
-// Loaded separately (and allowed to silently fail) from the core detection/landmark/
-// recognition models above - this is only a data-integrity nicety for registration,
-// never something that should block the core face-scan flow if it can't load.
-async function ensureAgeGenderModelLoaded(api) {
-  if (!api || !api.nets || !api.nets.ageGenderNet) return false;
-  await ensureTfBackendReady(api);
-  if (api.nets.ageGenderNet.isLoaded) return true;
-  try {
-    await api.nets.ageGenderNet.loadFromUri(LOCAL_MODEL_URL);
-    return true;
-  } catch (eLocal) {
-    try {
-      await api.nets.ageGenderNet.loadFromUri(CDN_MODEL_URL);
-      return true;
-    } catch (eCdn) {
-      console.warn("Age/gender model loading warning:", eCdn);
-      return false;
-    }
-  }
-}
 
 export default function FaceScanModalCapture({ 
   onFaceCaptured,
@@ -104,9 +84,6 @@ export default function FaceScanModalCapture({
   const [errorMessage, setErrorMessage] = useState('');
   const [capturedImage, setCapturedImage] = useState(null);
   const [scanProgress, setScanProgress] = useState(0);
-  const genderMismatchStreakRef = useRef(0);
-  const genderCheckTickRef = useRef(0);
-  const ageGenderReadyRef = useRef(false);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -160,13 +137,6 @@ export default function FaceScanModalCapture({
           try { api = await loadFaceApi(); } catch (error) { console.warn("Face scanner library unavailable:", error); }
         }
         await ensureFaceModelsLoaded(api);
-
-        genderMismatchStreakRef.current = 0;
-        genderCheckTickRef.current = 0;
-        ageGenderReadyRef.current = false;
-        if (mode === 'register' && expectedGender) {
-          ensureAgeGenderModelLoaded(api).then((ready) => { ageGenderReadyRef.current = ready; });
-        }
 
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
@@ -370,33 +340,6 @@ export default function FaceScanModalCapture({
           }
         }
 
-        // GENDER SANITY CHECK (registration only, only when the employee record
-        // has a gender on file). Throttled to every 2nd tick (~150ms, not every
-        // 75ms tick) and only while the face is centered, to keep this cheap.
-        // A mismatch is only acted on after 2 consecutive high-confidence (>=80%)
-        // mismatched reads (~300ms), so one bad-angle frame can't lock
-        // registration, but it still surfaces as soon as the face is read -
-        // not only once the scan ring is already well past halfway.
-        let isGenderMismatch = false;
-        if (mode === 'register' && expectedGender && ageGenderReadyRef.current && isCentered && !isCoveredFace) {
-          genderCheckTickRef.current += 1;
-          if (genderCheckTickRef.current % 2 === 0) {
-            try {
-              const genderResult = await api.detectSingleFace(
-                video,
-                new api.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.2 })
-              ).withAgeAndGender();
-              if (genderResult && genderResult.genderProbability >= 0.8) {
-                const detectedGender = genderResult.gender === 'male' ? 'MALE' : 'FEMALE';
-                genderMismatchStreakRef.current = detectedGender !== expectedGender ? genderMismatchStreakRef.current + 1 : 0;
-              }
-            } catch (e) {}
-          }
-          isGenderMismatch = genderMismatchStreakRef.current >= 2;
-        } else if (mode !== 'register' || !isCentered) {
-          genderMismatchStreakRef.current = 0;
-        }
-
         const parseDescriptor = (raw) => {
           if (!raw) return null;
           if (typeof raw === 'object' && !Array.isArray(raw)) {
@@ -439,6 +382,13 @@ export default function FaceScanModalCapture({
         if (mode === 'register' && liveDescriptor && allRegisteredDescriptors && allRegisteredDescriptors.length > 0) {
           const liveFloatArray = new Float32Array(liveDescriptor);
           for (const emp of allRegisteredDescriptors) {
+            // Exclude self if employee code or name matches
+            if (currentUserName && (
+              (emp.full_name && String(emp.full_name).toLowerCase() === String(currentUserName).toLowerCase()) ||
+              (emp.emp_id && String(emp.emp_id).toLowerCase() === String(currentUserName).toLowerCase())
+            )) {
+              continue;
+            }
             const empDesc = parseDescriptor(emp.descriptor || emp.face_encoding || emp.face_descriptor);
             if (empDesc) {
               const targetArr = new Float32Array(empDesc);
@@ -446,7 +396,7 @@ export default function FaceScanModalCapture({
                 ? api.euclideanDistance(liveFloatArray, targetArr) 
                 : Math.sqrt(liveDescriptor.reduce((sum, val, idx) => sum + Math.pow(val - empDesc[idx], 2), 0));
 
-              if (d < 0.52) {
+              if (d < 0.30) {
                 isDuplicateFace = true;
                 break;
               }
@@ -523,21 +473,7 @@ export default function FaceScanModalCapture({
             isCovered: false,
             text: 'This face is already registered in the system.'
           });
-        } else if (isGenderMismatch) {
-          autoCapturedRef.current = false;
-          scanProgressRef.current = 0;
-          regStageRef.current = 1;
-          setRegStep(1);
-          setScanProgress(0);
-          setFaceStatus({
-            valid: false,
-            count: 1,
-            isMismatch: true,
-            isCovered: false,
-            text: expectedGender === 'FEMALE'
-              ? '⚠️ Face does not match the recorded gender (Female) on this profile.'
-              : '⚠️ Face does not match the recorded gender (Male) on this profile.'
-          });
+
         } else if (hasNoProfilePhoto) {
           autoCapturedRef.current = false;
           scanProgressRef.current = 0;

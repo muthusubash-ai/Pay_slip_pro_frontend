@@ -2635,7 +2635,6 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                     ? (prefilledEmployee?.email_conflict_error || 'This email is already assigned to another attendance account. Contact your administrator.')
                     : "Set and confirm your password in Step 2 first to unlock face capture."
                 }
-                expectedGender={prefilledEmployee?.gender || null}
                 onFaceCaptured={(blobOrDataUrl, descriptorArray) => {
                   if (descriptorArray && Array.isArray(descriptorArray) && descriptorArray.length === 128) {
                     setRegPhotoDescriptor(descriptorArray);
