@@ -1451,8 +1451,16 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
       if (regData.phone_number) formData.append('phone_number', regData.phone_number);
       formData.append('face_image', regPhoto, 'registered_face.jpg');
 
+      const inviteToken = getAttendanceInvite();
+      if (inviteToken) {
+        formData.append('invite', inviteToken);
+        formData.append('token', inviteToken);
+      }
+      const registerUrl = inviteToken
+        ? `${API_BASE_URL}/api/attendance/register/?invite=${encodeURIComponent(inviteToken)}`
+        : `${API_BASE_URL}/api/attendance/register/`;
 
-      const res = await fetch(`${API_BASE_URL}/api/attendance/register/`, {
+      const res = await fetch(registerUrl, {
         method: 'POST',
         body: formData,
         credentials: 'include'
