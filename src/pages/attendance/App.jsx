@@ -22,7 +22,6 @@ import {
   User,
   Key,
   Calendar,
-  Sparkles,
   Search,
   Check,
   Building,
@@ -2314,10 +2313,9 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                   alignItems: 'center',
                   gap: '12px'
                 }}>
-                  <Sparkles style={{ width: '22px', height: '22px', color: theme.textPrimary, flexShrink: 0 }} />
                   <div>
                     <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '800', color: theme.textPrimary }}>
-                      ✨ Profile Details Auto-Filled from Pay Slip Pro
+                      Profile Details Auto-Filled from Pay Slip Pro
                     </h4>
                     <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: theme.textSecondary }}>
                       {regData.full_name ? `Welcome ${regData.full_name} (${regData.emp_id || 'Employee'})! ` : ''}Your employee records have been loaded. 
