@@ -50,8 +50,9 @@ api.interceptors.request.use(async (config) => {
   const isExcluded = url.includes('/auth/') || url.includes('/admin/');
   if (activeCompanyUserId && !isExcluded) {
     config.headers['X-Company-User-Id'] = String(activeCompanyUserId);
+    config.headers['Company-User-Id'] = String(activeCompanyUserId);
     config.params = config.params || {};
-    if (config.params.company_user_id === undefined) {
+    if (!config.params.company_user_id) {
       config.params.company_user_id = activeCompanyUserId;
     }
   }

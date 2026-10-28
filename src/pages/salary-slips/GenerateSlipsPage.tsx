@@ -14,10 +14,14 @@ import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { useAttendanceReadiness } from '../../hooks/useAttendance';
 import { hasMinimumPlan } from '../../lib/plans';
+import { useAdminCompany } from '../../context/AdminCompanyContext';
+import { AdminCompanySwitcher } from '../../components/admin/AdminCompanySwitcher';
 
 export function GenerateSlipsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { selectedCompanyUserId, isAdmin } = useAdminCompany();
+  const effectiveCompanyId = isAdmin ? selectedCompanyUserId : null;
   const { t, monthNames, getMonthName } = useTranslation();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -27,14 +31,14 @@ export function GenerateSlipsPage() {
   const [success, setSuccess] = useState('');
   const generateSlips = useGenerateSlips();
   const generateSingleSlip = useGenerateSingleSlip();
-  const { data: empData, isLoading: empLoading } = useEmployees(1, undefined, undefined);
+  const { data: empData, isLoading: empLoading } = useEmployees(1, undefined, undefined, undefined, 500, 'active');
   const { data: readiness, isLoading: readinessLoading, isError: readinessError } = useAttendanceReadiness(month, year);
 
   // Fetch existing slips for selected month & year to enforce one-slip-per-month rule
   const { data: existingSlipsRes } = useQuery({
-    queryKey: ['salary-slips-for-period', month, year],
-    queryFn: () => salarySlipService.list({ month, year, per_page: 500 }).then((r) => r.data),
-    enabled: !!user,
+    queryKey: ['salary-slips-for-period', effectiveCompanyId, month, year],
+    queryFn: () => salarySlipService.list({ month, year, per_page: 500, company_user_id: effectiveCompanyId || undefined }).then((r) => r.data),
+    enabled: !!user && (!isAdmin || effectiveCompanyId !== null),
   });
 
   const existingSlips = existingSlipsRes?.items || [];
@@ -198,6 +202,9 @@ export function GenerateSlipsPage() {
         </Link>
         <h2 className="truncate text-xl font-bold text-neutral-900 dark:text-white sm:text-2xl">{t('salary.generateTitle', 'Generate Salary Slips')}</h2>
       </div>
+
+      {/* Admin Multi-Company Scope */}
+      <AdminCompanySwitcher variant="banner" />
 
       {error && (
         <div className="bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800 text-red-700 dark:text-rose-300 px-4 py-3 rounded-xl text-sm flex items-start gap-2">
