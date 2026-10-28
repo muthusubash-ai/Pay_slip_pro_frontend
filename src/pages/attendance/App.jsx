@@ -546,11 +546,18 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
     }
   };
 
+  const clearLocalSession = () => {
+    try { localStorage.removeItem('attendance_current_user'); } catch (e) {}
+    setCurrentUser(null);
+    setHistoryList([]);
+    setActiveTab('punch');
+    setAuthMode('login');
+  };
+
   const handleLogout = async () => {
     try { await fetch(`${API_BASE_URL}/api/attendance/logout/`, { method: 'POST', credentials: 'include' }); }
     finally {
-      try { localStorage.removeItem('attendance_current_user'); } catch (e) {}
-      setCurrentUser(null); setHistoryList([]); setActiveTab('punch'); setAuthMode('login');
+      clearLocalSession();
     }
   };
 
@@ -691,6 +698,9 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
         const u = await response.json();
         saveUserSession(u);
         return u;
+      }
+      if (response.status === 401 || response.status === 403) {
+        clearLocalSession();
       }
       return null;
     }).catch(() => {});
@@ -1327,7 +1337,9 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
       }
 
       if (!response.ok) {
-        throw new Error(resData.error || resData.detail || 'Attendance punch failed');
+        const err = new Error(resData.error || resData.detail || 'Attendance punch failed');
+        err.status = response.status;
+        throw err;
       }
 
       setModalData({
@@ -1354,6 +1366,16 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
 
     } catch (err) {
       const isFetchError = err.message === 'Failed to fetch' || err.name === 'TypeError';
+      const isSessionExpired = err.status === 401 || err.status === 403 || (
+        err.message && (
+          err.message.toLowerCase().includes('session') ||
+          err.message.toLowerCase().includes('sign in') ||
+          err.message.toLowerCase().includes('logged in') ||
+          err.message.toLowerCase().includes('inactive') ||
+          err.message.toLowerCase().includes('unauthorized') ||
+          err.message.toLowerCase().includes('credentials')
+        )
+      );
       const isPunchRuleNotice = err.message && (
         err.message.includes('already recorded') || 
         err.message.includes('Check-Out') || 
@@ -1362,15 +1384,23 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
         err.message.includes('5:30 PM')
       );
       
+      if (isSessionExpired) {
+        clearLocalSession();
+      }
+
       setNotificationModal({
         type: 'error',
         title: isFetchError 
           ? 'Server Connection Error' 
+          : isSessionExpired
+          ? 'Session Expired'
           : isPunchRuleNotice 
           ? 'Attendance Punch Notice' 
           : 'Face Verification Failed',
         message: isFetchError 
           ? 'Unable to reach backend server. Please verify server status or connection.' 
+          : isSessionExpired
+          ? 'Your attendance session has expired. Please sign in with your password to continue.'
           : (err.message || 'Captured face does not match the registered employee photo.')
       });
     } finally {
