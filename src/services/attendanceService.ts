@@ -14,18 +14,18 @@ export const attendanceService = {
     permission_dates?: string[];
   }) => api.post('/attendance/bulk', data),
 
-  getMonthlyAttendance: (employeeId: number, month: number, year: number) =>
+  getMonthlyAttendance: (employeeId: number, month: number, year: number, company_user_id?: number | null) =>
     api.get<AttendanceRecord[]>('/attendance/monthly', {
-      params: { employee_id: employeeId, month, year },
+      params: { employee_id: employeeId, month, year, company_user_id: company_user_id || undefined },
     }),
 
-  getReadiness: (month: number, year: number) =>
+  getReadiness: (month: number, year: number, company_user_id?: number | null) =>
     api.get<{ employee_id: number; recorded_days: number; total_days: number; complete: boolean; eligible: boolean }[]>('/attendance/readiness', {
-      params: { month, year },
+      params: { month, year, company_user_id: company_user_id || undefined },
     }),
 
-  getLeaveSummary: (month: number, year: number) =>
+  getLeaveSummary: (month: number, year: number, company_user_id?: number | null) =>
     api.get<EmployeeLeaveSummary[]>('/attendance/leave-summary', {
-      params: { month, year },
+      params: { month, year, company_user_id: company_user_id || undefined },
     }),
 };

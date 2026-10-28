@@ -8,6 +8,7 @@ interface EmployeeFilters {
   department?: string;
   sort?: string;
   status?: 'active' | 'inactive' | 'all';
+  company_user_id?: number | null;
 }
 
 interface EmployeeCreateData {

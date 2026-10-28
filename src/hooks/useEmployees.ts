@@ -1,13 +1,28 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { employeeService } from '../services/employeeService';
 import { useAuth } from '../context/AuthContext';
+import { useAdminCompany } from '../context/AdminCompanyContext';
 
 export function useEmployees(page = 1, search?: string, department?: string, sort?: string, per_page?: number, status: 'active' | 'inactive' | 'all' = 'active') {
   const { user } = useAuth();
+  const { selectedCompanyUserId, isAdmin } = useAdminCompany();
+  const effectiveCompanyId = isAdmin ? selectedCompanyUserId : null;
+
   return useQuery({
-    queryKey: ['employees', page, search, department, sort, per_page, status],
-    queryFn: () => employeeService.list({ page, search, department, sort, per_page, status }).then((r) => r.data),
-    enabled: !!user,
+    queryKey: ['employees', effectiveCompanyId, page, search, department, sort, per_page, status],
+    queryFn: () =>
+      employeeService
+        .list({
+          page,
+          search,
+          department,
+          sort,
+          per_page,
+          status,
+          company_user_id: effectiveCompanyId || undefined,
+        })
+        .then((r) => r.data),
+    enabled: !!user && (!isAdmin || effectiveCompanyId !== null),
   });
 }
 

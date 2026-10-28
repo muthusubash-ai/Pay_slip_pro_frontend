@@ -7,6 +7,7 @@ interface SlipFilters {
   month?: number;
   year?: number;
   employee_id?: number;
+  company_user_id?: number | null;
 }
 
 export const salarySlipService = {

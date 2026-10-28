@@ -1,20 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { salarySlipService } from '../services/salarySlipService';
 import { useAuth } from '../context/AuthContext';
+import { useAdminCompany } from '../context/AdminCompanyContext';
 
 export function useSalarySlips(page = 1, month?: number, year?: number) {
   const { user } = useAuth();
+  const { selectedCompanyUserId, isAdmin } = useAdminCompany();
+  const effectiveCompanyId = isAdmin ? selectedCompanyUserId : null;
+
   return useQuery({
-    queryKey: ['salary-slips', page, month || 0, year || 0],
+    queryKey: ['salary-slips', effectiveCompanyId, page, month || 0, year || 0],
     queryFn: () =>
       salarySlipService
         .list({
           page,
           ...(month && month > 0 ? { month } : {}),
           ...(year && year > 0 ? { year } : {}),
+          company_user_id: effectiveCompanyId || undefined,
         })
         .then((r) => r.data),
-    enabled: !!user,
+    enabled: !!user && (!isAdmin || effectiveCompanyId !== null),
     staleTime: 0,
   });
 }

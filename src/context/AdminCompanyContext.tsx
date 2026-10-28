@@ -45,13 +45,14 @@ export function AdminCompanyProvider({ children }: { children: ReactNode }) {
         const newId = firstHr.user_id;
         setSelectedCompanyUserIdState(newId);
         setActiveCompanyUserId(newId);
+        queryClient.invalidateQueries();
       }
     } catch (err) {
       console.warn('Failed to fetch admin companies list:', err);
     } finally {
       setIsLoadingCompanies(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, queryClient]);
 
   useEffect(() => {
     if (isAdmin) {
