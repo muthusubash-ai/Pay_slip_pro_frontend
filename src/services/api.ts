@@ -3,6 +3,38 @@ import axios, { type InternalAxiosRequestConfig } from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || '';
 let csrfToken: string | null = null;
 let refreshRequest: Promise<void> | null = null;
+let activeCompanyUserId: number | null = null;
+
+try {
+  const saved = typeof window !== 'undefined' ? localStorage.getItem('payslip_admin_selected_company_user_id') : null;
+  if (saved) {
+    const parsed = parseInt(saved, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      activeCompanyUserId = parsed;
+    }
+  }
+} catch {
+  // Ignore localStorage read errors
+}
+
+export function setActiveCompanyUserId(id: number | null) {
+  activeCompanyUserId = id;
+  try {
+    if (typeof window !== 'undefined') {
+      if (id) {
+        localStorage.setItem('payslip_admin_selected_company_user_id', String(id));
+      } else {
+        localStorage.removeItem('payslip_admin_selected_company_user_id');
+      }
+    }
+  } catch {
+    // Ignore localStorage write errors
+  }
+}
+
+export function getActiveCompanyUserId(): number | null {
+  return activeCompanyUserId;
+}
 
 interface RetryableRequest extends InternalAxiosRequestConfig {
   _retry?: boolean;
@@ -14,6 +46,16 @@ const api = axios.create({
 });
 
 api.interceptors.request.use(async (config) => {
+  const url = config.url || '';
+  const isExcluded = url.includes('/auth/') || url.includes('/admin/');
+  if (activeCompanyUserId && !isExcluded) {
+    config.headers['X-Company-User-Id'] = String(activeCompanyUserId);
+    config.params = config.params || {};
+    if (config.params.company_user_id === undefined) {
+      config.params.company_user_id = activeCompanyUserId;
+    }
+  }
+
   const method = config.method?.toUpperCase();
   if (method && !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
     if (!csrfToken) {

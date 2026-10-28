@@ -12,6 +12,7 @@ import type { Employee } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { EMPLOYEE_LIMITS, getPlan } from '../../lib/plans';
+import { AdminCompanySwitcher } from '../../components/admin/AdminCompanySwitcher';
 
 export function EmployeeListPage() {
   const [page, setPage] = useState(1);
@@ -136,6 +137,9 @@ export function EmployeeListPage() {
           </Link>
         )}
       </div>
+      {/* Admin Multi-Company Switcher Scope */}
+      <AdminCompanySwitcher variant="banner" />
+
       {/* Success Notification Banner */}
       {successToast && (
         <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2">

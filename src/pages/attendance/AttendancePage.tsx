@@ -14,6 +14,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { hasMinimumPlan } from '../../lib/plans';
 import { companyService } from '../../services/companyService';
+import { AdminCompanySwitcher } from '../../components/admin/AdminCompanySwitcher';
 import type { AttendanceRecord } from '../../types';
 
 type DayStatus = 'present' | 'leave' | 'half_day' | 'permission' | 'weekoff' | 'weekoff_halfday' | 'company_week_off';
@@ -542,6 +543,9 @@ export function AttendancePage() {
           </h2>
         </div>
       </div>
+
+      {/* Admin Multi-Company Scope */}
+      <AdminCompanySwitcher variant="banner" />
 
       <AnimatePresence mode="wait">
         {error && (

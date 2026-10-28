@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MotionConfig } from 'framer-motion';
 import { AuthProvider } from './context/AuthContext';
+import { AdminCompanyProvider } from './context/AdminCompanyContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
@@ -62,43 +63,45 @@ export default function App() {
           <ThemeProvider>
             <LanguageProvider>
               <AuthProvider>
-                <ErrorBoundary>
-                <Suspense fallback={<PageLoader />}>
-                  <Routes>
-                  {/* Standalone Biometric & Attendance Kiosk Portal (Independent Full Page) */}
-                  <Route path="/biometric" element={<AttendancePunch />} />
-                  <Route path="/punch" element={<AttendancePunch />} />
-                  <Route path="/attendance-portal" element={<AttendancePunch />} />
-                  <Route path="/biometric/logs" element={<AttendanceLogs />} />
-                  <Route path="/attendance-portal/logs" element={<AttendanceLogs />} />
+                <AdminCompanyProvider>
+                  <ErrorBoundary>
+                  <Suspense fallback={<PageLoader />}>
+                    <Routes>
+                    {/* Standalone Biometric & Attendance Kiosk Portal (Independent Full Page) */}
+                    <Route path="/biometric" element={<AttendancePunch />} />
+                    <Route path="/punch" element={<AttendancePunch />} />
+                    <Route path="/attendance-portal" element={<AttendancePunch />} />
+                    <Route path="/biometric/logs" element={<AttendanceLogs />} />
+                    <Route path="/attendance-portal/logs" element={<AttendanceLogs />} />
 
-                  {/* Public routes */}
-                  <Route path="/login" element={<LoginPage />} />
-                  <Route path="/register" element={<RegisterPage />} />
-                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                  <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
+                    {/* Public routes */}
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/register" element={<RegisterPage />} />
+                    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                    <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
 
-                  {/* Protected routes with layout */}
-                  <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                    <Route index element={<PlanHomeRedirect />} />
-                    <Route path="dashboard" element={<PlanRoute minimumPlan="starter"><DashboardPage /></PlanRoute>} />
-                    <Route path="profile" element={<SettingsPage />} />
-                    <Route path="settings" element={<PlanRoute minimumPlan="starter"><SettingsPage /></PlanRoute>} />
-                    <Route path="employees" element={<EmployeeListPage />} />
-                    <Route path="employees/new" element={<EmployeeCreatePage />} />
-                    <Route path="employees/:id" element={<EmployeeDetailPage />} />
-                    <Route path="employees/:id/edit" element={<EmployeeEditPage />} />
-                    <Route path="attendance" element={<PlanRoute minimumPlan="starter"><AttendancePage /></PlanRoute>} />
-                    <Route path="salary-slips" element={<SalarySlipListPage />} />
-                    <Route path="salary-slips/generate" element={<GenerateSlipsPage />} />
-                    <Route path="salary-slips/:id" element={<SalarySlipDetailPage />} />
-                    <Route path="settings/company" element={<PlanRoute minimumPlan="starter"><CompanySettingsPage /></PlanRoute>} />
-                    <Route path="admin" element={<PlanRoute minimumPlan="enterprise" adminOnly><AdminDashboardPage /></PlanRoute>} />
-                    <Route path="admin/users" element={<PlanRoute minimumPlan="enterprise" adminOnly><AdminUsersPage /></PlanRoute>} />
-                  </Route>
-                  </Routes>
-                </Suspense>
-                </ErrorBoundary>
+                    {/* Protected routes with layout */}
+                    <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+                      <Route index element={<PlanHomeRedirect />} />
+                      <Route path="dashboard" element={<PlanRoute minimumPlan="starter"><DashboardPage /></PlanRoute>} />
+                      <Route path="profile" element={<SettingsPage />} />
+                      <Route path="settings" element={<PlanRoute minimumPlan="starter"><SettingsPage /></PlanRoute>} />
+                      <Route path="employees" element={<EmployeeListPage />} />
+                      <Route path="employees/new" element={<EmployeeCreatePage />} />
+                      <Route path="employees/:id" element={<EmployeeDetailPage />} />
+                      <Route path="employees/:id/edit" element={<EmployeeEditPage />} />
+                      <Route path="attendance" element={<PlanRoute minimumPlan="starter"><AttendancePage /></PlanRoute>} />
+                      <Route path="salary-slips" element={<SalarySlipListPage />} />
+                      <Route path="salary-slips/generate" element={<GenerateSlipsPage />} />
+                      <Route path="salary-slips/:id" element={<SalarySlipDetailPage />} />
+                      <Route path="settings/company" element={<PlanRoute minimumPlan="starter"><CompanySettingsPage /></PlanRoute>} />
+                      <Route path="admin" element={<PlanRoute minimumPlan="enterprise" adminOnly><AdminDashboardPage /></PlanRoute>} />
+                      <Route path="admin/users" element={<PlanRoute minimumPlan="enterprise" adminOnly><AdminUsersPage /></PlanRoute>} />
+                    </Route>
+                    </Routes>
+                  </Suspense>
+                  </ErrorBoundary>
+                </AdminCompanyProvider>
               </AuthProvider>
             </LanguageProvider>
           </ThemeProvider>

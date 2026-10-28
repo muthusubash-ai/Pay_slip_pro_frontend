@@ -10,6 +10,7 @@ import { AnimatedList } from '../../components/ui/AnimatedList';
 import { useSalarySlips, useDeleteSlip } from '../../hooks/useSalarySlips';
 import type { SalarySlip } from '../../types';
 import { useTranslation } from '../../context/LanguageContext';
+import { AdminCompanySwitcher } from '../../components/admin/AdminCompanySwitcher';
 
 const YEARS = [2024, 2025, 2026, 2027];
 
@@ -90,6 +91,9 @@ export function SalarySlipListPage() {
           </GradientButton>
         </Link>
       </div>
+
+      {/* Admin Multi-Company Scope */}
+      <AdminCompanySwitcher variant="banner" />
 
       {/* Month & Year Filters Card */}
       <GlassCard className="dark:bg-neutral-900/90 dark:border-neutral-800">

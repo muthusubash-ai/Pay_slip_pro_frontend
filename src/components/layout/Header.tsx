@@ -12,6 +12,7 @@ import type { Employee, SalarySlip } from '../../types';
 import { listEmployeeLeaveRequests, reviewEmployeeLeaveRequest, type EmployeeLeaveRequest } from '../../services/leaveRequestService';
 import { listMissedCheckouts, type MissedCheckout } from '../../services/missedCheckoutService';
 import { AllActivityModal } from './AllActivityModal';
+import { AdminCompanySwitcher } from '../admin/AdminCompanySwitcher';
 import {
   getNotificationOverrides,
   formatTimeAgo,
@@ -832,10 +833,12 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
             </button>
           )}
           {!hideSharedTitle && <h1 className="truncate text-sm font-bold tracking-tight text-neutral-900 min-[380px]:text-base sm:text-lg">{pageTitle}</h1>}
+          <AdminCompanySwitcher variant="header" className="hidden sm:inline-block ml-1 sm:ml-2" />
         </div>
 
         {/* Right — Actions */}
         <div className="flex shrink-0 items-center sm:gap-2">
+          <AdminCompanySwitcher variant="header" className="sm:hidden mr-1" />
           {/* Search Bar */}
           <button
             onClick={() => setShowSearch(true)}
