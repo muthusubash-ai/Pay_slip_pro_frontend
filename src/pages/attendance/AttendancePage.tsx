@@ -33,13 +33,18 @@ function toRawStatus(status: DayStatus): RawStatus {
   return status;
 }
 
-// The monthly Weekoff is a single shared pool worth 2 half-day units: a full-day
+// The monthly Weekoff is a single shared pool (default 2 half-day units = 1 day,
+// or customizable via Company.weekoff_days_per_month e.g. 2 days = 4 units): a full-day
 // leave costs 2 units, a half-day leave costs 1 unit. Whichever comes first
 // chronologically draws from the pool first - no partial credit. This mirrors
 // the backend's allocate_weekoff_pool() in attendance_service.py.
-const WEEKOFF_POOL_UNITS_PER_MONTH = 2;
+const DEFAULT_WEEKOFF_POOL_UNITS = 2;
 
-function computeDisplayStatuses(rawStatuses: Map<string, RawStatus>, joiningDate: string): Map<string, DayStatus> {
+function computeDisplayStatuses(
+  rawStatuses: Map<string, RawStatus>,
+  joiningDate: string,
+  poolUnits: number = DEFAULT_WEEKOFF_POOL_UNITS
+): Map<string, DayStatus> {
   const combined: Array<{ date: string; kind: 'full' | 'half' }> = [];
   rawStatuses.forEach((st, d) => {
     if (joiningDate && d < joiningDate) return;
@@ -51,7 +56,7 @@ function computeDisplayStatuses(rawStatuses: Map<string, RawStatus>, joiningDate
   const display = new Map<string, DayStatus>();
   rawStatuses.forEach((st, d) => display.set(d, st));
 
-  let remaining = WEEKOFF_POOL_UNITS_PER_MONTH;
+  let remaining = poolUnits;
   combined.forEach(({ date: d, kind }) => {
     if (kind === 'full') {
       if (remaining >= 2) {
@@ -117,6 +122,8 @@ export function AttendancePage() {
     enabled: !!user,
   });
   const permissionAllowance = company?.permission_days_per_month ?? 3;
+  const weekoffAllowance = company?.weekoff_days_per_month ?? 1;
+  const weekoffPoolUnits = weekoffAllowance * 2;
 
   // 'all' (not just active) so a deactivated employee's historical attendance stays
   // reachable here - same as how a deactivated employee's past salary slips still
@@ -347,11 +354,11 @@ export function AttendancePage() {
   };
 
   const displayStatuses = useMemo(() => {
-    const base = computeDisplayStatuses(dayStatuses, joiningDate);
+    const base = computeDisplayStatuses(dayStatuses, joiningDate, weekoffPoolUnits);
     // Company weekly-off days always win over the derived Leave/Weekoff display.
     companyWeekOffDates.forEach((d) => base.set(d, 'company_week_off'));
     return base;
-  }, [dayStatuses, joiningDate, companyWeekOffDates]);
+  }, [dayStatuses, joiningDate, companyWeekOffDates, weekoffPoolUnits]);
 
   // Warn when a Half Day won't be free because a full-day Weekoff already used up the
   // shared monthly pool (1 full day = 2 units, same pool as Weekoff Halfday).
@@ -760,7 +767,7 @@ export function AttendancePage() {
                 {monthNames[month - 1]} {year} — {t('attendance.cycleHelp', 'Click to cycle: Present → Leave → Half Day → Permission')}
               </h3>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                The monthly Weekoff is a shared pool worth 2 half-day units: a Leave costs 2 units (free only if both are still available), a Half Day costs 1 unit — whichever is marked first (by date) draws from the pool first, with no partial credit. Up to {permissionAllowance} permission{permissionAllowance === 1 ? '' : 's'}/month allowed with 0 deduction (excess permissions deduct 1 day each — configurable in Settings → Company). Days matching the company's configured Weekly Off (Settings → Company) are locked as "Company Off" — always paid, never deducted.
+                The monthly Weekoff is a shared pool worth {weekoffPoolUnits} half-day units ({weekoffAllowance} paid day{weekoffAllowance === 1 ? '' : 's'}/month): a Leave costs 2 units (free only if available), a Half Day costs 1 unit — whichever is marked first (by date) draws from the pool first, with no partial credit. Up to {permissionAllowance} permission{permissionAllowance === 1 ? '' : 's'}/month allowed with 0 deduction (excess permissions deduct 1 day each — configurable in Settings → Company). Days matching the company's configured Weekly Off (Settings → Company) are locked as "Company Off" — always paid, never deducted.
               </p>
               {firstActiveDay > 1 && <p className="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">Joined on {joiningDate}. Days before joining are locked and excluded.</p>}
             </div>
@@ -890,11 +897,11 @@ export function AttendancePage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-3.5 h-3.5 rounded bg-blue-600" />
-                  <span className="text-neutral-600 dark:text-neutral-300 font-medium">Weekoff ({weekoffCount})</span>
+                  <span className="text-neutral-600 dark:text-neutral-300 font-medium">Weekoff ({weekoffCount}/{weekoffAllowance})</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-3.5 h-3.5 rounded bg-teal-600" />
-                  <span className="text-neutral-600 dark:text-neutral-300 font-medium">Wkoff Half ({weekoffHalfdayCount}/2)</span>
+                  <span className="text-neutral-600 dark:text-neutral-300 font-medium">Wkoff Half ({weekoffHalfdayCount}/{weekoffPoolUnits})</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-3.5 h-3.5 rounded bg-slate-500" />
@@ -1210,11 +1217,11 @@ export function AttendancePage() {
                           </div>
                           <div className="rounded-lg bg-blue-50 dark:bg-blue-950/40 p-2 border border-blue-100 dark:border-blue-900/60">
                             <span className="block text-[10px] text-blue-600 dark:text-blue-400 uppercase font-semibold">Weekoff</span>
-                            <span className="font-bold text-blue-800 dark:text-blue-300">{s.weekoff_days}</span>
+                            <span className="font-bold text-blue-800 dark:text-blue-300">{s.weekoff_days}/{weekoffAllowance}</span>
                           </div>
                           <div className="rounded-lg bg-teal-50 dark:bg-teal-950/40 p-2 border border-teal-100 dark:border-teal-900/60">
                             <span className="block text-[10px] text-teal-600 dark:text-teal-400 uppercase font-semibold">Weekoff Half</span>
-                            <span className="font-bold text-teal-800 dark:text-teal-300">{s.weekoff_halfday_days || 0}/2</span>
+                            <span className="font-bold text-teal-800 dark:text-teal-300">{s.weekoff_halfday_days || 0}/{weekoffPoolUnits}</span>
                           </div>
                           <div className="rounded-lg bg-slate-50 dark:bg-slate-800/40 p-2 border border-slate-100 dark:border-slate-700/60">
                             <span className="block text-[10px] text-slate-600 dark:text-slate-400 uppercase font-semibold">Company Off</span>

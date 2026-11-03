@@ -286,6 +286,7 @@ export const en = {
     startTime: 'Office Start Time (Check-In Cutoff)',
     endTime: 'Office End Time (Check-Out Time)',
     freePermissions: 'Free Permissions per Month',
+    freeWeekoffs: 'Monthly Paid Weekoffs (Days / Month)',
     address: 'Address',
     city: 'City',
     state: 'State',

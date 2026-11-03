@@ -172,6 +172,7 @@ export function CompanySettingsPage() {
     office_lng: '78.117146',
     allowed_radius_meters: '70',
     permission_days_per_month: '3',
+    weekoff_days_per_month: '1',
     office_timing: '09:30 AM - 06:00 PM',
     office_start_time: '09:30',
     office_end_time: '18:00',
@@ -235,6 +236,7 @@ export function CompanySettingsPage() {
       office_lng: String(company.office_lng ?? 78.117146),
       allowed_radius_meters: String(company.allowed_radius_meters ?? 70),
       permission_days_per_month: String(company.permission_days_per_month ?? 3),
+      weekoff_days_per_month: String(company.weekoff_days_per_month ?? 1),
       office_timing: company.office_timing || '09:30 AM - 06:00 PM',
       office_start_time: company.office_start_time || '09:30',
       office_end_time: company.office_end_time || '18:00',
@@ -515,6 +517,7 @@ export function CompanySettingsPage() {
         allowed_radius_meters: form.allowed_radius_meters ? parseInt(form.allowed_radius_meters) : undefined,
         weekly_off_days: weeklyOffDays,
         permission_days_per_month: form.permission_days_per_month ? parseInt(form.permission_days_per_month) : undefined,
+        weekoff_days_per_month: form.weekoff_days_per_month ? parseInt(form.weekoff_days_per_month) : 1,
         office_timing: (form.office_start_time && form.office_end_time)
           ? `${format12Hour(form.office_start_time)} - ${format12Hour(form.office_end_time)}`
           : (form.office_timing || undefined),
@@ -1024,13 +1027,79 @@ export function CompanySettingsPage() {
 
       {/* Leave & Attendance Rules */}
       <GlassCard>
-        <h3 className="text-lg font-semibold mb-1 text-neutral-900 dark:text-white">
-          {t('company.leaveRules', 'Leave & Attendance Rules')}
-        </h3>
-        <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
-          {t('company.leaveRulesDesc', 'Select the day(s) that are a standing weekly off for your company (e.g. every Sunday).')}
-        </p>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+          <div>
+            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
+              {t('company.leaveRules', 'Leave & Attendance Rules')}
+            </h3>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              {t('company.leaveRulesDesc', 'Configure company-wide weekly off day(s). Supports single-day (e.g. Sunday) or 2-day weekend policies (e.g. Saturday & Sunday).')}
+            </p>
+          </div>
+          <div className="shrink-0">
+            {weeklyOffDays.length === 0 ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 text-xs font-semibold border border-amber-200 dark:border-amber-800">
+                7 Days Working (No Weekly Off)
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 text-xs font-semibold border border-neutral-200 dark:border-neutral-700">
+                {weeklyOffDays.length} {weeklyOffDays.length === 1 ? 'Day' : 'Days'} Off / Week
+              </span>
+            )}
+          </div>
+        </div>
+
+        {isEditing && (
+          <div className="flex flex-wrap items-center gap-2 mb-3 pt-2">
+            <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">Quick Presets:</span>
+            <button
+              type="button"
+              onClick={() => setWeeklyOffDays([6])}
+              className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                weeklyOffDays.length === 1 && weeklyOffDays[0] === 6
+                  ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 border-transparent shadow-sm'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+              }`}
+            >
+              Sunday Only (1 Day)
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeeklyOffDays([5, 6])}
+              className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                weeklyOffDays.length === 2 && weeklyOffDays.includes(5) && weeklyOffDays.includes(6)
+                  ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 border-transparent shadow-sm'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+              }`}
+            >
+              Saturday & Sunday (2 Days)
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeeklyOffDays([4, 5])}
+              className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                weeklyOffDays.length === 2 && weeklyOffDays.includes(4) && weeklyOffDays.includes(5)
+                  ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 border-transparent shadow-sm'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+              }`}
+            >
+              Friday & Saturday (2 Days)
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeeklyOffDays([])}
+              className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+                weeklyOffDays.length === 0
+                  ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 border-transparent shadow-sm'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+              }`}
+            >
+              Clear All (7 Days)
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 mt-2">
           {WEEKDAY_OPTIONS.map((opt) => {
             const checked = weeklyOffDays.includes(opt.value);
             return (
@@ -1042,7 +1111,7 @@ export function CompanySettingsPage() {
                 aria-pressed={checked}
                 className={`px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
                   checked
-                    ? 'bg-neutral-900 border-neutral-900 text-white dark:bg-white dark:border-white dark:text-neutral-900'
+                    ? 'bg-neutral-900 border-neutral-900 text-white dark:bg-white dark:border-white dark:text-neutral-900 shadow-sm'
                     : 'bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:border-neutral-400 dark:hover:border-neutral-500'
                 }`}
               >
@@ -1052,19 +1121,46 @@ export function CompanySettingsPage() {
           })}
         </div>
 
-        <div className="mt-5 pt-4 border-t border-neutral-100 dark:border-neutral-800 max-w-xs">
-          <AnimatedInput
-            label={t('company.freePermissions', 'Free Permissions per Month')}
-            type="number"
-            placeholder="3"
-            value={form.permission_days_per_month}
-            onChange={handleChange('permission_days_per_month')}
-            disabled={!isEditing}
-          />
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1.5">
-            Number of permission requests an employee can take per month with 0 salary deduction.
-            Any permission beyond this count deducts 1 full day's pay each.
+        {/* Multi-Module Synchronization Info Callout */}
+        <div className="mt-4 p-3 rounded-xl bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-xs text-neutral-600 dark:text-neutral-400 space-y-1">
+          <p className="font-semibold text-neutral-800 dark:text-neutral-200 flex items-center gap-1.5">
+            <span>✓</span> Automated Multi-Module Synchronization:
           </p>
+          <ul className="list-disc list-inside space-y-0.5 ml-1">
+            <li><strong>Attendance:</strong> Configured weekly offs are locked as paid &ldquo;Company Off&rdquo; without salary deduction.</li>
+            <li><strong>Biometric Kiosk:</strong> Weekend punches and monthly audit reports recognize these days and do not mark employees absent.</li>
+            <li><strong>Leave Requests:</strong> Approved leave spanning weekly off days does not deduct from the employee&apos;s leave allowance or salary.</li>
+          </ul>
+        </div>
+
+        <div className="mt-5 pt-4 border-t border-neutral-100 dark:border-neutral-800 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+          <div>
+            <AnimatedInput
+              label={t('company.freeWeekoffs', 'Monthly Paid Weekoffs (Days / Month)')}
+              type="number"
+              placeholder="1"
+              value={form.weekoff_days_per_month}
+              onChange={handleChange('weekoff_days_per_month')}
+              disabled={!isEditing}
+            />
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1.5">
+              Flexible paid weekoff days an employee can claim per month with 0 salary deduction (e.g. 1 day = 1 full day or 2 half-days; 2 days = 2 full days or 4 half-days). Approved leaves within this quota are automatically marked as paid Weekoffs.
+            </p>
+          </div>
+          <div>
+            <AnimatedInput
+              label={t('company.freePermissions', 'Free Permissions per Month')}
+              type="number"
+              placeholder="3"
+              value={form.permission_days_per_month}
+              onChange={handleChange('permission_days_per_month')}
+              disabled={!isEditing}
+            />
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1.5">
+              Number of permission requests an employee can take per month with 0 salary deduction.
+              Any permission beyond this count deducts 1 full day&apos;s pay each.
+            </p>
+          </div>
         </div>
       </GlassCard>
 
@@ -1495,6 +1591,7 @@ export function CompanySettingsPage() {
                       office_lng: String(company.office_lng ?? 78.117146),
                       allowed_radius_meters: String(company.allowed_radius_meters ?? 70),
                       permission_days_per_month: String(company.permission_days_per_month ?? 3),
+      weekoff_days_per_month: String(company.weekoff_days_per_month ?? 1),
                       office_timing: company.office_timing || '09:30 AM - 06:00 PM',
                       office_start_time: company.office_start_time || '09:30',
                       office_end_time: company.office_end_time || '18:00',

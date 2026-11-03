@@ -99,6 +99,8 @@ export interface Company {
   weekly_off_days?: number[];
   /** Permission requests allowed per month with 0 salary deduction. */
   permission_days_per_month?: number;
+  /** Flexible paid weekoff days allowed per month with 0 salary deduction (e.g. 1 or 2 days). */
+  weekoff_days_per_month?: number;
   office_timing?: string | null;
   office_start_time?: string | null;
   office_end_time?: string | null;

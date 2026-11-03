@@ -288,6 +288,7 @@ export const ta: TranslationKeys = {
     startTime: 'தொடக்க நேரம் (Check-In Cutoff)',
     endTime: 'முடிவு நேரம் (Check-Out Time)',
     freePermissions: 'மாத இலவச அனுமதி நேரங்கள்',
+    freeWeekoffs: 'மாத சம்பளக் கழிவற்ற வார விடுமுறைகள் (நாட்கள்/மாதம்)',
     address: 'முகவரி',
     city: 'நகரம்',
     state: 'மாநிலம்',

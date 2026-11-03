@@ -17,6 +17,7 @@ interface CompanyUpdateData {
   allowed_radius_meters?: number;
   weekly_off_days?: number[];
   permission_days_per_month?: number;
+  weekoff_days_per_month?: number;
   office_timing?: string;
   office_start_time?: string;
   office_end_time?: string;

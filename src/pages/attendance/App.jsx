@@ -456,6 +456,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
           office_lat: cLat,
           office_lng: cLng,
           allowed_radius_meters: cRadius,
+          weekly_off_days: Array.isArray(data.weekly_off_days) ? data.weekly_off_days : (data.company_data?.weekly_off_days || [6]),
         };
         setCompanyInfo((prev) => ({ ...prev, ...nextCompanyInfo }));
         cacheCompanyBranding(nextCompanyInfo);
@@ -516,6 +517,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
           office_timing: c.office_timing || data.office_timing || prev.office_timing,
           office_start_time: c.office_start_time || data.office_start_time || prev.office_start_time,
           office_end_time: c.office_end_time || data.office_end_time || prev.office_end_time,
+          weekly_off_days: Array.isArray(c.weekly_off_days) ? c.weekly_off_days : (Array.isArray(data.weekly_off_days) ? data.weekly_off_days : prev.weekly_off_days),
         };
         cacheCompanyBranding(next);
         return next;
@@ -1342,13 +1344,23 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
         throw err;
       }
 
+      const activePunchTime = 
+        resData.type === 'PUNCH_OUT' ? (resData.check_out || resData.check_in) :
+        resData.type === 'PERMISSION_OUT' ? (resData.permission_out || resData.check_out) :
+        resData.type === 'PERMISSION_IN' ? (resData.permission_in || resData.check_in) :
+        (resData.check_in || resData.check_out);
+
       setModalData({
         type: resData.type || 'PUNCH',
         message: resData.message,
         employeeName: resData.employee_name || currentUser.name,
         empId: resData.emp_id || currentUser.emp_id,
         status: resData.status,
-        checkIn: resData.check_in || resData.check_out,
+        punchTime: activePunchTime,
+        checkIn: resData.check_in,
+        checkOut: resData.check_out,
+        permissionOut: resData.permission_out,
+        permissionIn: resData.permission_in,
         distance: resData.distance
       });
 
@@ -1779,7 +1791,11 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
           distance_m: att.distance_m || 0
         });
       } else {
-        const isWeekend = dayOfWeek === 0; // Sunday only
+        const pyWeekday = (d.getDay() + 6) % 7; // Convert JS Sun=0..Sat=6 to Mon=0..Sun=6
+        const weeklyOffList = Array.isArray(companyInfo?.weekly_off_days) && companyInfo.weekly_off_days.length > 0
+          ? companyInfo.weekly_off_days
+          : [6];
+        const isWeekend = weeklyOffList.includes(pyWeekday);
 
         if (!isWeekend) absentCount++;
 
@@ -4375,8 +4391,15 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
               marginBottom: '20px'
             }}>
               <div>
-                <span style={{ fontSize: '10px', color: theme.textMuted, textTransform: 'uppercase', fontWeight: '800' }}>Punch Time</span>
-                <p style={{ margin: '2px 0 0 0', fontSize: '13px', fontWeight: '800', color: theme.textPrimary }}>{modalData.checkIn}</p>
+                <span style={{ fontSize: '10px', color: theme.textMuted, textTransform: 'uppercase', fontWeight: '800' }}>
+                  {modalData.type === 'PUNCH_OUT' ? 'Punch-Out Time' :
+                   modalData.type === 'PERMISSION_OUT' ? 'Step-Out Time' :
+                   modalData.type === 'PERMISSION_IN' ? 'Return Time' :
+                   'Punch-In Time'}
+                </span>
+                <p style={{ margin: '2px 0 0 0', fontSize: '13px', fontWeight: '800', color: theme.textPrimary }}>
+                  {modalData.punchTime || (modalData.type === 'PUNCH_OUT' ? (modalData.checkOut || modalData.checkIn) : modalData.checkIn)}
+                </p>
               </div>
               <div>
                 <span style={{ fontSize: '10px', color: theme.textMuted, textTransform: 'uppercase', fontWeight: '800' }}>Status Badge</span>
