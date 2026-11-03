@@ -104,6 +104,18 @@ export interface Company {
   office_end_time?: string | null;
   /** When true, HR can set a custom shift start/end time per employee (optional per employee). */
   enable_employee_shift_timing?: boolean;
+  /** Custom SMTP & Email Delivery (White-labeling) */
+  smtp_enabled?: boolean;
+  smtp_host?: string | null;
+  smtp_port?: number | null;
+  smtp_user?: string | null;
+  smtp_from_name?: string | null;
+  smtp_use_tls?: boolean;
+  smtp_use_ssl?: boolean;
+  smtp_categories?: string[];
+  smtp_verified?: boolean;
+  smtp_last_tested_at?: string | null;
+  smtp_password_configured?: boolean;
   /** Whether company settings editing is locked on the user's current subscription plan. */
   is_locked?: boolean;
 }

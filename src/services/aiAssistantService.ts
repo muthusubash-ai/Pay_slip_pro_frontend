@@ -41,6 +41,27 @@ export async function sendChatMessage(message: string, priorMessages: ChatMessag
   // Frontend intelligent fallback if backend API is temporarily offline
   const lower = message.trim().toLowerCase();
 
+  if (
+    lower.includes('app password') ||
+    lower.includes('google app') ||
+    lower.includes('smtp') ||
+    lower.includes('email delivery') ||
+    lower.includes('white-label') ||
+    lower.includes('gmail password')
+  ) {
+    return (
+      "🔐 **How to Generate a Google App Password for Custom Email Delivery:**\n\n" +
+      "Follow these simple steps:\n\n" +
+      "1. **Open Google Account Security:** Go to [myaccount.google.com/security](https://myaccount.google.com/security).\n" +
+      "2. **Enable 2-Step Verification:** Under *How you sign in to Google*, make sure **2-Step Verification** is turned ON.\n" +
+      "3. **Open App Passwords:** In the top search bar, search for **App passwords** (or go directly to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)).\n" +
+      "4. **Create Password:** Enter an app name like **PaySlipPro** and click **Create**.\n" +
+      "5. **Copy 16-Digit Code:** Google will display a yellow-bordered box with a **16-letter code** (e.g. `abcd efgh ijkl mnop`). Copy it without spaces.\n" +
+      "6. **Paste in PaySlipPro:** In **Company Settings → Custom Email Delivery**, paste the 16-character code into the **SMTP Password** field.\n" +
+      "7. **Test & Save:** Keep Port as **587 (TLS)**, enter your email as the Username, and click **Test SMTP Connection** to verify before saving!"
+    );
+  }
+
   if (lower.includes('net pay') || lower.includes('salary') || lower.includes('calculate')) {
     return (
       "💰 **How Salary & Net Pay is Calculated:**\n\n" +

@@ -99,6 +99,25 @@ export function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawerProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  // Listen for open-zigmaa-ai events with optional prefilled prompt
+  useEffect(() => {
+    const handleOpenAi = (e: Event) => {
+      const customEvent = e as CustomEvent<{ prompt?: string }>;
+      if (customEvent.detail?.prompt) {
+        setInput(customEvent.detail.prompt);
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.focus();
+            inputRef.current.selectionStart = inputRef.current.value.length;
+            inputRef.current.selectionEnd = inputRef.current.value.length;
+          }
+        }, 300);
+      }
+    };
+    window.addEventListener('open-zigmaa-ai', handleOpenAi);
+    return () => window.removeEventListener('open-zigmaa-ai', handleOpenAi);
+  }, []);
+
   const handleSend = async (textToSend?: string) => {
     const text = (textToSend ?? input).trim();
     if (!text || isLoading) return;

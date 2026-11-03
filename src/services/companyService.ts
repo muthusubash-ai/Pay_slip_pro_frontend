@@ -21,6 +21,26 @@ interface CompanyUpdateData {
   office_start_time?: string;
   office_end_time?: string;
   enable_employee_shift_timing?: boolean;
+  smtp_enabled?: boolean;
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_password?: string;
+  smtp_from_name?: string;
+  smtp_use_tls?: boolean;
+  smtp_use_ssl?: boolean;
+  smtp_categories?: string[];
+}
+
+export interface TestSmtpPayload {
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_password?: string;
+  smtp_from_name?: string;
+  smtp_use_tls?: boolean;
+  smtp_use_ssl?: boolean;
+  test_email?: string;
 }
 
 export interface AddressSuggestion {
@@ -60,4 +80,7 @@ export const companyService = {
 
   lookupPin: (code: string) =>
     api.get<PinLookupResult>('/locations/pin', { params: { code } }),
+
+  testSmtp: (data: TestSmtpPayload) =>
+    api.post<{ success: boolean; message: string }>('/company/smtp/test', data),
 };

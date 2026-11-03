@@ -23,7 +23,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refetchUser = useCallback(async () => {
     try {
       const res = await api.get('/auth/me');
-      setUser(res.data);
+      setUser((prev) => {
+        if (!prev) return res.data;
+        if (JSON.stringify(prev) === JSON.stringify(res.data)) {
+          return prev;
+        }
+        return res.data;
+      });
       return res.data;
     } catch {
       return null;

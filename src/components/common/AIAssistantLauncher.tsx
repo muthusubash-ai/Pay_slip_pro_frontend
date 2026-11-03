@@ -36,6 +36,15 @@ export function AIAssistantLauncher({ onOpen, className = '' }: AIAssistantLaunc
     return () => clearInterval(showTimer);
   }, [isDrawerOpen]);
 
+  // Global listener so any component (e.g. Gmail Guide in Company Settings) can open Zigmaa AI
+  useEffect(() => {
+    const handleOpenAi = () => {
+      setIsDrawerOpen(true);
+    };
+    window.addEventListener('open-zigmaa-ai', handleOpenAi);
+    return () => window.removeEventListener('open-zigmaa-ai', handleOpenAi);
+  }, []);
+
   const handleClick = () => {
     if (onOpen) {
       onOpen();

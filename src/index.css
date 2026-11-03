@@ -320,3 +320,22 @@ html.dark .zigmaa-tech-brand:hover {
   text-shadow: 0 0 14px rgba(248, 113, 113, 0.75);
 }
 
+/* Prevent unwanted yellow highlights or mark backgrounds from extensions/browser */
+mark,
+::target-text,
+.highlight,
+[data-highlighted] {
+  background-color: transparent !important;
+  color: inherit !important;
+}
+
+.no-yellow-highlight,
+.no-yellow-highlight * {
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+.no-yellow-highlight ::selection {
+  background-color: rgba(99, 102, 241, 0.2) !important;
+  color: inherit !important;
+}
+
