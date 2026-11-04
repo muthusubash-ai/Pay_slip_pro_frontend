@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -93,7 +93,8 @@ export function AttendancePage() {
   const { user } = useAuth();
   const { t, monthNames, getMonthName } = useTranslation();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialParamsApplied = useRef(false);
   const queryClient = useQueryClient();
   const canViewReports = hasMinimumPlan(user, 'professional');
   const now = new Date();
@@ -188,7 +189,9 @@ export function AttendancePage() {
     const paramCode = searchParams.get('code') || searchParams.get('emp_id');
     const paramName = searchParams.get('name') || searchParams.get('employee_name');
 
+    if (!paramEmpId && !paramCode && !paramName) return;
     if (!employees || employees.length === 0) return;
+    if (initialParamsApplied.current) return;
 
     let matchedEmp: (typeof employees)[0] | undefined;
 
@@ -211,10 +214,33 @@ export function AttendancePage() {
       );
     }
 
-    if (matchedEmp && matchedEmp.id !== selectedEmployee) {
+    if (matchedEmp) {
       setSelectedEmployee(matchedEmp.id);
+      initialParamsApplied.current = true;
     }
-  }, [searchParams, employees, selectedEmployee]);
+  }, [searchParams, employees]);
+
+  const handleEmployeeChange = (empId: number) => {
+    initialParamsApplied.current = true;
+    setSelectedEmployee(empId);
+    setSuccess('');
+    setError('');
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('code');
+      next.delete('emp_id');
+      next.delete('name');
+      next.delete('employee_name');
+      next.delete('leave_request');
+      next.delete('checkout_id');
+      if (empId > 0) {
+        next.set('employee_id', String(empId));
+      } else {
+        next.delete('employee_id');
+      }
+      return next;
+    }, { replace: true });
+  };
 
   // Arriving from a "Missed punch-out" notification (?checkout_id=...) - open the
   // Biometric Timesheet (collapsed by default) and jump straight into the
@@ -628,11 +654,7 @@ export function AttendancePage() {
             ) : (
               <select
                 value={selectedEmployee}
-                onChange={(e) => {
-                  setSelectedEmployee(Number(e.target.value));
-                  setSuccess('');
-                  setError('');
-                }}
+                onChange={(e) => handleEmployeeChange(Number(e.target.value))}
                 className="w-full px-4 py-3 rounded-xl border-2 border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white transition-colors text-sm font-medium"
               >
                 <option value={0} className="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white">
@@ -720,11 +742,15 @@ export function AttendancePage() {
                     <span className="text-xs text-amber-900 dark:text-amber-200 font-semibold">
                       {req.start_date === req.end_date ? req.start_date : `${req.start_date} to ${req.end_date}`}
                     </span>
-                    {req.duration_hours && (
+                    {req.from_time && req.to_time ? (
+                      <span className="text-xs text-amber-800 dark:text-amber-300 font-semibold">
+                        ⏱️ {req.from_time} – {req.to_time} ({req.duration_hours || 2} hrs)
+                      </span>
+                    ) : req.duration_hours ? (
                       <span className="text-xs text-amber-800 dark:text-amber-300 font-medium">
                         ({req.duration_hours} {req.duration_hours === 1 ? 'hour' : 'hours'})
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <p className="text-sm font-medium text-amber-950 dark:text-amber-100 mt-1">
                     {req.reason}

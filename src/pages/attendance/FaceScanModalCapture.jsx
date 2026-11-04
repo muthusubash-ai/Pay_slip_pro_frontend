@@ -92,6 +92,7 @@ export default function FaceScanModalCapture({
   const handleCaptureRef = useRef(null);
   const scanProgressRef = useRef(0);
   const scanIntervalRef = useRef(null);
+  const latestDescriptorRef = useRef(null);
 
   const prevFaceRef = useRef(null);
   const regStageRef = useRef(1);
@@ -166,40 +167,18 @@ export default function FaceScanModalCapture({
 
   const [faceStatus, setFaceStatus] = useState({ valid: false, count: 0, isMismatch: false, isCovered: false, text: 'Align face inside the center circle' });
 
-  const handleCapture = async () => {
+  const handleCapture = () => {
     if (!videoRef.current || faceStatus.isMismatch || faceStatus.isCovered) return;
 
-    const video = videoRef.current;
-    let descriptorArray = null;
-
-    const api = window.faceapi;
-    if (api) {
-      try {
-        await ensureFaceModelsLoaded(api);
-
-        let detection = null;
-        if (api.detectSingleFace) {
-          detection = await api.detectSingleFace(
-            video,
-            new api.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.2 })
-          ).withFaceLandmarks(true).withFaceDescriptor();
-        }
-
-        if (!detection && api.detectAllFaces) {
-          const raw = await api.detectAllFaces(
-            video,
-            new api.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.2 })
-          ).withFaceLandmarks(true).withFaceDescriptors();
-          if (raw && raw.length > 0) detection = raw[0];
-        }
-
-        if (detection && detection.descriptor) {
-          descriptorArray = Array.from(detection.descriptor);
-        }
-      } catch (e) {
-        console.warn("Capture face descriptor extraction warning:", e);
-      }
+    // Immediately stop scanning loop to free WebGL and CPU
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
     }
+
+    const video = videoRef.current;
+    // Fast path: use already-computed descriptor from the active scan loop (avoids 3-second freeze)
+    const descriptorArray = latestDescriptorRef.current;
 
     const offCanvas = document.createElement('canvas');
     offCanvas.width = video.videoWidth || 640;
@@ -211,17 +190,19 @@ export default function FaceScanModalCapture({
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, offCanvas.width, offCanvas.height);
 
+    // Stop camera and close scan modal IMMEDIATELY so the green circle completes and modal disappears without lag
+    stopCamera();
+    setIsOpen(false);
+
     offCanvas.toBlob((blob) => {
-      const dataUrl = offCanvas.toDataURL('image/jpeg', 0.95);
+      const dataUrl = offCanvas.toDataURL('image/jpeg', 0.85);
       if (!resetOnCapture) {
         setCapturedImage(dataUrl);
       } else {
         setCapturedImage(null);
       }
       if (onFaceCaptured) onFaceCaptured(blob || dataUrl, descriptorArray);
-      stopCamera();
-      setIsOpen(false);
-    }, 'image/jpeg', 0.95);
+    }, 'image/jpeg', 0.85);
   };
 
   handleCaptureRef.current = handleCapture;
@@ -376,6 +357,9 @@ export default function FaceScanModalCapture({
         }
 
         let liveDescriptor = det.descriptor ? Array.from(det.descriptor) : null;
+        if (liveDescriptor) {
+          latestDescriptorRef.current = liveDescriptor;
+        }
         let isFaceMatched = true;
         let isDuplicateFace = false;
         let calculatedDistance = null;
@@ -529,9 +513,11 @@ export default function FaceScanModalCapture({
 
               if (autoCapture && !autoCapturedRef.current) {
                 autoCapturedRef.current = true;
-                setTimeout(() => {
-                  if (handleCaptureRef.current) handleCaptureRef.current();
-                }, 120);
+                if (scanIntervalRef.current) {
+                  clearInterval(scanIntervalRef.current);
+                  scanIntervalRef.current = null;
+                }
+                if (handleCaptureRef.current) handleCaptureRef.current();
               }
             } else {
               setFaceStatus({
@@ -617,9 +603,11 @@ export default function FaceScanModalCapture({
 
             if (currentProgress >= 100 && autoCapture && !autoCapturedRef.current) {
               autoCapturedRef.current = true;
-              setTimeout(() => {
-                if (handleCaptureRef.current) handleCaptureRef.current();
-              }, 120);
+              if (scanIntervalRef.current) {
+                clearInterval(scanIntervalRef.current);
+                scanIntervalRef.current = null;
+              }
+              if (handleCaptureRef.current) handleCaptureRef.current();
             }
           }
         }

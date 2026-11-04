@@ -9,6 +9,8 @@ export interface EmployeeLeaveRequest {
   start_date: string;
   end_date: string;
   duration_hours?: number | null;
+  from_time?: string | null;
+  to_time?: string | null;
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   admin_remarks?: string;

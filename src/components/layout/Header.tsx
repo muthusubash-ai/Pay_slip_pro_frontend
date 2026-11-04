@@ -270,7 +270,7 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
 /* ─── Notification Dropdown ─── */
 interface NotificationDropdownProps {
   onClose: () => void;
-  onViewAllActivity: (filter?: 'leaves') => void;
+  onViewAllActivity: (filter?: 'leaves', leaveId?: number) => void;
 }
 
 let cachedNotificationData: { employees: Employee[]; slips: SalarySlip[]; leaveRequests: EmployeeLeaveRequest[]; missedCheckouts: MissedCheckout[] } | null = null;
@@ -291,13 +291,39 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
     setDecidingId(requestId);
     try {
       await reviewEmployeeLeaveRequest(requestId, action);
+      const req = leaveRequests.find((l) => l.id === requestId);
       setLeaveRequests((prev) => {
-        const next = prev.filter((l) => l.id !== requestId);
+        const next = prev.map((l) => l.id === requestId ? { ...l, status: action } : l);
         cachedNotificationData = cachedNotificationData
           ? { ...cachedNotificationData, leaveRequests: next }
           : cachedNotificationData;
         return next;
       });
+      window.dispatchEvent(new CustomEvent('attendance_updated', {
+        detail: { leaveRequestId: requestId, action }
+      }));
+      window.dispatchEvent(new CustomEvent('notifications_read_updated'));
+
+      // Redirect to employee attendance page on Accept/Reject as requested
+      if (req) {
+        let leaveMonth = '';
+        let leaveYear = '';
+        if (req.start_date) {
+          const parts = req.start_date.split('-');
+          if (parts.length >= 2) {
+            leaveYear = parts[0];
+            leaveMonth = String(parseInt(parts[1], 10));
+          }
+        }
+        const params = new URLSearchParams();
+        if (req.employee_id) params.set('employee_id', String(req.employee_id));
+        if (req.emp_id) params.set('code', req.emp_id);
+        if (req.employee_name) params.set('name', req.employee_name);
+        if (leaveMonth) params.set('month', leaveMonth);
+        if (leaveYear) params.set('year', leaveYear);
+        onClose();
+        navigate(`/attendance${params.toString() ? `?${params.toString()}` : ''}`);
+      }
     } catch {
       // Leave it visible so the admin can retry, or open the full attendance page instead.
     } finally {
@@ -358,6 +384,7 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
     path: string;
     kind?: 'leave';
     leaveRequestId?: number;
+    leaveStatus?: string;
   }
 
   const notifications: NotificationItem[] = [];
@@ -408,7 +435,7 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
     });
   });
 
-  leaveRequests.filter((leave) => leave.status === 'PENDING').forEach((leave) => {
+  leaveRequests.slice(0, 10).forEach((leave) => {
     const id = `leave-${leave.id}`;
     const ov = overrides[id];
     if (ov?.dismissed) return;
@@ -431,17 +458,25 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
     if (leaveYear) params.set('year', leaveYear);
     const leavePath = `/attendance${params.toString() ? `?${params.toString()}` : ''}`;
 
+    const isPending = leave.status === 'PENDING';
+    const isApproved = leave.status === 'APPROVED';
+
     notifications.push({
       id,
       icon: CalendarDays,
-      title: 'Employee leave request',
+      title: isPending ? 'Employee leave request' : `Leave request ${leave.status.toLowerCase()}`,
       desc: `${leave.employee_name} · ${leave.request_type} · ${leave.start_date}`,
       time: formatTimeAgo(leave.created_at),
       timestamp: leave.created_at ? new Date(leave.created_at).getTime() : 0,
-      color: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400',
+      color: isPending
+        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400'
+        : isApproved
+        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400'
+        : 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400',
       path: leavePath,
       kind: 'leave',
       leaveRequestId: leave.id,
+      leaveStatus: leave.status,
     });
   });
 
@@ -601,8 +636,22 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
               key={notif.id}
               role="button"
               tabIndex={0}
-              onClick={() => goTo(notif.path)}
-              onKeyDown={(e) => { if (e.key === 'Enter') goTo(notif.path); }}
+              onClick={() => {
+                if (notif.kind === 'leave' && notif.leaveRequestId) {
+                  onViewAllActivity('leaves', notif.leaveRequestId);
+                } else {
+                  goTo(notif.path);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  if (notif.kind === 'leave' && notif.leaveRequestId) {
+                    onViewAllActivity('leaves', notif.leaveRequestId);
+                  } else {
+                    goTo(notif.path);
+                  }
+                }
+              }}
               className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/60 transition-colors text-left border-b border-neutral-50 dark:border-neutral-800/60 last:border-0 cursor-pointer group"
             >
               <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -615,22 +664,43 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
                 </div>
               </div>
               {notif.kind === 'leave' && notif.leaveRequestId ? (
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  {notif.leaveStatus === 'PENDING' ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={decidingId === notif.leaveRequestId}
+                        onClick={(e) => handleDecision(e, notif.leaveRequestId as number, 'APPROVED')}
+                        className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-2 py-1 rounded-md transition-colors disabled:opacity-50 cursor-pointer"
+                        title="Accept & View Attendance"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        disabled={decidingId === notif.leaveRequestId}
+                        onClick={(e) => handleDecision(e, notif.leaveRequestId as number, 'REJECTED')}
+                        className="text-[10px] font-bold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 px-2 py-1 rounded-md transition-colors disabled:opacity-50 cursor-pointer"
+                        title="Reject & View Attendance"
+                      >
+                        Reject
+                      </button>
+                    </>
+                  ) : (
+                    <span className={cn(
+                      "text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize",
+                      notif.leaveStatus === 'APPROVED' ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400" : "bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400"
+                    )}>
+                      {notif.leaveStatus?.toLowerCase()}
+                    </span>
+                  )}
                   <button
                     type="button"
-                    disabled={decidingId === notif.leaveRequestId}
-                    onClick={(e) => handleDecision(e, notif.leaveRequestId as number, 'APPROVED')}
-                    className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-2 py-1 rounded-md transition-colors disabled:opacity-50 cursor-pointer"
+                    onClick={() => onViewAllActivity('leaves', notif.leaveRequestId)}
+                    className="text-[10px] font-semibold text-neutral-600 dark:text-neutral-300 hover:text-black dark:hover:text-white px-1.5 py-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                    title="View details"
                   >
-                    Accept
-                  </button>
-                  <button
-                    type="button"
-                    disabled={decidingId === notif.leaveRequestId}
-                    onClick={(e) => handleDecision(e, notif.leaveRequestId as number, 'REJECTED')}
-                    className="text-[10px] font-bold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 px-2 py-1 rounded-md transition-colors disabled:opacity-50 cursor-pointer"
-                  >
-                    Reject
+                    View
                   </button>
                 </div>
               ) : (
@@ -670,8 +740,28 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [activityInitialFilter, setActivityInitialFilter] = useState<'all' | 'leaves'>('all');
+  const [selectedLeaveIdForModal, setSelectedLeaveIdForModal] = useState<number | null>(null);
+  interface ToastNotice {
+    id: string;
+    title: string;
+    employeeName: string;
+    empId?: string;
+    details: string;
+    reason?: string;
+    path: string;
+  }
+
   const [hasUnread, setHasUnread] = useState(false);
+  const [toastNotification, setToastNotification] = useState<ToastNotice | null>(null);
   const notificationWrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!toastNotification) return;
+    const timer = window.setTimeout(() => {
+      setToastNotification(null);
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [toastNotification]);
 
   useEffect(() => {
     if (location.pathname === '/attendance' && new URLSearchParams(location.search).has('leave_request')) {
@@ -696,11 +786,17 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
       const slipTime = latestSlip ? new Date(latestSlip.emailed_at || latestSlip.generated_at).getTime() : 0;
       let latestLeaveTime = 0;
       let requests: EmployeeLeaveRequest[] = [];
+      let latestPendingLeave: EmployeeLeaveRequest | undefined;
       try {
         requests = await listEmployeeLeaveRequests();
-        latestLeaveTime = requests.filter((leave) => leave.status === 'PENDING').reduce(
+        const pendingLeaves = requests.filter((leave) => leave.status === 'PENDING');
+        latestLeaveTime = pendingLeaves.reduce(
           (latest, leave) => Math.max(latest, new Date(leave.created_at).getTime() || 0), 0,
         );
+        if (pendingLeaves.length > 0) {
+          pendingLeaves.sort((a, b) => (new Date(b.created_at).getTime() || b.id) - (new Date(a.created_at).getTime() || a.id));
+          latestPendingLeave = pendingLeaves[0];
+        }
       } catch { /* Attendance can be unavailable for this user. */ }
 
       let latestMissedCheckoutTime = 0;
@@ -726,8 +822,46 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
       }
 
       const maxTime = Math.max(empTime, slipTime, latestPlanAlertTime, latestLeaveTime, latestMissedCheckoutTime);
+      const isUnread = hasUnreadItems(maxTime);
+      setHasUnread(isUnread);
 
-      setHasUnread(hasUnreadItems(maxTime));
+      // Trigger animated floating toast badge for new pending request (auto-closes in 8s)
+      if (latestPendingLeave && isUnread) {
+        const lastNotifiedStr = sessionStorage.getItem('last_notified_leave_id');
+        const lastNotifiedId = lastNotifiedStr ? parseInt(lastNotifiedStr, 10) : 0;
+        if (latestPendingLeave.id !== lastNotifiedId) {
+          sessionStorage.setItem('last_notified_leave_id', String(latestPendingLeave.id));
+
+          const timeSlot = (latestPendingLeave.from_time && latestPendingLeave.to_time)
+            ? `${latestPendingLeave.from_time} – ${latestPendingLeave.to_time} (${latestPendingLeave.duration_hours || 2} hrs)`
+            : latestPendingLeave.duration_hours
+            ? `${latestPendingLeave.duration_hours} hrs`
+            : latestPendingLeave.start_date;
+
+          const params = new URLSearchParams();
+          if (latestPendingLeave.employee_id) params.set('employee_id', String(latestPendingLeave.employee_id));
+          if (latestPendingLeave.emp_id) params.set('code', latestPendingLeave.emp_id);
+          if (latestPendingLeave.employee_name) params.set('name', latestPendingLeave.employee_name);
+          params.set('leave_request', String(latestPendingLeave.id));
+          const leavePath = `/attendance${params.toString() ? `?${params.toString()}` : ''}`;
+
+          const typeName = latestPendingLeave.request_type === 'PERMISSION'
+            ? 'Permission'
+            : latestPendingLeave.request_type === 'HALF_DAY'
+            ? 'Half Day'
+            : 'Leave';
+
+          setToastNotification({
+            id: `leave-${latestPendingLeave.id}`,
+            title: `New ${typeName} Request! 🔔`,
+            employeeName: latestPendingLeave.employee_name,
+            empId: latestPendingLeave.emp_id,
+            details: timeSlot,
+            reason: latestPendingLeave.reason,
+            path: leavePath,
+          });
+        }
+      }
     } catch {
       // ignore
     }
@@ -741,7 +875,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
     // Admins often leave this tab open in the background (no focus/reload event
     // fires), so poll periodically too - otherwise a new leave/permission
     // request only surfaces after the tab is refocused.
-    const pollId = window.setInterval(checkUnread, 45000);
+    const pollId = window.setInterval(checkUnread, 15000);
     window.addEventListener('notifications_read_updated', handleReadUpdate);
     window.addEventListener('focus', checkUnread);
     return () => {
@@ -856,6 +990,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
             <button
               type="button"
               onClick={() => {
+                setToastNotification(null);
                 setShowNotifications((prev) => {
                   const next = !prev;
                   if (next) {
@@ -875,7 +1010,12 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
               aria-label="Notifications"
               aria-expanded={showNotifications}
             >
-              <Bell className="h-4 w-4" />
+              <motion.div
+                animate={toastNotification ? { rotate: [0, -18, 18, -12, 12, 0] } : {}}
+                transition={{ duration: 0.6, repeat: 3 }}
+              >
+                <Bell className="h-4 w-4" />
+              </motion.div>
               {hasUnread && (
                 <motion.span
                   initial={{ scale: 0 }}
@@ -886,13 +1026,86 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
               )}
             </button>
 
+            {/* FLOATING ANIMATED TOAST BADGE (Auto-dismisses in 8 seconds) */}
+            <AnimatePresence>
+              {toastNotification && !showNotifications && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                  transition={{ type: "spring", stiffness: 450, damping: 28 }}
+                  onClick={() => {
+                    const rawLeaveId = parseInt(toastNotification.id.replace('leave-', ''), 10);
+                    setToastNotification(null);
+                    setNotificationsRead();
+                    setHasUnread(false);
+                    setSelectedLeaveIdForModal(isNaN(rawLeaveId) ? null : rawLeaveId);
+                    setActivityInitialFilter('leaves');
+                    setShowActivityModal(true);
+                  }}
+                  className="absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-2xl p-3.5 bg-white dark:bg-neutral-900 border border-neutral-200/90 dark:border-neutral-800 shadow-xl shadow-black/10 dark:shadow-black/40 z-50 cursor-pointer overflow-hidden group hover:border-neutral-300 dark:hover:border-neutral-700 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                      </span>
+                      <h4 className="text-xs font-extrabold text-neutral-900 dark:text-neutral-100 flex items-center gap-1">
+                        {toastNotification.title}
+                      </h4>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setToastNotification(null);
+                      }}
+                      className="p-1 rounded-md text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                      title="Dismiss"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="mt-2 text-xs">
+                    <div className="font-bold text-neutral-800 dark:text-neutral-200 flex items-center justify-between gap-2">
+                      <span>{toastNotification.employeeName}</span>
+                      {toastNotification.empId && (
+                        <span className="text-[10px] font-semibold text-neutral-400 dark:text-neutral-500">
+                          {toastNotification.empId}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 font-semibold text-[11px]">
+                      <span>⏱️ {toastNotification.details}</span>
+                    </div>
+                    {toastNotification.reason && (
+                      <p className="mt-1.5 text-[11px] text-neutral-500 dark:text-neutral-400 italic line-clamp-1">
+                        "{toastNotification.reason}"
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Slim animated countdown progress bar (4.5s) */}
+                  <motion.div
+                    initial={{ width: '100%' }}
+                    animate={{ width: '0%' }}
+                    transition={{ duration: 8, ease: 'linear' }}
+                    className="absolute bottom-0 left-0 h-0.5 bg-emerald-500"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <AnimatePresence>
               {showNotifications && (
                 <NotificationDropdown
                   onClose={closeNotifications}
-                  onViewAllActivity={(filter) => {
+                  onViewAllActivity={(filter, leaveId) => {
                     setShowNotifications(false);
                     setActivityInitialFilter(filter || 'all');
+                    setSelectedLeaveIdForModal(leaveId || null);
                     setShowActivityModal(true);
                   }}
                 />
@@ -946,7 +1159,14 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
       {/* Centered Activity & Notifications Modal */}
       <AnimatePresence>
         {showActivityModal && (
-          <AllActivityModal onClose={() => setShowActivityModal(false)} initialFilter={activityInitialFilter} />
+          <AllActivityModal
+            onClose={() => {
+              setShowActivityModal(false);
+              setSelectedLeaveIdForModal(null);
+            }}
+            initialFilter={activityInitialFilter}
+            initialLeaveId={selectedLeaveIdForModal}
+          />
         )}
       </AnimatePresence>
     </>

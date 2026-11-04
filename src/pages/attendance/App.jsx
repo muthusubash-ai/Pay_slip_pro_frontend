@@ -143,7 +143,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
     }
     if (typeof window !== 'undefined') {
       const searchTab = new URLSearchParams(window.location.search).get('tab');
-      if (searchTab && ['punch', 'history', 'leave', 'status'].includes(searchTab)) {
+      if (searchTab && ['punch', 'history', 'leave', 'status', 'onboard'].includes(searchTab)) {
         return searchTab;
       }
     }
@@ -164,12 +164,15 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
   const [hoursDropdownOpen, setHoursDropdownOpen] = useState(false);
 
   // Leave & Permission states
+  const [isManualRegistration, setIsManualRegistration] = useState(false);
   const [leaveDurationMode, setLeaveDurationMode] = useState('single'); // 'single' (One Day) | 'multiple' (Many Days)
   const [leaveForm, setLeaveForm] = useState({
     request_type: 'CASUAL',
     start_date: '',
     end_date: '',
     duration_hours: '2',
+    from_time: '09:30',
+    to_time: '11:30',
     reason: ''
   });
   const [myLeavesList, setMyLeavesList] = useState([]);
@@ -570,17 +573,20 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
       setCurrentUser(null);
       setHistoryList([]);
     }
+    clearAttendanceInvite();
     setPrefilledEmployee(null);
+    setIsManualRegistration(true);
     setRegData({ full_name: '', emp_id: '', email: '', password: '', confirm_password: '', designation: '', joining_date: '', phone_number: '' });
     setRegPhoto(null);
     setRegPhotoPreview(null);
     setRegPhotoDescriptor(null);
     setErrorBanner('');
-    setAuthMode('login');
+    setAuthMode('app');
     setActiveTab('onboard');
     if (typeof window !== 'undefined') {
       try {
         const url = new URL(window.location.href);
+        url.searchParams.delete('invite');
         url.searchParams.set('tab', 'onboard');
         window.history.pushState({}, document.title, url.toString());
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -803,8 +809,9 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
     setLoadingLeaves(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/attendance/my-leaves/?emp_id=${currentUser.emp_id}`);
-      const data = await res.json();
-      if (res.ok) {
+      const contentType = res.headers.get('content-type');
+      if (res.ok && contentType && contentType.includes('application/json')) {
+        const data = await res.json();
         setMyLeavesList(data.leave_requests || []);
       }
     } catch (err) {
@@ -838,6 +845,15 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
       return;
     }
 
+    if (isPermission && leaveForm.from_time && leaveForm.to_time && leaveForm.to_time <= leaveForm.from_time) {
+      setNotificationModal({
+        type: 'error',
+        title: 'Invalid Time Slot',
+        message: 'Permission To Time must be later than From Time.'
+      });
+      return;
+    }
+
     const effectiveEndDate = isSingleDate ? leaveForm.start_date : (leaveForm.end_date || leaveForm.start_date);
 
     setIsProcessing(true);
@@ -852,20 +868,32 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
           start_date: leaveForm.start_date,
           end_date: effectiveEndDate,
           duration_hours: isPermission ? leaveForm.duration_hours : null,
+          from_time: isPermission ? leaveForm.from_time : null,
+          to_time: isPermission ? leaveForm.to_time : null,
           reason: leaveForm.reason
         })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to submit request');
+      let data = {};
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const rawText = await res.text();
+        throw new Error(res.ok ? 'Server returned invalid response.' : (res.status === 401 || res.status === 403 ? 'Your attendance session has expired. Please sign in with your password to continue.' : `Server Error (${res.status})`));
+      }
+      if (!res.ok) throw new Error(data.error || data.detail || 'Failed to submit request');
 
       const formattedStart = formatDisplayDate(leaveForm.start_date);
       const formattedEnd = formatDisplayDate(effectiveEndDate);
+      const formattedTimeRange = (isPermission && leaveForm.from_time && leaveForm.to_time)
+        ? ` (${formatTime12(leaveForm.from_time)} – ${formatTime12(leaveForm.to_time)})`
+        : '';
 
       setNotificationModal({
         type: 'success',
         title: 'Request Submitted! 📝',
         message: isPermission
-          ? `Your ${leaveForm.duration_hours}-hour permission request for ${formattedStart} has been submitted for approval.`
+          ? `Your ${leaveForm.duration_hours}-hour permission request${formattedTimeRange} for ${formattedStart} has been submitted for approval.`
           : isHalfDay
           ? `Your Half Day Leave request for ${formattedStart} has been submitted for approval.`
           : isSingleDate
@@ -878,6 +906,8 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
         start_date: '',
         end_date: '',
         duration_hours: '2',
+        from_time: '09:30',
+        to_time: '11:30',
         reason: ''
       });
       setLeaveDurationMode('single');
@@ -892,6 +922,39 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handlePermissionTimeChange = (field, val) => {
+    const newFrom = field === 'from_time' ? val : (leaveForm.from_time || '09:30');
+    const newTo = field === 'to_time' ? val : (leaveForm.to_time || '11:30');
+    let calcHrs = leaveForm.duration_hours || '2';
+    if (newFrom && newTo) {
+      const [h1, m1] = newFrom.split(':').map(Number);
+      const [h2, m2] = newTo.split(':').map(Number);
+      const diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+      if (diff > 0) {
+        calcHrs = String(Math.round((diff / 60) * 10) / 10);
+      }
+    }
+    setLeaveForm(prev => ({
+      ...prev,
+      [field]: val,
+      duration_hours: calcHrs
+    }));
+  };
+
+  const handlePermissionPresetHours = (presetHrs) => {
+    const baseFrom = leaveForm.from_time || '09:30';
+    const [h, m] = baseFrom.split(':').map(Number);
+    const totalMins = (h * 60 + m) + (parseFloat(presetHrs) * 60);
+    const newH = Math.floor(totalMins / 60) % 24;
+    const newM = Math.floor(totalMins % 60);
+    const newTo = `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+    setLeaveForm(prev => ({
+      ...prev,
+      duration_hours: presetHrs,
+      to_time: newTo
+    }));
   };
 
 
@@ -972,6 +1035,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
   }, []);
 
   const handleEmpIdLookup = async (queryVal) => {
+    if (isManualRegistration) return;
     if (!queryVal || queryVal.trim().length < 2) return;
     setIsLookingUpEmp(true);
     fetchGeofenceConfig(queryVal.trim());
@@ -1420,11 +1484,36 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
     }
   };
 
+
+
   const handleRegisterEmployee = async (e) => {
     e.preventDefault();
     setErrorBanner(null);
-    if (!hasAttendanceInvite()) {
-      setErrorBanner('Open the activation link sent by your company administrator to register.');
+
+    if (!regData.full_name || !regData.full_name.trim()) {
+      setNotificationModal({
+        type: 'error',
+        title: 'Full Name Required',
+        message: 'Please enter your Full Name.'
+      });
+      return;
+    }
+
+    if (!regData.emp_id || !regData.emp_id.trim()) {
+      setNotificationModal({
+        type: 'error',
+        title: 'Employee ID Required',
+        message: 'Please enter your Employee ID (e.g. EMP001).'
+      });
+      return;
+    }
+
+    if (!regData.email || !regData.email.trim()) {
+      setNotificationModal({
+        type: 'error',
+        title: 'Email Required',
+        message: 'Please enter your corporate or registered email address.'
+      });
       return;
     }
 
@@ -1565,6 +1654,8 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
     }
   };
 
+
+
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setErrorBanner(null);
@@ -1607,6 +1698,8 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
       setIsProcessing(false);
     }
   };
+
+
 
   const handleForgotSendOtp = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -1733,6 +1826,8 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
       setIsProcessing(false);
     }
   };
+
+
 
   const executeGoogleAuth = async (credential) => {
     setGoogleSigningIn(true);
@@ -2386,7 +2481,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
               )}
 
               {/* PRE-FILLED PROFILE NOTICE BANNER */}
-              {(prefilledEmployee || regData.full_name || regData.emp_id) && !prefilledEmployee?.email_conflict && (
+              {Boolean(prefilledEmployee) && !prefilledEmployee?.email_conflict && (
                 <div style={{
                   padding: '14px 18px',
                   borderRadius: '14px',
@@ -2401,8 +2496,30 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                       Profile Details Auto-Filled from Pay Slip Pro
                     </h4>
                     <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: theme.textSecondary }}>
-                      {regData.full_name ? `Welcome ${regData.full_name} (${regData.emp_id || 'Employee'})! ` : ''}Your employee records have been loaded. 
+                      {regData.full_name ? `Welcome ${regData.full_name} (${regData.emp_id || 'Employee'})! ` : ''}Your employee records have been loaded from your invitation. 
                       <strong> You only need to set your password (Step 2) and capture your face photo (Step 3) to complete registration.</strong>
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* MANUAL REGISTRATION NOTICE BANNER */}
+              {!prefilledEmployee && (
+                <div style={{
+                  padding: '14px 18px',
+                  borderRadius: '14px',
+                  background: isDarkMode ? 'rgba(30, 27, 75, 0.4)' : '#eef2ff',
+                  border: `1px solid ${isDarkMode ? '#3730a3' : '#c7d2fe'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px'
+                }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '13px', fontWeight: '800', color: isDarkMode ? '#c7d2fe' : '#3730a3' }}>
+                      ✍️ Manual Employee Registration
+                    </h4>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: isDarkMode ? '#a5b4fc' : '#4338ca' }}>
+                      Please enter your Full Name, Employee ID, Email, and details manually. Set your password and capture your face photo to complete registration.
                     </p>
                   </div>
                 </div>
@@ -2421,7 +2538,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '800', color: theme.textPrimary, display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: isDarkMode ? '#ffffff' : '#0f172a', color: isDarkMode ? '#0a0a0a' : '#ffffff', fontSize: '11px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800' }}>1</span>
-                    Employee Information (Auto-Filled from Pay Slip Pro)
+                    {prefilledEmployee ? 'Employee Information (Auto-Filled from Pay Slip Pro)' : 'Employee Information (Manual Entry)'}
                   </h4>
                   {isLookingUpEmp ? (
                     <span style={{ fontSize: '11px', color: theme.textSecondary, display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600' }}>
@@ -2439,7 +2556,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                       <label style={{ fontSize: '12px', fontWeight: '700', color: theme.textSecondary }}>Full Name *</label>
-                      {regData.full_name && (
+                      {prefilledEmployee?.full_name && (
                         <span style={{ fontSize: '10px', fontWeight: '700', color: '#10b981' }}>✓ Auto-filled</span>
                       )}
                     </div>
@@ -2457,7 +2574,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                       <label style={{ fontSize: '12px', fontWeight: '700', color: theme.textSecondary }}>Employee ID *</label>
-                      {regData.emp_id && (
+                      {prefilledEmployee?.emp_id && (
                         <span style={{ fontSize: '10px', fontWeight: '700', color: '#10b981' }}>✓ Auto-filled</span>
                       )}
                     </div>
@@ -2479,7 +2596,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                       <label style={{ fontSize: '12px', fontWeight: '700', color: theme.textSecondary }}>Email *</label>
-                      {regData.email && (
+                      {prefilledEmployee?.email && (
                         <span style={{ fontSize: '10px', fontWeight: '700', color: '#10b981' }}>✓ Auto-filled</span>
                       )}
                     </div>
@@ -2503,7 +2620,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                       <label style={{ fontSize: '12px', fontWeight: '700', color: theme.textSecondary }}>Designation *</label>
-                      {regData.designation && (
+                      {prefilledEmployee?.designation && (
                         <span style={{ fontSize: '10px', fontWeight: '700', color: '#10b981' }}>✓ Auto-filled</span>
                       )}
                     </div>
@@ -2524,7 +2641,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                       <label style={{ fontSize: '12px', fontWeight: '700', color: theme.textSecondary }}>Date of Joining</label>
-                      {regData.joining_date && (
+                      {prefilledEmployee?.joining_date && (
                         <span style={{ fontSize: '10px', fontWeight: '700', color: '#10b981' }}>✓ Auto-filled</span>
                       )}
                     </div>
@@ -2540,7 +2657,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                       <label style={{ fontSize: '12px', fontWeight: '700', color: theme.textSecondary }}>Phone Number</label>
-                      {regData.phone_number && (
+                      {prefilledEmployee?.phone_number && (
                         <span style={{ fontSize: '10px', fontWeight: '700', color: '#10b981' }}>✓ Auto-filled</span>
                       )}
                     </div>
@@ -3108,7 +3225,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                   )}
 
                   {leaveForm.request_type === 'PERMISSION' ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                    <div className="flex flex-col gap-3 w-full">
                       <div className="w-full">
                         <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: theme.textSecondary, marginBottom: '6px' }}>Date *</label>
                         <input
@@ -3121,80 +3238,110 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                         />
                       </div>
 
-                      {/* CUSTOM HOURS REQUIRED DROPDOWN */}
-                      <div data-custom-dropdown className="w-full" style={{ position: 'relative' }}>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: theme.textSecondary, marginBottom: '6px' }}>Hours Required *</label>
-                        <button
-                          type="button"
-                          onClick={() => setHoursDropdownOpen(!hoursDropdownOpen)}
-                          style={{
-                            width: '100%',
-                            minWidth: 0,
-                            padding: '11px 14px',
-                            borderRadius: '10px',
-                            backgroundColor: theme.inputBg,
-                            border: `1px solid ${theme.inputBorder}`,
-                            fontSize: '13px',
-                            fontWeight: '700',
-                            color: theme.textPrimary,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            boxSizing: 'border-box'
-                          }}
-                        >
-                          <span>{leaveForm.duration_hours} Hour{leaveForm.duration_hours > 1 ? 's' : ''}</span>
-                          <ChevronDown style={{ width: '15px', height: '15px', color: theme.textSecondary, transition: 'transform 0.2s', transform: hoursDropdownOpen ? 'rotate(180deg)' : 'none' }} />
-                        </button>
+                      {/* FROM TIME AND TO TIME INPUTS */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                        <div className="w-full">
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: theme.textSecondary, marginBottom: '6px' }}>
+                            From Time *
+                          </label>
+                          <input
+                            type="time"
+                            required
+                            className="biometric-input"
+                            value={leaveForm.from_time || '09:30'}
+                            onChange={(e) => handlePermissionTimeChange('from_time', e.target.value)}
+                            style={{
+                              width: '100%',
+                              minWidth: 0,
+                              padding: '11px 14px',
+                              borderRadius: '10px',
+                              backgroundColor: theme.inputBg,
+                              border: `1px solid ${theme.inputBorder}`,
+                              fontSize: '13px',
+                              fontWeight: '700',
+                              color: theme.textPrimary,
+                              colorScheme: isDarkMode ? 'dark' : 'light',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                        </div>
 
-                        {hoursDropdownOpen && (
-                          <div style={{
-                            position: 'absolute',
-                            top: 'calc(100% + 6px)',
-                            left: 0,
-                            right: 0,
-                            backgroundColor: theme.cardBg,
-                            borderRadius: '12px',
-                            border: `1px solid ${theme.border}`,
-                            boxShadow: isDarkMode ? '0 12px 30px rgba(0,0,0,0.6)' : '0 10px 25px -5px rgba(0,0,0,0.1)',
-                            zIndex: 100,
-                            padding: '6px',
-                            overflow: 'hidden'
+                        <div className="w-full">
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: theme.textSecondary, marginBottom: '6px' }}>
+                            To Time *
+                          </label>
+                          <input
+                            type="time"
+                            required
+                            className="biometric-input"
+                            value={leaveForm.to_time || '11:30'}
+                            onChange={(e) => handlePermissionTimeChange('to_time', e.target.value)}
+                            style={{
+                              width: '100%',
+                              minWidth: 0,
+                              padding: '11px 14px',
+                              borderRadius: '10px',
+                              backgroundColor: theme.inputBg,
+                              border: `1px solid ${theme.inputBorder}`,
+                              fontSize: '13px',
+                              fontWeight: '700',
+                              color: theme.textPrimary,
+                              colorScheme: isDarkMode ? 'dark' : 'light',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* QUICK DURATION PRESETS & BADGE (BLACK & WHITE THEME) */}
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 rounded-xl"
+                        style={{
+                          backgroundColor: theme.cardInnerBg,
+                          border: `1px solid ${theme.border}`
+                        }}>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span style={{ fontSize: '11px', fontWeight: '700', color: theme.textSecondary, marginRight: '4px' }}>Quick Presets:</span>
+                          {['1', '2', '3'].map((hr) => {
+                            const isSelected = String(leaveForm.duration_hours) === hr;
+                            return (
+                              <button
+                                key={hr}
+                                type="button"
+                                onClick={() => handlePermissionPresetHours(hr)}
+                                style={{
+                                  padding: '5px 12px',
+                                  borderRadius: '8px',
+                                  fontSize: '11px',
+                                  fontWeight: '800',
+                                  border: isSelected ? (isDarkMode ? '1px solid #ffffff' : '1px solid #0f172a') : `1px solid ${theme.border}`,
+                                  backgroundColor: isSelected ? (isDarkMode ? '#ffffff' : '#0f172a') : (isDarkMode ? '#27272a' : '#ffffff'),
+                                  color: isSelected ? (isDarkMode ? '#0a0a0a' : '#ffffff') : theme.textPrimary,
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                  boxShadow: isSelected ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
+                                }}
+                              >
+                                {hr} Hr{parseInt(hr) > 1 ? 's' : ''}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <div className="flex items-center gap-2 self-start sm:self-center">
+                          <span style={{ fontSize: '12px', fontWeight: '800', color: theme.textPrimary }}>
+                            ⏱️ {formatTime12(leaveForm.from_time || '09:30')} – {formatTime12(leaveForm.to_time || '11:30')}
+                          </span>
+                          <span style={{
+                            padding: '2px 8px',
+                            borderRadius: '6px',
+                            backgroundColor: isDarkMode ? '#ffffff' : '#0f172a',
+                            color: isDarkMode ? '#0a0a0a' : '#ffffff',
+                            fontSize: '11px',
+                            fontWeight: '800'
                           }}>
-                            {['1', '2', '3'].map((hr) => {
-                              const isSelected = String(leaveForm.duration_hours) === hr;
-                              return (
-                                <button
-                                  key={hr}
-                                  type="button"
-                                  onClick={() => {
-                                    setLeaveForm({ ...leaveForm, duration_hours: hr });
-                                    setHoursDropdownOpen(false);
-                                  }}
-                                  style={{
-                                    width: '100%',
-                                    padding: '9px 12px',
-                                    borderRadius: '8px',
-                                    backgroundColor: isSelected ? (isDarkMode ? '#27272a' : '#f1f5f9') : 'transparent',
-                                    color: isSelected ? (isDarkMode ? '#ffffff' : '#0f172a') : theme.textPrimary,
-                                    fontSize: '13px',
-                                    fontWeight: isSelected ? '800' : '600',
-                                    textAlign: 'left',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between'
-                                  }}
-                                >
-                                  <span>{hr} Hour{parseInt(hr) > 1 ? 's' : ''}</span>
-                                  {isSelected && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isDarkMode ? '#ffffff' : '#0f172a' }} />}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
+                            {leaveForm.duration_hours || 2} hrs
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ) : leaveForm.request_type === 'HALF_DAY' ? (
@@ -3344,7 +3491,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                           </div>
                           <div style={{ fontSize: '12px', color: theme.textSecondary, fontWeight: '600' }}>
                             {item.request_type === 'PERMISSION' ? (
-                              <>⏱️ Date: {formatDisplayDate(item.start_date)} | Duration: {item.duration_hours || 2} Hours</>
+                              <>⏱️ Date: {formatDisplayDate(item.start_date)} | {item.from_time && item.to_time ? `Time: ${item.from_time} – ${item.to_time} ` : ''}({item.duration_hours || 2} Hours)</>
                             ) : item.request_type === 'HALF_DAY' ? (
                               <>🌗 Date: {formatDisplayDate(item.start_date)} (Half Day)</>
                             ) : item.start_date === item.end_date ? (
@@ -3418,7 +3565,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                         </div>
                         <div style={{ fontSize: '13px', color: theme.textSecondary, fontWeight: '600' }}>
                           {item.request_type === 'PERMISSION' ? (
-                            <>⏱️ Date: {formatDisplayDate(item.start_date)} | Duration: {item.duration_hours || 2} Hours</>
+                            <>⏱️ Date: {formatDisplayDate(item.start_date)} | {item.from_time && item.to_time ? `Time: ${item.from_time} – ${item.to_time} ` : ''}({item.duration_hours || 2} Hours)</>
                           ) : item.request_type === 'HALF_DAY' ? (
                             <>🌗 Date: {formatDisplayDate(item.start_date)} (Half Day)</>
                           ) : item.start_date === item.end_date ? (
