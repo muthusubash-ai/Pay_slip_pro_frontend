@@ -3,6 +3,7 @@ import { attendanceFetch as fetch, hasAttendanceInvite, clearAttendanceInvite, g
 import GoogleAttendanceButton from './GoogleAttendanceButton';
 import { loadFaceApi } from './faceApiLoader';
 import FaceScanModalCapture, { preloadFaceBiometrics, ensureFaceModelsLoaded } from './FaceScanModalCapture';
+import { DiwaliSparkler } from '../../components/common/DiwaliSparkler';
 
 import { 
   Building2, 
@@ -2067,30 +2068,38 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
         <div className="w-full flex items-center justify-between gap-3">
           
           {/* BRAND LOGO & TITLE */}
-          <div className="flex items-center gap-3 shrink-0">
-            {companyInfo.company_logo ? (
-              <img 
-                src={companyInfo.company_logo} 
-                alt={`${companyInfo.company_name || 'Company'} Logo`} 
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  const fb = document.getElementById('company-header-fallback-logo');
-                  if (fb) fb.style.display = 'flex';
-                }}
-                className="w-9 h-9 rounded-xl object-contain bg-white dark:bg-neutral-800 border border-neutral-200/80 dark:border-neutral-700/80 p-1 shadow-sm shrink-0"
-              />
-            ) : null}
-            <div 
-              id="company-header-fallback-logo"
-              style={{ display: companyInfo.company_logo ? 'none' : 'flex' }}
-              className="w-9 h-9 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200/80 dark:border-neutral-700/80 items-center justify-center shadow-sm shrink-0 overflow-hidden p-0.5"
-            >
-              <img src="/biometric-favicon.png" alt="Portal Icon" className="w-full h-full object-contain" />
+          <div className="flex items-center gap-3 shrink-0 overflow-visible">
+            <div className="relative overflow-visible shrink-0 flex items-center justify-center">
+              {companyInfo.company_logo ? (
+                <img 
+                  src={companyInfo.company_logo} 
+                  alt={`${companyInfo.company_name || 'Company'} Logo`} 
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const fb = document.getElementById('company-header-fallback-logo');
+                    if (fb) fb.style.display = 'flex';
+                  }}
+                  className="w-9 h-9 rounded-xl object-contain bg-white dark:bg-neutral-800 border border-neutral-200/80 dark:border-neutral-700/80 p-1 shadow-sm shrink-0"
+                />
+              ) : null}
+              <div 
+                id="company-header-fallback-logo"
+                style={{ display: companyInfo.company_logo ? 'none' : 'flex' }}
+                className="w-9 h-9 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200/80 dark:border-neutral-700/80 items-center justify-center shadow-sm shrink-0 overflow-hidden p-0.5"
+              >
+                <img src="/biometric-favicon.png" alt="Portal Icon" className="w-full h-full object-contain" />
+              </div>
+              <DiwaliSparkler />
             </div>
             <div className="flex flex-col min-w-0">
-              <h1 className="m-0 text-sm sm:text-base font-bold tracking-tight text-neutral-900 dark:text-white leading-tight truncate">
-                {companyInfo.company_name || 'Zigmaa Tech'}
-              </h1>
+              <div className="flex items-center gap-1.5">
+                <h1 className="m-0 text-sm sm:text-base font-bold tracking-tight text-neutral-900 dark:text-white leading-tight truncate">
+                  {companyInfo.company_name || 'Zigmaa Tech'}
+                </h1>
+                <span className="hidden sm:inline-block text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                  ✨
+                </span>
+              </div>
               <p className="hidden sm:block m-0 text-[10px] font-semibold tracking-wider uppercase text-neutral-400 dark:text-neutral-500 truncate">
                 Attendance & Biometric Portal
               </p>

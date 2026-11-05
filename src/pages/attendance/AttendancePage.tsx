@@ -40,11 +40,19 @@ function toRawStatus(status: DayStatus): RawStatus {
 // the backend's allocate_weekoff_pool() in attendance_service.py.
 const DEFAULT_WEEKOFF_POOL_UNITS = 2;
 
+interface ConvertedLeaveInfo {
+  offsetFrom: string;
+  reason: string;
+}
+
 function computeDisplayStatuses(
   rawStatuses: Map<string, RawStatus>,
   joiningDate: string,
   poolUnits: number = DEFAULT_WEEKOFF_POOL_UNITS
-): Map<string, DayStatus> {
+): {
+  display: Map<string, DayStatus>;
+  convertedDates: Map<string, ConvertedLeaveInfo>;
+} {
   const combined: Array<{ date: string; kind: 'full' | 'half' }> = [];
   rawStatuses.forEach((st, d) => {
     if (joiningDate && d < joiningDate) return;
@@ -54,25 +62,38 @@ function computeDisplayStatuses(
   combined.sort((a, b) => a.date.localeCompare(b.date));
 
   const display = new Map<string, DayStatus>();
+  const convertedDates = new Map<string, ConvertedLeaveInfo>();
   rawStatuses.forEach((st, d) => display.set(d, st));
 
   let remaining = poolUnits;
+  let lastWeekoffHalfDate = '';
+
   combined.forEach(({ date: d, kind }) => {
     if (kind === 'full') {
       if (remaining >= 2) {
         display.set(d, 'weekoff');
         remaining -= 2;
+      } else if (remaining === 1) {
+        // 1 unit offsets half of this full-day leave -> converted to a half day
+        display.set(d, 'half_day');
+        const offsetDisplay = formatDisplayDate(lastWeekoffHalfDate) || 'previous Half Day';
+        convertedDates.set(d, {
+          offsetFrom: offsetDisplay,
+          reason: `Full day leave converted to Half Day (0.5 day covered by balance Weekoff from ${offsetDisplay}. Only 0.5 day salary will be deducted).`,
+        });
+        remaining -= 1;
       } else {
         display.set(d, 'leave');
       }
     } else if (remaining >= 1) {
       display.set(d, 'weekoff_halfday');
+      lastWeekoffHalfDate = d;
       remaining -= 1;
     } else {
       display.set(d, 'half_day');
     }
   });
-  return display;
+  return { display, convertedDates };
 }
 
 function formatDate(year: number, month: number, day: number): string {
@@ -118,6 +139,52 @@ export function AttendancePage() {
   const [error, setError] = useState('');
   const [quotaWarning, setQuotaWarning] = useState('');
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const [activeMobileNotice, setActiveMobileNotice] = useState<ConvertedLeaveInfo | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const isLongPressActiveRef = useRef<boolean>(false);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) {
+        window.clearTimeout(longPressTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleTouchStart = (dateStr: string) => {
+    isLongPressActiveRef.current = false;
+    const converted = convertedDates.get(dateStr);
+    if (!converted) return;
+
+    longPressTimerRef.current = window.setTimeout(() => {
+      isLongPressActiveRef.current = true;
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(40); } catch { /* ignore */ }
+      }
+      setActiveMobileNotice(converted);
+    }, 450);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartPosRef.current && e.touches && e.touches[0]) {
+      const dx = Math.abs(e.touches[0].clientX - touchStartPosRef.current.x);
+      const dy = Math.abs(e.touches[0].clientY - touchStartPosRef.current.y);
+      if (dx > 8 || dy > 8) {
+        if (longPressTimerRef.current) {
+          window.clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
   const [reportFilter, setReportFilter] = useState<'all' | 'leaves' | 'deductions'>('all');
 
   const { data: company } = useQuery({
@@ -379,8 +446,15 @@ export function AttendancePage() {
       const statuses = new Map<string, RawStatus>();
       const bioMap = new Map<string, AttendanceRecord>();
       const weekOffDates = new Set<string>();
+      const weekoffHalfCount = attendance.filter((a) => (a.status as unknown as string) === 'weekoff_halfday').length;
+
       attendance.forEach((a) => {
-        statuses.set(a.date, toRawStatus(a.status as DayStatus));
+        let raw = toRawStatus(a.status as DayStatus);
+        // If exactly 1 weekoff_halfday exists and this date is a half_day, it was a full leave converted to half day
+        if (a.status === 'half_day' && weekoffHalfCount === 1) {
+          raw = 'leave';
+        }
+        statuses.set(a.date, raw);
         bioMap.set(a.date, a);
         if ((a.status as unknown as string) === 'company_week_off') weekOffDates.add(a.date);
       });
@@ -437,11 +511,11 @@ export function AttendancePage() {
     });
   };
 
-  const displayStatuses = useMemo(() => {
-    const base = computeDisplayStatuses(dayStatuses, joiningDate, weekoffPoolUnits);
+  const { display: displayStatuses, convertedDates } = useMemo(() => {
+    const { display: base, convertedDates: cDates } = computeDisplayStatuses(dayStatuses, joiningDate, weekoffPoolUnits);
     // Company weekly-off days always win over the derived Leave/Weekoff display.
     companyWeekOffDates.forEach((d) => base.set(d, 'company_week_off'));
-    return base;
+    return { display: base, convertedDates: cDates };
   }, [dayStatuses, joiningDate, companyWeekOffDates, weekoffPoolUnits]);
 
   // Warn when a Half Day won't be free because a full-day Weekoff already used up the
@@ -851,7 +925,7 @@ export function AttendancePage() {
                 {monthNames[month - 1]} {year} — {t('attendance.cycleHelp', 'Click to cycle: Present → Leave → Half Day → Permission')}
               </h3>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                The monthly Weekoff is a shared pool worth {weekoffPoolUnits} half-day units ({weekoffAllowance} paid day{weekoffAllowance === 1 ? '' : 's'}/month): a Leave costs 2 units (free only if available), a Half Day costs 1 unit — whichever is marked first (by date) draws from the pool first, with no partial credit. Up to {permissionAllowance} permission{permissionAllowance === 1 ? '' : 's'}/month allowed with 0 deduction (excess permissions deduct 1 day each — configurable in Settings → Company). Days matching the company's configured Weekly Off (Settings → Company) are locked as "Company Off" — always paid, never deducted.
+                The monthly Weekoff is a shared pool worth {weekoffPoolUnits} half-day units ({weekoffAllowance} paid day{weekoffAllowance === 1 ? '' : 's'}/month): a Leave costs 2 units, a Half Day costs 1 unit. If 1 unit remains when a full Leave is marked, it offsets half of it and converts it to a Half Day (only 0.5 day deducted). Whichever is marked first draws from the pool first. Up to {permissionAllowance} permission{permissionAllowance === 1 ? '' : 's'}/month allowed with 0 deduction (excess permissions deduct 1 day each — configurable in Settings → Company). Days matching the company's configured Weekly Off (Settings → Company) are locked as "Company Off" — always paid, never deducted.
               </p>
               {firstActiveDay > 1 && <p className="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">Joined on {joiningDate}. Days before joining are locked and excluded.</p>}
             </div>
@@ -874,7 +948,7 @@ export function AttendancePage() {
           ) : (
             <>
               {/* Day headers */}
-              <div className="grid grid-cols-7 gap-1 mb-2 sm:gap-2">
+              <div className="grid grid-cols-7 gap-1 sm:gap-2.5 md:gap-3 mb-2">
                 {[
                   t('attendance.sun', 'Sun'),
                   t('attendance.mon', 'Mon'),
@@ -891,7 +965,7 @@ export function AttendancePage() {
               </div>
 
               {/* Calendar days */}
-              <div className="grid grid-cols-7 gap-2 sm:gap-3">
+              <div className="grid grid-cols-7 gap-1 sm:gap-2.5 md:gap-3">
                 {/* Empty cells for offset */}
                 {Array.from({ length: new Date(year, month - 1, 1).getDay() }, (_, i) => (
                   <div key={`empty-${i}`} />
@@ -907,24 +981,31 @@ export function AttendancePage() {
 
                   let bgClass = 'bg-white dark:bg-[#18181b] text-neutral-900 dark:text-neutral-100 border border-neutral-200 dark:border-[#27272a] hover:border-neutral-400 dark:hover:border-neutral-600';
                   let label = 'PRESENT';
+                  let shortLabel = 'PRES';
                   if (status === 'leave') {
                     bgClass = 'bg-rose-600 text-white border-transparent shadow-sm';
                     label = 'LEAVE';
+                    shortLabel = 'LEAVE';
                   } else if (status === 'half_day') {
                     bgClass = 'bg-amber-500 text-white border-transparent shadow-sm';
                     label = 'HALF DAY';
+                    shortLabel = 'HALF';
                   } else if (status === 'permission') {
                     bgClass = 'bg-purple-600 text-white border-transparent shadow-sm';
                     label = 'PERMISSION';
+                    shortLabel = 'PERM';
                   } else if (status === 'weekoff') {
                     bgClass = 'bg-blue-600 text-white border-transparent shadow-sm';
                     label = 'WEEKOFF';
+                    shortLabel = 'WKOFF';
                   } else if (status === 'weekoff_halfday') {
                     bgClass = 'bg-teal-600 text-white border-transparent shadow-sm';
                     label = 'WKOFF HALF';
+                    shortLabel = 'W-HALF';
                   } else if (status === 'company_week_off') {
                     bgClass = 'bg-slate-500 text-white border-transparent shadow-sm';
                     label = 'COMPANY OFF';
+                    shortLabel = 'CO. OFF';
                   }
 
                   const locked = beforeJoiningDay || isCompanyWeekOff;
@@ -935,8 +1016,23 @@ export function AttendancePage() {
                       type="button"
                       disabled={locked}
                       aria-label={beforeJoiningDay ? `${dateStr}: before joining date` : `${dateStr}: ${label}`}
-                      onClick={() => cycleStatus(dateStr)}
-                      className={`min-w-0 rounded-2xl p-2.5 sm:p-3 text-center transition-all flex flex-col items-center justify-center min-h-[64px] sm:min-h-[76px] group relative ${
+                      onClick={() => {
+                        if (isLongPressActiveRef.current) {
+                          isLongPressActiveRef.current = false;
+                          return;
+                        }
+                        cycleStatus(dateStr);
+                      }}
+                      onTouchStart={(e) => {
+                        if (e.touches && e.touches[0]) {
+                          touchStartPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                        }
+                        handleTouchStart(dateStr);
+                      }}
+                      onTouchMove={handleTouchMove}
+                      onTouchEnd={handleTouchEnd}
+                      onTouchCancel={handleTouchEnd}
+                      className={`min-w-0 rounded-xl sm:rounded-2xl px-0.5 py-1.5 sm:px-2 sm:py-3 text-center transition-all flex flex-col items-center justify-center min-h-[52px] sm:min-h-[76px] aspect-square sm:aspect-auto group relative select-none ${
                         beforeJoiningDay
                           ? 'cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-600'
                           : isCompanyWeekOff
@@ -944,17 +1040,60 @@ export function AttendancePage() {
                           : `cursor-pointer ${bgClass}`
                       }`}
                     >
-                      <span className="block text-base sm:text-lg font-extrabold tracking-tight leading-none mb-1">
+                      <span className="block text-sm min-[380px]:text-base sm:text-lg font-black tracking-tight leading-none mb-0.5 sm:mb-1">
                         {day}
                       </span>
 
-                      <span className="text-[9px] sm:text-[10px] font-bold tracking-wider uppercase leading-none opacity-90">
-                        {beforeJoiningDay ? 'Not Joined' : label}
+                      <span className="text-[7.5px] min-[360px]:text-[8px] sm:text-[10px] font-bold tracking-tight sm:tracking-wider uppercase leading-none opacity-90 max-w-full truncate px-0.5">
+                        {beforeJoiningDay ? (
+                          <>
+                            <span className="sm:hidden">N/A</span>
+                            <span className="hidden sm:inline">Not Joined</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="sm:hidden">{shortLabel}</span>
+                            <span className="hidden sm:inline">{label}</span>
+                          </>
+                        )}
                       </span>
 
-                      {/* Small late arrival indicator badge */}
+                      {/* Small late arrival indicator badge (top-right) */}
                       {bio?.is_late && !beforeJoiningDay && (
-                        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-neutral-900" title="Late arrival punch" />
+                        <span className="absolute top-1 sm:top-1.5 right-1 sm:right-1.5 w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-amber-400 ring-1.5 sm:ring-2 ring-neutral-900" title="Late arrival punch" />
+                      )}
+
+                      {/* Converted full leave to half-day indicator dot (top-left) and hover/touch notice */}
+                      {convertedDates.has(dateStr) && !beforeJoiningDay && (
+                        <>
+                          <span
+                            className="absolute top-1 sm:top-1.5 left-1 sm:left-1.5 w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-teal-300 dark:bg-teal-400 ring-1.5 sm:ring-2 ring-neutral-900/40 shadow-sm cursor-pointer z-10 animate-pulse"
+                            title={convertedDates.get(dateStr)?.reason}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMobileNotice(convertedDates.get(dateStr) || null);
+                            }}
+                            onTouchEnd={(e) => {
+                              e.stopPropagation();
+                              setActiveMobileNotice(convertedDates.get(dateStr) || null);
+                            }}
+                          />
+
+                          {/* Desktop Hover Notice Tooltip */}
+                          <div className="pointer-events-none absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden sm:group-hover:flex flex-col items-center z-40 w-60 sm:w-64 p-2.5 rounded-xl bg-neutral-900/95 dark:bg-neutral-800/95 text-white text-[11px] leading-snug shadow-2xl border border-neutral-700/80 backdrop-blur-sm">
+                            <div className="flex items-center gap-1.5 font-bold text-teal-300 text-xs mb-1 w-full text-left">
+                              <span>🔄 Converted to Half Day</span>
+                            </div>
+                            <p className="text-neutral-200 text-left font-normal">
+                              Full day leave converted to <strong>Half Day</strong> because 1 Weekoff unit was applied from {convertedDates.get(dateStr)?.offsetFrom}.
+                            </p>
+                            <div className="mt-1.5 pt-1.5 border-t border-neutral-700/60 w-full text-left text-[10px] text-amber-300 font-semibold flex items-center gap-1">
+                              <span>⚡ Only 0.5 day salary will be deducted.</span>
+                            </div>
+                            {/* Down arrow pointer */}
+                            <div className="w-2.5 h-2.5 bg-neutral-900/95 dark:bg-neutral-800/95 rotate-45 border-r border-b border-neutral-700/80 -mb-1 mt-[-5px]" />
+                          </div>
+                        </>
                       )}
                     </button>
                   );
@@ -987,6 +1126,12 @@ export function AttendancePage() {
                   <div className="w-3.5 h-3.5 rounded bg-teal-600" />
                   <span className="text-neutral-600 dark:text-neutral-300 font-medium">Wkoff Half ({weekoffHalfdayCount}/{weekoffPoolUnits})</span>
                 </div>
+                {convertedDates.size > 0 && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800 font-bold text-xs" title="1 Weekoff half unit used to offset a full day leave into a Half Day">
+                    <span className="w-2 h-2 rounded-full bg-teal-400 ring-2 ring-neutral-900/40" />
+                    <span>Converted: {convertedDates.size}</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <div className="w-3.5 h-3.5 rounded bg-slate-500" />
                   <span className="text-neutral-600 dark:text-neutral-300 font-medium">Company Off ({companyWeekOffCount})</span>
@@ -1530,6 +1675,59 @@ export function AttendancePage() {
           )}
         </AnimatePresence>
       </GlassCard>}
+
+      {/* Mobile Long-Press / Tap Dialog for Converted Leave Notice */}
+      <AnimatePresence>
+        {activeMobileNotice && (
+          <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+            onClick={() => setActiveMobileNotice(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 30, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 30, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-3xl p-5 bg-neutral-900 text-white shadow-2xl border border-neutral-700/80"
+            >
+              <div className="flex items-center justify-between gap-3 mb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-teal-400 ring-2 ring-teal-500/40 animate-pulse" />
+                  <h4 className="font-extrabold text-teal-300 text-sm sm:text-base flex items-center gap-1.5">
+                    <span>🔄 Converted to Half Day</span>
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveMobileNotice(null)}
+                  className="p-1.5 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs sm:text-sm text-neutral-200 leading-relaxed font-normal">
+                Full day leave converted to <strong className="text-white">Half Day</strong> because 1 Weekoff unit was applied from <span className="text-teal-300 font-semibold">{activeMobileNotice.offsetFrom}</span>.
+              </p>
+
+              <div className="mt-3.5 pt-3 border-t border-neutral-800 flex items-center justify-between gap-2 text-xs">
+                <div className="text-amber-300 font-bold flex items-center gap-1.5">
+                  <span>⚡ Only 0.5 day salary will be deducted.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveMobileNotice(null)}
+                  className="px-3 py-1.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-neutral-950 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Got it
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
