@@ -10,7 +10,7 @@ import { employeeService } from '../../services/employeeService';
 import { salarySlipService } from '../../services/salarySlipService';
 import type { Employee, SalarySlip } from '../../types';
 import { listEmployeeLeaveRequests, reviewEmployeeLeaveRequest, type EmployeeLeaveRequest } from '../../services/leaveRequestService';
-import { listMissedCheckouts, type MissedCheckout } from '../../services/missedCheckoutService';
+import { listMissedCheckouts, listMissedCheckins, type MissedCheckout, type MissedCheckin } from '../../services/missedCheckoutService';
 import { AllActivityModal } from './AllActivityModal';
 import { AdminCompanySwitcher } from '../admin/AdminCompanySwitcher';
 import {
@@ -273,7 +273,7 @@ interface NotificationDropdownProps {
   onViewAllActivity: (filter?: 'leaves', leaveId?: number) => void;
 }
 
-let cachedNotificationData: { employees: Employee[]; slips: SalarySlip[]; leaveRequests: EmployeeLeaveRequest[]; missedCheckouts: MissedCheckout[] } | null = null;
+let cachedNotificationData: { employees: Employee[]; slips: SalarySlip[]; leaveRequests: EmployeeLeaveRequest[]; missedCheckouts: MissedCheckout[]; missedCheckins: MissedCheckin[] } | null = null;
 
 function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdownProps) {
   const { user } = useAuth();
@@ -281,6 +281,7 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
   const [slips, setSlips] = useState<SalarySlip[]>(() => cachedNotificationData?.slips || []);
   const [leaveRequests, setLeaveRequests] = useState<EmployeeLeaveRequest[]>(() => cachedNotificationData?.leaveRequests || []);
   const [missedCheckouts, setMissedCheckouts] = useState<MissedCheckout[]>(() => cachedNotificationData?.missedCheckouts || []);
+  const [missedCheckins, setMissedCheckins] = useState<MissedCheckin[]>(() => cachedNotificationData?.missedCheckins || []);
   const [loading, setLoading] = useState(() => !cachedNotificationData);
   const [overrides, setOverrides] = useState(() => getNotificationOverrides());
   const [decidingId, setDecidingId] = useState<number | null>(null);
@@ -354,11 +355,14 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
         try { newLeaveRequests = await listEmployeeLeaveRequests(); } catch { /* Attendance may not be enabled for this account. */ }
         let newMissedCheckouts: MissedCheckout[] = [];
         try { newMissedCheckouts = await listMissedCheckouts(); } catch { /* Attendance may not be enabled for this account. */ }
-        cachedNotificationData = { employees: newEmps, slips: newSlips, leaveRequests: newLeaveRequests, missedCheckouts: newMissedCheckouts };
+        let newMissedCheckins: MissedCheckin[] = [];
+        try { newMissedCheckins = await listMissedCheckins(); } catch { /* Attendance may not be enabled for this account. */ }
+        cachedNotificationData = { employees: newEmps, slips: newSlips, leaveRequests: newLeaveRequests, missedCheckouts: newMissedCheckouts, missedCheckins: newMissedCheckins };
         setEmployees(newEmps);
         setSlips(newSlips);
         setLeaveRequests(newLeaveRequests);
         setMissedCheckouts(newMissedCheckouts);
+        setMissedCheckins(newMissedCheckins);
       } catch {
         // ignore
       } finally {
@@ -507,6 +511,38 @@ function NotificationDropdown({ onClose, onViewAllActivity }: NotificationDropdo
       time: formatTimeAgo(mc.date),
       timestamp: mc.date ? new Date(mc.date).getTime() : 0,
       color: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400',
+      path,
+    });
+  });
+
+  missedCheckins.forEach((mc) => {
+    const id = `missed-checkin-${mc.id || mc.employee_id}-${mc.date}`;
+    const ov = overrides[id];
+    if (ov?.dismissed) return;
+
+    const parts = mc.date ? mc.date.split('-') : [];
+    const params = new URLSearchParams();
+    if (mc.employee_id) params.set('employee_id', String(mc.employee_id));
+    if (mc.emp_id) params.set('code', mc.emp_id);
+    if (mc.employee_name) params.set('name', mc.employee_name);
+    if (parts.length >= 2) {
+      params.set('month', String(parseInt(parts[1], 10)));
+      params.set('year', parts[0]);
+    }
+    if (mc.id) {
+      params.set('checkin_id', String(mc.id));
+    }
+    params.set('checkin_date', mc.date);
+    const path = `/attendance${params.toString() ? `?${params.toString()}` : ''}`;
+
+    notifications.push({
+      id,
+      icon: Clock,
+      title: 'Missed punch-in',
+      desc: `${mc.employee_name} · shift ${mc.expected_time || '09:30'} · no morning check-in on ${mc.date}`,
+      time: formatTimeAgo(mc.date),
+      timestamp: mc.date ? new Date(mc.date).getTime() : 0,
+      color: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400',
       path,
     });
   });
@@ -810,7 +846,16 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
         );
       } catch { /* Attendance can be unavailable for this user. */ }
 
-      cachedNotificationData = { employees: empItems, slips: slipItems, leaveRequests: requests, missedCheckouts };
+      let latestMissedCheckinTime = 0;
+      let missedCheckins: MissedCheckin[] = [];
+      try {
+        missedCheckins = await listMissedCheckins();
+        latestMissedCheckinTime = missedCheckins.reduce(
+          (latest, mc) => Math.max(latest, mc.date ? new Date(mc.date).getTime() : 0), 0,
+        );
+      } catch { /* Attendance can be unavailable for this user. */ }
+
+      cachedNotificationData = { employees: empItems, slips: slipItems, leaveRequests: requests, missedCheckouts, missedCheckins };
 
       let latestPlanAlertTime = 0;
       if (user?.plan && user.plan !== 'starter' && user.plan_expires_at) {
@@ -821,7 +866,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
         }
       }
 
-      const maxTime = Math.max(empTime, slipTime, latestPlanAlertTime, latestLeaveTime, latestMissedCheckoutTime);
+      const maxTime = Math.max(empTime, slipTime, latestPlanAlertTime, latestLeaveTime, latestMissedCheckoutTime, latestMissedCheckinTime);
       const isUnread = hasUnreadItems(maxTime);
       setHasUnread(isUnread);
 
@@ -859,6 +904,39 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
             details: timeSlot,
             reason: latestPendingLeave.reason,
             path: leavePath,
+          });
+        }
+      }
+
+      // Trigger animated floating toast badge for missed punch-in
+      if (missedCheckins.length > 0 && isUnread && !latestPendingLeave) {
+        const latestMissedCheckin = missedCheckins[0];
+        const lastNotifiedCheckinKey = sessionStorage.getItem('last_notified_missed_checkin_key');
+        const currentKey = `${latestMissedCheckin.employee_id}-${latestMissedCheckin.date}`;
+        if (lastNotifiedCheckinKey !== currentKey) {
+          sessionStorage.setItem('last_notified_missed_checkin_key', currentKey);
+
+          const params = new URLSearchParams();
+          if (latestMissedCheckin.employee_id) params.set('employee_id', String(latestMissedCheckin.employee_id));
+          if (latestMissedCheckin.emp_id) params.set('code', latestMissedCheckin.emp_id);
+          if (latestMissedCheckin.employee_name) params.set('name', latestMissedCheckin.employee_name);
+          const parts = latestMissedCheckin.date ? latestMissedCheckin.date.split('-') : [];
+          if (parts.length >= 2) {
+            params.set('month', String(parseInt(parts[1], 10)));
+            params.set('year', parts[0]);
+          }
+          if (latestMissedCheckin.id) params.set('checkin_id', String(latestMissedCheckin.id));
+          params.set('checkin_date', latestMissedCheckin.date);
+          const checkinPath = `/attendance${params.toString() ? `?${params.toString()}` : ''}`;
+
+          setToastNotification({
+            id: `missed-checkin-${latestMissedCheckin.id || latestMissedCheckin.employee_id}-${latestMissedCheckin.date}`,
+            title: '⚠️ Missed Punch-In!',
+            employeeName: latestMissedCheckin.employee_name,
+            empId: latestMissedCheckin.emp_id,
+            details: `Shift: ${latestMissedCheckin.expected_time || '09:30'}`,
+            reason: `No morning punch-in recorded for ${latestMissedCheckin.date}`,
+            path: checkinPath,
           });
         }
       }
@@ -1035,13 +1113,19 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
                   exit={{ opacity: 0, y: -8, scale: 0.95 }}
                   transition={{ type: "spring", stiffness: 450, damping: 28 }}
                   onClick={() => {
+                    const isLeave = toastNotification.id.startsWith('leave-');
                     const rawLeaveId = parseInt(toastNotification.id.replace('leave-', ''), 10);
+                    const toastPath = toastNotification.path;
                     setToastNotification(null);
                     setNotificationsRead();
                     setHasUnread(false);
-                    setSelectedLeaveIdForModal(isNaN(rawLeaveId) ? null : rawLeaveId);
-                    setActivityInitialFilter('leaves');
-                    setShowActivityModal(true);
+                    if (isLeave) {
+                      setSelectedLeaveIdForModal(isNaN(rawLeaveId) ? null : rawLeaveId);
+                      setActivityInitialFilter('leaves');
+                      setShowActivityModal(true);
+                    } else if (toastPath) {
+                      navigate(toastPath);
+                    }
                   }}
                   className="absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-2xl p-3.5 bg-white dark:bg-neutral-900 border border-neutral-200/90 dark:border-neutral-800 shadow-xl shadow-black/10 dark:shadow-black/40 z-50 cursor-pointer overflow-hidden group hover:border-neutral-300 dark:hover:border-neutral-700 transition-colors"
                 >

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { attendanceFetch as fetch, hasAttendanceInvite, clearAttendanceInvite, getAttendanceInvite } from './attendanceApi';
 import GoogleAttendanceButton from './GoogleAttendanceButton';
 import { loadFaceApi } from './faceApiLoader';
-import FaceScanModalCapture from './FaceScanModalCapture';
+import FaceScanModalCapture, { preloadFaceBiometrics, ensureFaceModelsLoaded } from './FaceScanModalCapture';
 
 import { 
   Building2, 
@@ -1111,7 +1111,52 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
 
 
 
-  // Real-time GPS Geolocation Tracker
+  // Explicit Location Permission Request and GPS Refresh
+  const requestLocationAccess = (silent = false) => {
+    if (!navigator.geolocation) {
+      setGpsError("Geolocation is not supported by your browser.");
+      setLocationLoading(false);
+      return;
+    }
+
+    if (!silent) setLocationLoading(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        setUserCoords({ lat, lng });
+
+        const dist = calculateHaversine(lat, lng, officeLat, officeLng);
+        setDistanceMeters(dist);
+        setIsWithinZone(dist <= allowedRadius);
+        setLocationLoading(false);
+        setGpsError(null);
+      },
+      (error) => {
+        console.warn("Location prompt result:", error);
+        if (error.code === 1) {
+          setGpsError("Location permission denied. Please allow location access in your browser settings to verify you are at the office.");
+        } else if (error.code === 2) {
+          setGpsError("GPS unavailable. Please make sure your device Location / GPS is turned ON.");
+        } else if (error.code === 3) {
+          setGpsError("Location request timed out. Please tap Allow Location to retry.");
+        } else {
+          setGpsError("Location access unavailable. Please enable GPS and allow permission.");
+        }
+        setLocationLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  // 1. Prompt location permission and preload face biometrics immediately on portal load
+  useEffect(() => {
+    requestLocationAccess();
+    preloadFaceBiometrics();
+  }, []);
+
+  // 2. Real-time GPS Geolocation Tracker
   useEffect(() => {
     if (!navigator.geolocation) {
       setGpsError("Geolocation is not supported by your browser.");
@@ -1132,10 +1177,14 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
         setGpsError(null);
       },
       (error) => {
-        setGpsError("Location access denied or unavailable.");
+        if (error.code === 1) {
+          setGpsError("Location permission denied. Please allow location access in your browser to punch attendance.");
+        } else if (error.code === 2) {
+          setGpsError("GPS unavailable. Please make sure your device Location / GPS is turned ON.");
+        }
         setLocationLoading(false);
       },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+      { enableHighAccuracy: true, maximumAge: 4000, timeout: 12000 }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
@@ -1206,16 +1255,12 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
     const loadModels = async () => {
       try {
         const api = window.faceapi || await loadFaceApi();
-        if (api && api.nets) {
-          try {
-            await api.nets.tinyFaceDetector.loadFromUri('/models/');
-          } catch (eLocal) {
-            await api.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
-          }
+        if (api) {
+          await ensureFaceModelsLoaded(api);
           setIsModelLoaded(true);
         }
       } catch (err) {
-        console.warn("face-api CDN model load notice (using native FaceDetector fallback if available):", err);
+        console.warn("face-api model load notice:", err);
       }
     };
     loadModels();
@@ -2287,11 +2332,50 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                       {distanceMeters !== null && ` (${distanceMeters < 1000 ? `${distanceMeters.toFixed(1)}m` : `${(distanceMeters / 1000).toFixed(2)}km`} away)`}
                     </p>
                   </div>
+                ) : locationLoading ? (
+                  <div className="p-3.5 rounded-xl bg-sky-50/80 border border-sky-200/80 dark:bg-sky-950/30 dark:border-sky-800/50 text-sky-900 dark:text-sky-200 text-xs sm:text-sm font-medium flex flex-col gap-1 transition-all">
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 animate-spin" />
+                      <span className="font-semibold">Detecting GPS Location...</span>
+                    </div>
+                    <p className="text-[11px] text-sky-700/90 dark:text-sky-300/80 pl-6 m-0">
+                      Checking your distance from office premises.
+                    </p>
+                  </div>
+                ) : gpsError ? (
+                  <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200/80 dark:bg-amber-950/30 dark:border-amber-800/50 text-amber-900 dark:text-amber-200 text-xs sm:text-sm font-medium flex flex-col gap-1.5 transition-all">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <span className="font-semibold">Location Access Needed</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => requestLocationAccess(false)}
+                        className="px-2.5 py-1 rounded-lg bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 hover:opacity-90 text-[10px] font-bold shadow-xs cursor-pointer"
+                      >
+                        Allow GPS
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-amber-700/90 dark:text-amber-300/80 pl-6 m-0">
+                      {gpsError}
+                    </p>
+                  </div>
                 ) : (
                   <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200/80 dark:bg-amber-950/30 dark:border-amber-800/50 text-amber-900 dark:text-amber-200 text-xs sm:text-sm font-medium flex flex-col gap-1 transition-all">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                      <span className="font-semibold">Outside Office Location ({allowedRadius}m limit)</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <span className="font-semibold">Outside Office Location ({allowedRadius}m limit)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => requestLocationAccess(false)}
+                        className="px-2 py-0.5 rounded-md border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100/50 text-[10px] font-semibold cursor-pointer flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Refresh</span>
+                      </button>
                     </div>
                     <p className="text-[11px] text-amber-700/90 dark:text-amber-300/80 pl-6 m-0">
                       {distanceMeters !== null
@@ -2423,6 +2507,34 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                     />
                   )}
                 </div>
+              ) : locationLoading ? (
+                <div className="w-full py-12 px-6 rounded-2xl border border-dashed border-sky-300 dark:border-sky-800/80 bg-sky-50/40 dark:bg-sky-950/20 flex flex-col items-center justify-center text-center transition-all">
+                  <div className="w-14 h-14 rounded-2xl bg-white dark:bg-neutral-800 border border-sky-200 dark:border-sky-700 shadow-sm flex items-center justify-center mb-4">
+                    <RefreshCw className="w-6 h-6 text-sky-500 animate-spin stroke-[1.75]" />
+                  </div>
+                  <h3 className="text-base sm:text-lg font-bold text-neutral-900 dark:text-white tracking-tight">Detecting GPS Location...</h3>
+                  <p className="mt-1.5 text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed">
+                    Please allow location permission in the browser prompt to verify you are at the office premises.
+                  </p>
+                </div>
+              ) : gpsError ? (
+                <div className="w-full py-12 px-6 rounded-2xl border border-dashed border-amber-300 dark:border-amber-700/80 bg-amber-50/50 dark:bg-amber-950/30 flex flex-col items-center justify-center text-center transition-all">
+                  <div className="w-14 h-14 rounded-2xl bg-white dark:bg-neutral-800 border border-amber-200 dark:border-amber-700 shadow-sm flex items-center justify-center mb-4">
+                    <MapPin className="w-6 h-6 text-amber-500 stroke-[1.75]" />
+                  </div>
+                  <h3 className="text-base sm:text-lg font-bold text-neutral-900 dark:text-white tracking-tight">Location Permission Needed</h3>
+                  <p className="mt-1.5 text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed">
+                    {gpsError}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => requestLocationAccess(false)}
+                    className="mt-4 px-4 py-2.5 rounded-xl bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100 text-xs font-semibold shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    <span>Allow Location / Refresh GPS</span>
+                  </button>
+                </div>
               ) : (
                 <div className="w-full py-12 px-6 rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-700/80 bg-neutral-50/50 dark:bg-neutral-900/40 flex flex-col items-center justify-center text-center transition-all">
                   <div className="w-14 h-14 rounded-2xl bg-white dark:bg-neutral-800 border border-neutral-200/80 dark:border-neutral-700 shadow-sm flex items-center justify-center mb-4">
@@ -2430,11 +2542,21 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                   </div>
                   <h3 className="text-base sm:text-lg font-bold text-neutral-900 dark:text-white tracking-tight">Camera & Punch Disabled</h3>
                   <p className="mt-1.5 text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed">
-                    You are outside the office area. Please reach the office location to access the camera and punch attendance.
+                    You are outside the office area{distanceMeters !== null ? ` (${distanceMeters < 1000 ? `${distanceMeters.toFixed(1)}m` : `${(distanceMeters / 1000).toFixed(2)}km`} away)` : ''}. Please reach the office location to access the camera and punch attendance.
                   </p>
-                  <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200/70 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/60">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                    Geofence Verification Required ({allowedRadius}m)
+                  <div className="mt-4 flex items-center gap-3">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200/70 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/60">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      Geofence Verification ({allowedRadius}m)
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => requestLocationAccess(false)}
+                      className="px-3 py-1 rounded-full text-xs font-semibold bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 hover:opacity-90 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Refresh</span>
+                    </button>
                   </div>
                 </div>
               )}

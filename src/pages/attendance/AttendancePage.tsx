@@ -9,7 +9,7 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { useEmployees } from '../../hooks/useEmployees';
 import { useMonthlyAttendance, useBulkMarkLeaves, useLeaveSummary, useAttendanceReadiness } from '../../hooks/useAttendance';
 import { listEmployeeLeaveRequests, reviewEmployeeLeaveRequest } from '../../services/leaveRequestService';
-import { updateAttendanceCheckout } from '../../services/missedCheckoutService';
+import { updateAttendanceCheckout, updateAttendanceCheckin } from '../../services/missedCheckoutService';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { hasMinimumPlan } from '../../lib/plans';
@@ -111,6 +111,9 @@ export function AttendancePage() {
   const [editingCheckoutId, setEditingCheckoutId] = useState<number | null>(null);
   const [checkoutTimeInput, setCheckoutTimeInput] = useState('');
   const [checkoutActionBusy, setCheckoutActionBusy] = useState(false);
+  const [editingCheckinDate, setEditingCheckinDate] = useState<string | null>(null);
+  const [checkinTimeInput, setCheckinTimeInput] = useState('');
+  const [checkinActionBusy, setCheckinActionBusy] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [quotaWarning, setQuotaWarning] = useState('');
@@ -233,6 +236,8 @@ export function AttendancePage() {
       next.delete('employee_name');
       next.delete('leave_request');
       next.delete('checkout_id');
+      next.delete('checkin_id');
+      next.delete('checkin_date');
       if (empId > 0) {
         next.set('employee_id', String(empId));
       } else {
@@ -248,12 +253,33 @@ export function AttendancePage() {
   // employee's calendar and leaving HR to find it themselves.
   useEffect(() => {
     const paramCheckoutId = searchParams.get('checkout_id');
-    if (!paramCheckoutId) return;
-    const numId = parseInt(paramCheckoutId, 10);
-    if (isNaN(numId)) return;
-    setShowBiometricTimesheet(true);
-    setEditingCheckoutId(numId);
-  }, [searchParams]);
+    if (paramCheckoutId) {
+      const numId = parseInt(paramCheckoutId, 10);
+      if (!isNaN(numId)) {
+        setShowBiometricTimesheet(true);
+        setEditingCheckoutId(numId);
+      }
+    }
+    const paramCheckinId = searchParams.get('checkin_id');
+    const paramCheckinDate = searchParams.get('checkin_date');
+    if (paramCheckinDate) {
+      setShowBiometricTimesheet(true);
+      setEditingCheckinDate(paramCheckinDate);
+      setCheckinTimeInput('09:30');
+    } else if (paramCheckinId) {
+      const numId = parseInt(paramCheckinId, 10);
+      if (!isNaN(numId)) {
+        setShowBiometricTimesheet(true);
+        for (const [d, rec] of biometricMap.entries()) {
+          if (rec.bio_record_id === numId || rec.id === numId) {
+            setEditingCheckinDate(d);
+            setCheckinTimeInput(rec.check_in ? rec.check_in.slice(0, 5) : '09:30');
+            break;
+          }
+        }
+      }
+    }
+  }, [searchParams, biometricMap]);
 
   // Listen for global attendance updates (from modal or another tab) to refresh real-time without reloading
   useEffect(() => {
@@ -292,6 +318,38 @@ export function AttendancePage() {
       setError('Unable to update leave request. Please try again.');
     } finally {
       setLeaveActionBusy(null);
+    }
+  };
+
+  // HR correcting or adding a check-in time directly from the Biometric Timesheet
+  const handleSaveCheckinTime = async (dateStr: string, bioRecordId?: number | null) => {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(checkinTimeInput)) {
+      setError('Enter the check-in time in HH:MM (24-hour) format.');
+      return;
+    }
+    setCheckinActionBusy(true);
+    setError('');
+    try {
+      await updateAttendanceCheckin(
+        bioRecordId || null,
+        checkinTimeInput,
+        selectedEmployee,
+        dateStr
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['attendance'] }),
+        queryClient.invalidateQueries({ queryKey: ['leave-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['attendance-readiness'] }),
+      ]);
+      await refetchAttendance();
+      await refetchSummary();
+      await refetchReadiness();
+      setEditingCheckinDate(null);
+      setSuccess('Check-in time updated.');
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || 'Unable to update check-in time. Please try again.');
+    } finally {
+      setCheckinActionBusy(false);
     }
   };
 
@@ -1041,7 +1099,59 @@ export function AttendancePage() {
                             <td className="py-2.5 px-3 font-semibold text-neutral-900 dark:text-white">{displayDate}</td>
                             <td className="py-2.5 px-3 text-neutral-500 dark:text-neutral-400 font-medium">{dayName}</td>
                             <td className="py-2.5 px-3 font-mono font-medium text-emerald-600 dark:text-emerald-400">
-                              {bio?.check_in ? `🟢 ${bio.check_in}` : <span className="text-neutral-400">—</span>}
+                              {editingCheckinDate === dateStr ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="time"
+                                    value={checkinTimeInput}
+                                    onChange={(e) => setCheckinTimeInput(e.target.value)}
+                                    className="w-[88px] rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-1.5 py-0.5 text-[11px] text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white"
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={checkinActionBusy}
+                                    onClick={() => handleSaveCheckinTime(dateStr, bio?.bio_record_id || bio?.id)}
+                                    className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-bold cursor-pointer"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingCheckinDate(null)}
+                                    className="px-2 py-0.5 rounded border border-neutral-300 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 text-[11px] font-semibold cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : bio?.check_in ? (
+                                <div className="inline-flex items-center gap-1.5">
+                                  <span>🟢 {bio.check_in}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingCheckinDate(dateStr);
+                                      setCheckinTimeInput(bio.check_in ? bio.check_in.slice(0, 5) : '09:30');
+                                      setError('');
+                                    }}
+                                    className="text-[10px] text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 underline cursor-pointer"
+                                    title="Edit punch-in time"
+                                  >
+                                    Edit
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingCheckinDate(dateStr);
+                                    setCheckinTimeInput('09:30');
+                                    setError('');
+                                  }}
+                                  className="px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/60"
+                                >
+                                  + Set In Time
+                                </button>
+                              )}
                               {bio?.permission_out && (
                                 <div className="mt-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
                                   ⏱️ Permission: {bio.permission_out} {bio.permission_in ? `– ${bio.permission_in}` : '(not back yet)'}
@@ -1049,42 +1159,60 @@ export function AttendancePage() {
                               )}
                             </td>
                             <td className="py-2.5 px-3 font-mono font-medium text-rose-600 dark:text-rose-400">
-                              {bio?.check_out ? (
-                                `🔴 ${bio.check_out}`
-                              ) : bio?.check_in && bio?.bio_record_id ? (
-                                editingCheckoutId === bio.bio_record_id ? (
-                                  <div className="flex items-center gap-1">
-                                    <input
-                                      type="time"
-                                      value={checkoutTimeInput}
-                                      onChange={(e) => setCheckoutTimeInput(e.target.value)}
-                                      className="w-[88px] rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-1.5 py-0.5 text-[11px] text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white"
-                                    />
-                                    <button
-                                      type="button"
-                                      disabled={checkoutActionBusy}
-                                      onClick={() => handleSaveCheckoutTime(bio.bio_record_id as number)}
-                                      className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-bold cursor-pointer"
-                                    >
-                                      Save
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingCheckoutId(null)}
-                                      className="px-2 py-0.5 rounded border border-neutral-300 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 text-[11px] font-semibold cursor-pointer"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                ) : (
+                              {editingCheckoutId === (bio?.bio_record_id || bio?.id) ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="time"
+                                    value={checkoutTimeInput}
+                                    onChange={(e) => setCheckoutTimeInput(e.target.value)}
+                                    className="w-[88px] rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-1.5 py-0.5 text-[11px] text-neutral-900 dark:text-white outline-none focus:border-black dark:focus:border-white"
+                                  />
                                   <button
                                     type="button"
-                                    onClick={() => { setEditingCheckoutId(bio.bio_record_id as number); setCheckoutTimeInput(''); setError(''); }}
-                                    className="px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[11px] font-semibold cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/60"
+                                    disabled={checkoutActionBusy}
+                                    onClick={() => handleSaveCheckoutTime((bio?.bio_record_id || bio?.id) as number)}
+                                    className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-bold cursor-pointer"
                                   >
-                                    ⚠️ Set Out Time
+                                    Save
                                   </button>
-                                )
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingCheckoutId(null)}
+                                    className="px-2 py-0.5 rounded border border-neutral-300 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 text-[11px] font-semibold cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : bio?.check_out ? (
+                                <div className="inline-flex items-center gap-1.5">
+                                  <span>🔴 {bio.check_out}</span>
+                                  {(bio?.bio_record_id || bio?.id) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingCheckoutId((bio.bio_record_id || bio.id) as number);
+                                        setCheckoutTimeInput(bio.check_out ? bio.check_out.slice(0, 5) : '18:30');
+                                        setError('');
+                                      }}
+                                      className="text-[10px] text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 underline cursor-pointer"
+                                      title="Edit punch-out time"
+                                    >
+                                      Edit
+                                    </button>
+                                  )}
+                                </div>
+                              ) : bio?.check_in && (bio?.bio_record_id || bio?.id) ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingCheckoutId((bio.bio_record_id || bio.id) as number);
+                                    setCheckoutTimeInput('18:30');
+                                    setError('');
+                                  }}
+                                  className="px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[11px] font-semibold cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/60"
+                                >
+                                  ⚠️ Set Out Time
+                                </button>
                               ) : (
                                 <span className="text-neutral-400">—</span>
                               )}

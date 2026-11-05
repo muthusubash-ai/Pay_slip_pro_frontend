@@ -18,7 +18,7 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 // model before inference" and the scan circle never progresses past 0%.
 // 'cpu' is pure JS, so it always works as a last resort (just slower).
 let tfBackendReadyPromise = null;
-async function ensureTfBackendReady(api) {
+export async function ensureTfBackendReady(api) {
   if (!api || !api.tf) return false;
   if (tfBackendReadyPromise) return tfBackendReadyPromise;
   tfBackendReadyPromise = (async () => {
@@ -37,28 +37,51 @@ async function ensureTfBackendReady(api) {
   return tfBackendReadyPromise;
 }
 
-async function ensureFaceModelsLoaded(api) {
+let faceModelsPromise = null;
+export async function ensureFaceModelsLoaded(api) {
   if (!api || !api.nets) return;
-  await ensureTfBackendReady(api);
-  const loadNets = async (url) => {
-    if (!api.nets.tinyFaceDetector.isLoaded) {
-      await api.nets.tinyFaceDetector.loadFromUri(url);
-    }
-    if (api.nets.faceLandmark68TinyNet && !api.nets.faceLandmark68TinyNet.isLoaded) {
-      await api.nets.faceLandmark68TinyNet.loadFromUri(url);
-    }
-    if (api.nets.faceRecognitionNet && !api.nets.faceRecognitionNet.isLoaded) {
-      await api.nets.faceRecognitionNet.loadFromUri(url);
-    }
-  };
-  try {
-    await loadNets(LOCAL_MODEL_URL);
-  } catch (eLocal) {
+  if (faceModelsPromise) return faceModelsPromise;
+
+  faceModelsPromise = (async () => {
+    await ensureTfBackendReady(api);
+    const loadNets = async (url) => {
+      const promises = [];
+      if (!api.nets.tinyFaceDetector.isLoaded) {
+        promises.push(api.nets.tinyFaceDetector.loadFromUri(url));
+      }
+      if (api.nets.faceLandmark68TinyNet && !api.nets.faceLandmark68TinyNet.isLoaded) {
+        promises.push(api.nets.faceLandmark68TinyNet.loadFromUri(url));
+      }
+      if (api.nets.faceRecognitionNet && !api.nets.faceRecognitionNet.isLoaded) {
+        promises.push(api.nets.faceRecognitionNet.loadFromUri(url));
+      }
+      if (promises.length > 0) {
+        await Promise.all(promises);
+      }
+    };
+
     try {
-      await loadNets(CDN_MODEL_URL);
-    } catch (eCdn) {
-      console.warn("Face model loading warning:", eCdn);
+      await loadNets(LOCAL_MODEL_URL);
+    } catch (eLocal) {
+      try {
+        await loadNets(CDN_MODEL_URL);
+      } catch (eCdn) {
+        console.warn("Face model loading warning:", eCdn);
+      }
     }
+  })();
+
+  return faceModelsPromise;
+}
+
+export async function preloadFaceBiometrics() {
+  try {
+    const api = window.faceapi || await loadFaceApi();
+    if (api) {
+      await ensureFaceModelsLoaded(api);
+    }
+  } catch (err) {
+    console.warn("Background biometric preload notice:", err);
   }
 }
 
@@ -585,7 +608,7 @@ export default function FaceScanModalCapture({
               text: 'Look straight towards the camera to verify'
             });
           } else {
-            scanProgressRef.current = Math.min(100, scanProgressRef.current + 10.0);
+            scanProgressRef.current = Math.min(100, scanProgressRef.current + 14.0);
             const currentProgress = Math.floor(scanProgressRef.current);
             setScanProgress(currentProgress);
 
@@ -807,6 +830,20 @@ export default function FaceScanModalCapture({
                                 strokeDashoffset: `${RING_CIRCUMFERENCE * (1 - scanProgress / 100)}`,
                                 transition: 'stroke-dashoffset 90ms ease-out, stroke 0.2s ease',
                               }}
+                            />
+                          )}
+
+                          {/* Instant Active Green Guide Ring: Shows immediately when ready so user never waits */}
+                          {scanProgress === 0 && !faceStatus.isMismatch && !faceStatus.isCovered && !loading && (
+                            <circle
+                              cx="105"
+                              cy="105"
+                              r={RING_RADIUS}
+                              fill="none"
+                              stroke="rgba(16, 185, 129, 0.6)"
+                              strokeWidth="3.5"
+                              strokeDasharray="6 6"
+                              className="animate-pulse"
                             />
                           )}
                         </g>
