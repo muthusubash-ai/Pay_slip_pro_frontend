@@ -11,7 +11,6 @@ import { paymentService } from '../../services/paymentService';
 import { getPlanHome, PLAN_CATALOG } from '../../lib/plans';
 import { PlanUpgradeModal } from '../../components/ui/PlanUpgradeModal';
 import type { User } from '../../types';
-import { DiwaliSparkler } from '../../components/common/DiwaliSparkler';
 
 const ENABLE_DECORATIVE_MOTION = false;
 
@@ -403,9 +402,8 @@ function LoginModal({
           </button>
 
           <div className="flex items-center gap-2.5 mb-6">
-            <div className="relative overflow-visible w-9 h-9 rounded-xl bg-black flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-black flex items-center justify-center">
               <FileText className="h-4 w-4 text-white" />
-              <DiwaliSparkler />
             </div>
             <div>
               <h2 className="text-lg font-bold text-neutral-900 tracking-tight">
@@ -668,10 +666,9 @@ export function LoginPage() {
         <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between">
           <motion.div className="flex min-w-0 items-center gap-2.5"
             whileHover={{ scale: 1.03 }} transition={{ type: 'spring', stiffness: 300 }}>
-            <motion.div className={`relative overflow-visible flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${scrolled ? 'bg-black' : 'bg-white'}`}
+            <motion.div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${scrolled ? 'bg-black' : 'bg-white'}`}
               whileHover={{ rotate: [0, -10, 10, 0] }} transition={{ duration: 0.5 }}>
               <FileText className={`h-4 w-4 ${scrolled ? 'text-white' : 'text-black'}`} />
-              <DiwaliSparkler />
             </motion.div>
             <span className={`hidden text-lg font-bold tracking-tight transition-colors min-[430px]:inline sm:inline ${scrolled ? 'text-neutral-900' : 'text-white'}`}>
               <GlitchText>{scrolled ? 'PaySlip Pro' : 'PaySlip Pro'}</GlitchText>

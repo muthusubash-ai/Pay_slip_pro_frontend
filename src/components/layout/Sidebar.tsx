@@ -6,7 +6,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useTranslation } from '../../context/LanguageContext';
 import { getPlan, hasMinimumPlan, type Plan } from '../../lib/plans';
-import { DiwaliSparkler } from '../common/DiwaliSparkler';
 
 const navItems: Array<{ to: string; label: string; translationKey: string; icon: typeof LayoutDashboard; minimumPlan: Plan }> = [
   { to: '/dashboard', label: 'Dashboard', translationKey: 'nav.dashboard', icon: LayoutDashboard, minimumPlan: 'starter' },
@@ -110,13 +109,12 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
       <div className="pt-7 pb-8 px-4">
         {/* Mobile Header */}
         <div className="flex items-center justify-between gap-3 lg:hidden">
-          <div className="flex items-center gap-3 overflow-visible">
+          <div className="flex items-center gap-3 overflow-hidden">
             <div className={cn(
-              "relative overflow-visible w-9 h-9 rounded-lg flex items-center justify-center shadow-md shrink-0",
+              "w-9 h-9 rounded-lg flex items-center justify-center shadow-md shrink-0",
               isDark ? "bg-white text-black keep-white shadow-white/5" : "bg-black text-white shadow-black/10"
             )}>
               <FileText className="h-4 w-4" />
-              <DiwaliSparkler badgeSize="xs" />
             </div>
             <div className="flex flex-col min-w-0">
               <h1 className={cn("text-[15px] font-bold tracking-tight whitespace-nowrap truncate", isDark ? "text-white" : "text-neutral-900")}>
@@ -141,8 +139,8 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
         </div>
 
         {/* Desktop Header */}
-        <div className="hidden lg:flex items-center justify-between overflow-visible">
-          <div className="flex items-center gap-3 min-w-0 overflow-visible">
+        <div className="hidden lg:flex items-center justify-between overflow-hidden">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={() => {
@@ -151,7 +149,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                 }
               }}
               className={cn(
-                "relative overflow-visible w-9 h-9 rounded-lg flex items-center justify-center shadow-md shrink-0 transition-transform duration-200 cursor-pointer",
+                "w-9 h-9 rounded-lg flex items-center justify-center shadow-md shrink-0 transition-transform duration-200 cursor-pointer",
                 isCollapsed && "hover:scale-105 active:scale-95",
                 isDark ? "bg-white text-black keep-white shadow-white/5" : "bg-black text-white shadow-black/10"
               )}
@@ -159,7 +157,6 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
               aria-label={isCollapsed ? "Expand sidebar" : "Pay Slip Pro"}
             >
               <FileText className="h-4 w-4 shrink-0" />
-              <DiwaliSparkler />
             </button>
             <div className={cn(
               "flex flex-col min-w-0 whitespace-nowrap transition-all duration-300 ease-in-out overflow-hidden",
