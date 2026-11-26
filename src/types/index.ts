@@ -177,6 +177,8 @@ export interface AttendanceRecord {
   biometric_status?: string | null;
   leave_type?: string | null;
   distance_meters?: number | null;
+  missed_punch_type?: 'missed_checkin' | 'missed_checkout' | null;
+  missed_punch_reason?: string | null;
 }
 
 export interface EmployeeLeaveSummary {

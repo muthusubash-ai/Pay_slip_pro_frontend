@@ -410,6 +410,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
 
   // Face Registration states
   const [regPhoto, setRegPhoto] = useState(null);
+  const [regLivenessPhoto, setRegLivenessPhoto] = useState(null);
   const [regPhotoPreview, setRegPhotoPreview] = useState(null);
   const [regPhotoDescriptor, setRegPhotoDescriptor] = useState(null);
   const [allRegisteredDescriptors, setAllRegisteredDescriptors] = useState([]);
@@ -1396,7 +1397,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
     }
   };
 
-  const handlePunchAttendance = async (capturedBlob, liveDescriptor = null, isEarlyCheckout = false) => {
+  const handlePunchAttendance = async (capturedBlob, liveDescriptor = null, isEarlyCheckout = false, livenessBlob = null) => {
     if (!isWithinZone) {
       const distStr = distanceMeters ? (distanceMeters > 1000 ? `${(distanceMeters/1000).toFixed(1)} km` : `${Math.round(distanceMeters)} meters`) : '';
       setNotificationModal({
@@ -1431,6 +1432,9 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
       }
       if (photoBlob) {
         formData.append('face_image', photoBlob, 'punch_selfie.jpg');
+      }
+      if (livenessBlob) {
+        formData.append('liveness_image', livenessBlob, 'punch_liveness.jpg');
       }
 
       const response = await fetch(`${API_BASE_URL}/api/attendance/mark-attendance/`, {
@@ -1487,18 +1491,27 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
 
     } catch (err) {
       const isFetchError = err.message === 'Failed to fetch' || err.name === 'TypeError';
-      const isSessionExpired = err.status === 401 || err.status === 403 || (
+      const msgLower = (err.message || '').toLowerCase();
+      const isSessionExpired = err.status === 401 || (
+        msgLower.includes('session') ||
+        msgLower.includes('sign in') ||
+        msgLower.includes('logged in') ||
+        msgLower.includes('inactive') ||
+        msgLower.includes('unauthorized') ||
+        msgLower.includes('credentials') ||
+        msgLower.includes('authentication')
+      );
+      const isEarlyCheckoutWarning = Boolean(
         err.message && (
-          err.message.toLowerCase().includes('session') ||
-          err.message.toLowerCase().includes('sign in') ||
-          err.message.toLowerCase().includes('logged in') ||
-          err.message.toLowerCase().includes('inactive') ||
-          err.message.toLowerCase().includes('unauthorized') ||
-          err.message.toLowerCase().includes('credentials')
+          msgLower.includes('has not been reached yet') ||
+          msgLower.includes('permission section') ||
+          msgLower.includes('early checkout')
         )
       );
       const isPunchRuleNotice = err.message && (
+        isEarlyCheckoutWarning ||
         err.message.includes('already recorded') || 
+        err.message.includes('already complete') ||
         err.message.includes('Check-Out') || 
         err.message.includes('Check-In') ||
         err.message.includes('6:00 PM') ||
@@ -1510,11 +1523,13 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
       }
 
       setNotificationModal({
-        type: 'error',
+        type: isEarlyCheckoutWarning ? 'warning' : 'error',
         title: isFetchError 
           ? 'Server Connection Error' 
           : isSessionExpired
           ? 'Session Expired'
+          : isEarlyCheckoutWarning
+          ? 'Check-Out Time Not Reached'
           : isPunchRuleNotice 
           ? 'Attendance Punch Notice' 
           : 'Face Verification Failed',
@@ -1626,6 +1641,9 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
       if (regData.joining_date) formData.append('joining_date', regData.joining_date);
       if (regData.phone_number) formData.append('phone_number', regData.phone_number);
       formData.append('face_image', regPhoto, 'registered_face.jpg');
+      if (regLivenessPhoto) {
+        formData.append('liveness_image', regLivenessPhoto, 'registered_liveness.jpg');
+      }
 
       const inviteToken = getAttendanceInvite();
       if (inviteToken) {
@@ -2483,7 +2501,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                       )?.descriptor
                     }
                     currentUserName={currentUser?.name || currentUser?.full_name || 'Employee'}
-                    onFaceCaptured={(blob, descriptorArray) => handlePunchAttendance(blob, descriptorArray, false)} 
+                    onFaceCaptured={(blob, descriptorArray, livenessBlob) => handlePunchAttendance(blob, descriptorArray, false, livenessBlob)} 
                   />
 
                   {hasCheckedIn && !onPermissionBreak && (
@@ -2503,7 +2521,7 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                         )?.descriptor
                       }
                       currentUserName={currentUser?.name || currentUser?.full_name || 'Employee'}
-                      onFaceCaptured={(blob, descriptorArray) => handlePunchAttendance(blob, descriptorArray, true)} 
+                      onFaceCaptured={(blob, descriptorArray, livenessBlob) => handlePunchAttendance(blob, descriptorArray, true, livenessBlob)} 
                     />
                   )}
                 </div>
@@ -2928,7 +2946,8 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
                     ? (prefilledEmployee?.email_conflict_error || 'This email is already assigned to another attendance account. Contact your administrator.')
                     : "Set and confirm your password in Step 2 first to unlock face capture."
                 }
-                onFaceCaptured={(blobOrDataUrl, descriptorArray) => {
+                onFaceCaptured={(blobOrDataUrl, descriptorArray, livenessBlob) => {
+                  setRegLivenessPhoto(livenessBlob || null);
                   if (descriptorArray && Array.isArray(descriptorArray) && descriptorArray.length === 128) {
                     setRegPhotoDescriptor(descriptorArray);
                   }
@@ -4730,9 +4749,21 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
               width: '56px',
               height: '56px',
               borderRadius: '50%',
-              backgroundColor: notificationModal.type === 'success' ? (isDarkMode ? '#064e3b' : '#ECFDF5') : (isDarkMode ? '#450a0a' : '#FEF2F2'),
-              border: notificationModal.type === 'success' ? `1px solid ${isDarkMode ? '#065f46' : '#10b981'}` : `1px solid ${isDarkMode ? '#991b1b' : '#ef4444'}`,
-              color: notificationModal.type === 'success' ? (isDarkMode ? '#6ee7b7' : '#047857') : (isDarkMode ? '#fca5a5' : '#b91c1c'),
+              backgroundColor: notificationModal.type === 'success'
+                ? (isDarkMode ? '#064e3b' : '#ECFDF5')
+                : notificationModal.type === 'warning'
+                ? (isDarkMode ? '#451a03' : '#FFFBEB')
+                : (isDarkMode ? '#450a0a' : '#FEF2F2'),
+              border: notificationModal.type === 'success'
+                ? `1px solid ${isDarkMode ? '#065f46' : '#10b981'}`
+                : notificationModal.type === 'warning'
+                ? `1px solid ${isDarkMode ? '#92400e' : '#f59e0b'}`
+                : `1px solid ${isDarkMode ? '#991b1b' : '#ef4444'}`,
+              color: notificationModal.type === 'success'
+                ? (isDarkMode ? '#6ee7b7' : '#047857')
+                : notificationModal.type === 'warning'
+                ? (isDarkMode ? '#fcd34d' : '#b45309')
+                : (isDarkMode ? '#fca5a5' : '#b91c1c'),
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -4740,6 +4771,8 @@ export default function AttendanceCheckIn({ initialTab = 'punch' }) {
             }}>
               {notificationModal.type === 'success' ? (
                 <CheckCircle2 style={{ width: '32px', height: '32px', color: '#10b981' }} />
+              ) : notificationModal.type === 'warning' ? (
+                <AlertTriangle style={{ width: '32px', height: '32px', color: '#f59e0b' }} />
               ) : (
                 <AlertTriangle style={{ width: '32px', height: '32px', color: '#ef4444' }} />
               )}

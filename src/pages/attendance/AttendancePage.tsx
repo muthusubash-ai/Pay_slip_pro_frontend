@@ -41,14 +41,18 @@ function toRawStatus(status: DayStatus): RawStatus {
 const DEFAULT_WEEKOFF_POOL_UNITS = 2;
 
 interface ConvertedLeaveInfo {
+  kind?: 'converted' | 'missed_punch';
   offsetFrom: string;
   reason: string;
+  title?: string;
+  footer?: string;
 }
 
 function computeDisplayStatuses(
   rawStatuses: Map<string, RawStatus>,
   joiningDate: string,
-  poolUnits: number = DEFAULT_WEEKOFF_POOL_UNITS
+  poolUnits: number = DEFAULT_WEEKOFF_POOL_UNITS,
+  missedPunchDates?: Set<string>
 ): {
   display: Map<string, DayStatus>;
   convertedDates: Map<string, ConvertedLeaveInfo>;
@@ -56,8 +60,13 @@ function computeDisplayStatuses(
   const combined: Array<{ date: string; kind: 'full' | 'half' }> = [];
   rawStatuses.forEach((st, d) => {
     if (joiningDate && d < joiningDate) return;
-    if (st === 'leave') combined.push({ date: d, kind: 'full' });
-    else if (st === 'half_day') combined.push({ date: d, kind: 'half' });
+    if (st === 'leave') {
+      // Missed punch penalties must deduct salary directly, never consume free weekoff pool
+      if (missedPunchDates?.has(d)) return;
+      combined.push({ date: d, kind: 'full' });
+    } else if (st === 'half_day') {
+      combined.push({ date: d, kind: 'half' });
+    }
   });
   combined.sort((a, b) => a.date.localeCompare(b.date));
 
@@ -154,15 +163,15 @@ export function AttendancePage() {
 
   const handleTouchStart = (dateStr: string) => {
     isLongPressActiveRef.current = false;
-    const converted = convertedDates.get(dateStr);
-    if (!converted) return;
+    const notice = convertedDates.get(dateStr) || missedPunchNotices.get(dateStr);
+    if (!notice) return;
 
     longPressTimerRef.current = window.setTimeout(() => {
       isLongPressActiveRef.current = true;
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
         try { navigator.vibrate(40); } catch { /* ignore */ }
       }
-      setActiveMobileNotice(converted);
+      setActiveMobileNotice(notice);
     }, 450);
   };
 
@@ -511,12 +520,37 @@ export function AttendancePage() {
     });
   };
 
+  const missedPunchNotices = useMemo(() => {
+    const map = new Map<string, ConvertedLeaveInfo>();
+    biometricMap.forEach((rec, dateStr) => {
+      if (rec.missed_punch_type && dayStatuses.get(dateStr) === 'leave') {
+        const isOut = rec.missed_punch_type === 'missed_checkout';
+        const reason = rec.missed_punch_reason || (
+          isOut
+            ? 'Employee did not punch out on this date, so leave was consumed (salary deducted).'
+            : 'Employee did not punch in on this date, so leave was consumed (salary deducted).'
+        );
+        map.set(dateStr, {
+          kind: 'missed_punch',
+          offsetFrom: formatDisplayDate(dateStr),
+          title: isOut ? '⚠️ Missed Punch-Out — Absent' : '⚠️ Missed Punch-In — Absent',
+          reason,
+          footer: '⚡ 1.0 day salary will be deducted.',
+        });
+      }
+    });
+    return map;
+  }, [biometricMap, dayStatuses]);
+
   const { display: displayStatuses, convertedDates } = useMemo(() => {
-    const { display: base, convertedDates: cDates } = computeDisplayStatuses(dayStatuses, joiningDate, weekoffPoolUnits);
+    const missedSet = new Set<string>(missedPunchNotices.keys());
+    const { display: base, convertedDates: cDates } = computeDisplayStatuses(
+      dayStatuses, joiningDate, weekoffPoolUnits, missedSet
+    );
     // Company weekly-off days always win over the derived Leave/Weekoff display.
     companyWeekOffDates.forEach((d) => base.set(d, 'company_week_off'));
     return { display: base, convertedDates: cDates };
-  }, [dayStatuses, joiningDate, companyWeekOffDates, weekoffPoolUnits]);
+  }, [dayStatuses, joiningDate, companyWeekOffDates, weekoffPoolUnits, missedPunchNotices]);
 
   // Warn when a Half Day won't be free because a full-day Weekoff already used up the
   // shared monthly pool (1 full day = 2 units, same pool as Weekoff Halfday).
@@ -983,9 +1017,10 @@ export function AttendancePage() {
                   let label = 'PRESENT';
                   let shortLabel = 'PRES';
                   if (status === 'leave') {
+                    const isMissed = missedPunchNotices.has(dateStr);
                     bgClass = 'bg-rose-600 text-white border-transparent shadow-sm';
-                    label = 'LEAVE';
-                    shortLabel = 'LEAVE';
+                    label = isMissed ? 'ABSENT' : 'LEAVE';
+                    shortLabel = isMissed ? 'ABSENT' : 'LEAVE';
                   } else if (status === 'half_day') {
                     bgClass = 'bg-amber-500 text-white border-transparent shadow-sm';
                     label = 'HALF DAY';
@@ -1095,6 +1130,38 @@ export function AttendancePage() {
                           </div>
                         </>
                       )}
+
+                      {/* Missed punch indicator dot (top-left, sky blue) and hover/touch notice */}
+                      {!convertedDates.has(dateStr) && missedPunchNotices.has(dateStr) && !beforeJoiningDay && (
+                        <>
+                          <span
+                            className="absolute top-1 sm:top-1.5 left-1 sm:left-1.5 w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-sky-300 dark:bg-sky-400 ring-1.5 sm:ring-2 ring-white/80 dark:ring-neutral-900/60 shadow-sm cursor-pointer z-10 animate-pulse"
+                            title={missedPunchNotices.get(dateStr)?.reason}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMobileNotice(missedPunchNotices.get(dateStr) || null);
+                            }}
+                            onTouchEnd={(e) => {
+                              e.stopPropagation();
+                              setActiveMobileNotice(missedPunchNotices.get(dateStr) || null);
+                            }}
+                          />
+
+                          {/* Desktop Hover Notice Tooltip */}
+                          <div className="pointer-events-none absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden sm:group-hover:flex flex-col items-center z-40 w-60 sm:w-64 p-2.5 rounded-xl bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white text-[11px] leading-snug shadow-2xl border border-sky-300 dark:border-sky-700/80 backdrop-blur-sm">
+                            <div className="flex items-center gap-1.5 font-bold text-sky-600 dark:text-sky-300 text-xs mb-1 w-full text-left">
+                              <span>{missedPunchNotices.get(dateStr)?.title}</span>
+                            </div>
+                            <p className="text-neutral-600 dark:text-neutral-200 text-left font-normal">
+                              {missedPunchNotices.get(dateStr)?.reason}
+                            </p>
+                            <div className="mt-1.5 pt-1.5 border-t border-neutral-200 dark:border-neutral-700/60 w-full text-left text-[10px] text-rose-600 dark:text-rose-300 font-semibold flex items-center gap-1">
+                              <span>{missedPunchNotices.get(dateStr)?.footer}</span>
+                            </div>
+                            <div className="w-2.5 h-2.5 bg-white dark:bg-neutral-900 rotate-45 border-r border-b border-sky-300 dark:border-sky-700/80 -mb-1 mt-[-5px]" />
+                          </div>
+                        </>
+                      )}
                     </button>
                   );
                 })}
@@ -1130,6 +1197,12 @@ export function AttendancePage() {
                   <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800 font-bold text-xs" title="1 Weekoff half unit used to offset a full day leave into a Half Day">
                     <span className="w-2 h-2 rounded-full bg-teal-400 ring-2 ring-neutral-900/40" />
                     <span>Converted: {convertedDates.size}</span>
+                  </div>
+                )}
+                {missedPunchNotices.size > 0 && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800 font-bold text-xs" title="Employee missed punch-in or punch-out, marked as Absent (salary deducted)">
+                    <span className="w-2 h-2 rounded-full bg-sky-400 ring-2 ring-sky-500/30" />
+                    <span>Missed Punch (Absent): {missedPunchNotices.size}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2">
@@ -1370,7 +1443,15 @@ export function AttendancePage() {
                               )}
                             </td>
                             <td className="py-2.5 px-3">
-                              {bio?.is_late ? (
+                              {bio?.missed_punch_type === 'missed_checkout' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
+                                  ⚠️ Missed Out
+                                </span>
+                              ) : bio?.missed_punch_type === 'missed_checkin' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
+                                  ⚠️ Missed In
+                                </span>
+                              ) : bio?.is_late ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
                                   ⚡ Late Punch
                                 </span>
@@ -1383,17 +1464,28 @@ export function AttendancePage() {
                               )}
                             </td>
                             <td className="py-2.5 px-3">
-                              <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold uppercase ${
-                                status === 'leave' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300' :
-                                status === 'half_day' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' :
-                                status === 'permission' ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300' :
-                                status === 'weekoff' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300' :
-                                status === 'weekoff_halfday' ? 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300' :
-                                status === 'company_week_off' ? 'bg-slate-200 text-slate-800 dark:bg-slate-800/60 dark:text-slate-300' :
-                                'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                              }`}>
-                                {status.replace(/_/g, ' ')}
-                              </span>
+                              <div className="inline-flex items-center gap-1.5">
+                                <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold uppercase ${
+                                  status === 'leave' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300' :
+                                  status === 'half_day' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' :
+                                  status === 'permission' ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300' :
+                                  status === 'weekoff' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300' :
+                                  status === 'weekoff_halfday' ? 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300' :
+                                  status === 'company_week_off' ? 'bg-slate-200 text-slate-800 dark:bg-slate-800/60 dark:text-slate-300' :
+                                  'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                }`}>
+                                  {missedPunchNotices.has(dateStr) ? 'ABSENT' : status.replace(/_/g, ' ')}
+                                </span>
+                                {missedPunchNotices.has(dateStr) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveMobileNotice(missedPunchNotices.get(dateStr) || null)}
+                                    title={missedPunchNotices.get(dateStr)?.reason}
+                                    className="w-2.5 h-2.5 rounded-full bg-sky-400 ring-2 ring-sky-400/30 cursor-pointer animate-pulse shrink-0"
+                                    aria-label="Missed punch leave info"
+                                  />
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -1693,9 +1785,15 @@ export function AttendancePage() {
             >
               <div className="flex items-center justify-between gap-3 mb-2.5">
                 <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-teal-400 ring-2 ring-teal-500/40 animate-pulse" />
-                  <h4 className="font-extrabold text-teal-300 text-sm sm:text-base flex items-center gap-1.5">
-                    <span>🔄 Converted to Half Day</span>
+                  <span className={`w-3 h-3 rounded-full ring-2 animate-pulse ${
+                    activeMobileNotice.kind === 'missed_punch'
+                      ? 'bg-sky-400 ring-sky-500/40'
+                      : 'bg-teal-400 ring-teal-500/40'
+                  }`} />
+                  <h4 className={`font-extrabold text-sm sm:text-base flex items-center gap-1.5 ${
+                    activeMobileNotice.kind === 'missed_punch' ? 'text-sky-300' : 'text-teal-300'
+                  }`}>
+                    <span>{activeMobileNotice.title || '🔄 Converted to Half Day'}</span>
                   </h4>
                 </div>
                 <button
@@ -1708,18 +1806,30 @@ export function AttendancePage() {
                 </button>
               </div>
 
-              <p className="text-xs sm:text-sm text-neutral-200 leading-relaxed font-normal">
-                Full day leave converted to <strong className="text-white">Half Day</strong> because 1 Weekoff unit was applied from <span className="text-teal-300 font-semibold">{activeMobileNotice.offsetFrom}</span>.
-              </p>
+              {activeMobileNotice.kind === 'missed_punch' ? (
+                <p className="text-xs sm:text-sm text-neutral-200 leading-relaxed font-normal">
+                  {activeMobileNotice.reason} <span className="text-sky-300 font-semibold">({activeMobileNotice.offsetFrom})</span>
+                </p>
+              ) : (
+                <p className="text-xs sm:text-sm text-neutral-200 leading-relaxed font-normal">
+                  Full day leave converted to <strong className="text-white">Half Day</strong> because 1 Weekoff unit was applied from <span className="text-teal-300 font-semibold">{activeMobileNotice.offsetFrom}</span>.
+                </p>
+              )}
 
               <div className="mt-3.5 pt-3 border-t border-neutral-800 flex items-center justify-between gap-2 text-xs">
-                <div className="text-amber-300 font-bold flex items-center gap-1.5">
-                  <span>⚡ Only 0.5 day salary will be deducted.</span>
+                <div className={`font-bold flex items-center gap-1.5 ${
+                  activeMobileNotice.kind === 'missed_punch' ? 'text-rose-300' : 'text-amber-300'
+                }`}>
+                  <span>{activeMobileNotice.footer || '⚡ Only 0.5 day salary will be deducted.'}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setActiveMobileNotice(null)}
-                  className="px-3 py-1.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-neutral-950 font-bold text-xs transition-colors cursor-pointer"
+                  className={`px-3 py-1.5 rounded-xl text-neutral-950 font-bold text-xs transition-colors cursor-pointer ${
+                    activeMobileNotice.kind === 'missed_punch'
+                      ? 'bg-sky-400 hover:bg-sky-300'
+                      : 'bg-teal-500 hover:bg-teal-400'
+                  }`}
                 >
                   Got it
                 </button>

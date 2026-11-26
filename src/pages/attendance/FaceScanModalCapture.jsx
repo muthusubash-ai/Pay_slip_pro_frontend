@@ -23,13 +23,22 @@ export async function ensureTfBackendReady(api) {
   if (tfBackendReadyPromise) return tfBackendReadyPromise;
   tfBackendReadyPromise = (async () => {
     const tf = api.tf;
-    for (const backend of ['webgl', 'wasm', 'cpu']) {
+    let hasWebGL = false;
+    try {
+      const testCanvas = document.createElement('canvas');
+      hasWebGL = !!(testCanvas.getContext('webgl2') || testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl'));
+    } catch (e) {
+      hasWebGL = false;
+    }
+
+    const candidates = hasWebGL ? ['webgl', 'cpu'] : ['cpu'];
+    for (const backend of candidates) {
       try {
         await tf.setBackend(backend);
         await tf.ready();
         if (tf.getBackend() === backend) return true;
       } catch (e) {
-        console.warn(`TensorFlow backend '${backend}' failed to initialize:`, e);
+        console.warn(`TensorFlow backend '${backend}' unavailable, falling back...`);
       }
     }
     return false;
@@ -38,11 +47,14 @@ export async function ensureTfBackendReady(api) {
 }
 
 let faceModelsPromise = null;
-export async function ensureFaceModelsLoaded(api) {
-  if (!api || !api.nets) return;
-  if (faceModelsPromise) return faceModelsPromise;
+let coreModelsPromise = null;
 
-  faceModelsPromise = (async () => {
+export async function ensureFaceModelsLoaded(api, includeRecognition = true) {
+  if (!api || !api.nets) return;
+  if (!includeRecognition && coreModelsPromise) return coreModelsPromise;
+  if (includeRecognition && faceModelsPromise) return faceModelsPromise;
+
+  const loadTask = (async () => {
     await ensureTfBackendReady(api);
     const loadNets = async (url) => {
       const promises = [];
@@ -52,7 +64,7 @@ export async function ensureFaceModelsLoaded(api) {
       if (api.nets.faceLandmark68TinyNet && !api.nets.faceLandmark68TinyNet.isLoaded) {
         promises.push(api.nets.faceLandmark68TinyNet.loadFromUri(url));
       }
-      if (api.nets.faceRecognitionNet && !api.nets.faceRecognitionNet.isLoaded) {
+      if (includeRecognition && api.nets.faceRecognitionNet && !api.nets.faceRecognitionNet.isLoaded) {
         promises.push(api.nets.faceRecognitionNet.loadFromUri(url));
       }
       if (promises.length > 0) {
@@ -71,7 +83,12 @@ export async function ensureFaceModelsLoaded(api) {
     }
   })();
 
-  return faceModelsPromise;
+  if (includeRecognition) {
+    faceModelsPromise = loadTask;
+  } else {
+    coreModelsPromise = loadTask;
+  }
+  return loadTask;
 }
 
 export async function preloadFaceBiometrics() {
@@ -115,17 +132,81 @@ export default function FaceScanModalCapture({
   const handleCaptureRef = useRef(null);
   const scanProgressRef = useRef(0);
   const scanIntervalRef = useRef(null);
+  const blinkTimerRef = useRef(null);
   const latestDescriptorRef = useRef(null);
 
   const prevFaceRef = useRef(null);
   const regStageRef = useRef(1);
   const [regStep, setRegStep] = useState(1);
 
+  // Eye-blink liveness state (blocks printed / mobile screen photos)
+  const earSamplesRef = useRef([]);
+  const earBaselineRef = useRef(null);
+  const closedEarRef = useRef(null);
+  const eyeLumaSamplesRef = useRef([]);
+  const eyeLumaBaselineRef = useRef(null);
+  const eyeRegionRef = useRef(null);
+  const eyeBasePixelsRef = useRef(null);
+  const prevCheekPixelsRef = useRef(null);
+  const prevFaceBoxRef = useRef(null);
+  const eyesClosedAtRef = useRef(null);
+  const blinkStateRef = useRef('waiting_open'); // 'waiting_open' | 'eyes_closed' | 'blinked'
+  const blinkFrameBlobRef = useRef(null);
+  const livenessPromptAtRef = useRef(null);
+  const [blinkVerified, setBlinkVerified] = useState(false);
+
+  const resetLivenessState = () => {
+    earSamplesRef.current = [];
+    earBaselineRef.current = null;
+    closedEarRef.current = null;
+    eyeLumaSamplesRef.current = [];
+    eyeLumaBaselineRef.current = null;
+    eyeRegionRef.current = null;
+    eyeBasePixelsRef.current = null;
+    prevCheekPixelsRef.current = null;
+    prevFaceBoxRef.current = null;
+    eyesClosedAtRef.current = null;
+    blinkStateRef.current = 'waiting_open';
+    blinkFrameBlobRef.current = null;
+    livenessPromptAtRef.current = null;
+    setBlinkVerified(false);
+  };
+
+  // Synchronous JPEG Blob capture so liveness frame is never null when handleCapture runs
+  const captureVideoBlobSync = (video, quality = 0.82) => {
+    try {
+      const w = video?.videoWidth || 640;
+      const h = video?.videoHeight || 480;
+      if (!w || !h) return null;
+      const snapCanvas = document.createElement('canvas');
+      snapCanvas.width = w;
+      snapCanvas.height = h;
+      const sCtx = snapCanvas.getContext('2d');
+      sCtx.translate(w, 0);
+      sCtx.scale(-1, 1);
+      sCtx.drawImage(video, 0, 0, w, h);
+      const dataUrl = snapCanvas.toDataURL('image/jpeg', quality);
+      const parts = dataUrl.split(';base64,');
+      const raw = window.atob(parts[1]);
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) {
+        bytes[i] = raw.charCodeAt(i);
+      }
+      return new Blob([bytes], { type: 'image/jpeg' });
+    } catch (e) {
+      return null;
+    }
+  };
+
   // Stop camera tracks cleanly
   const stopCamera = () => {
     if (scanIntervalRef.current) {
       clearInterval(scanIntervalRef.current);
       scanIntervalRef.current = null;
+    }
+    if (blinkTimerRef.current) {
+      clearInterval(blinkTimerRef.current);
+      blinkTimerRef.current = null;
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -143,6 +224,7 @@ export default function FaceScanModalCapture({
         prevFaceRef.current = null;
         regStageRef.current = 1;
         setRegStep(1);
+        resetLivenessState();
         return;
       }
 
@@ -154,17 +236,22 @@ export default function FaceScanModalCapture({
       regStageRef.current = 1;
       setRegStep(1);
       setScanProgress(0);
+      resetLivenessState();
 
       try {
-        let api = window.faceapi;
-        if (!api) {
-          try { api = await loadFaceApi(); } catch (error) { console.warn("Face scanner library unavailable:", error); }
-        }
-        await ensureFaceModelsLoaded(api);
+        const modelsPromise = (async () => {
+          let api = window.faceapi;
+          if (!api) {
+            try { api = await loadFaceApi(); } catch (error) { console.warn("Face scanner library unavailable:", error); }
+          }
+          await ensureFaceModelsLoaded(api, mode === 'register');
+        })();
 
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const cameraPromise = navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
         });
+
+        const [, stream] = await Promise.all([modelsPromise, cameraPromise]);
 
         if (active) {
           streamRef.current = stream;
@@ -213,6 +300,7 @@ export default function FaceScanModalCapture({
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, offCanvas.width, offCanvas.height);
 
+    const livenessBlob = blinkFrameBlobRef.current || captureVideoBlobSync(video, 0.80);
     // Stop camera and close scan modal IMMEDIATELY so the green circle completes and modal disappears without lag
     stopCamera();
     setIsOpen(false);
@@ -224,7 +312,7 @@ export default function FaceScanModalCapture({
       } else {
         setCapturedImage(null);
       }
-      if (onFaceCaptured) onFaceCaptured(blob || dataUrl, descriptorArray);
+      if (onFaceCaptured) onFaceCaptured(blob || dataUrl, descriptorArray, livenessBlob);
     }, 'image/jpeg', 0.85);
   };
 
@@ -245,6 +333,10 @@ export default function FaceScanModalCapture({
       clearInterval(scanIntervalRef.current);
       scanIntervalRef.current = null;
     }
+    if (blinkTimerRef.current) {
+      clearInterval(blinkTimerRef.current);
+      blinkTimerRef.current = null;
+    }
 
     const api = window.faceapi;
     const displaySize = { width: video.clientWidth || 480, height: video.clientHeight || 360 };
@@ -255,19 +347,116 @@ export default function FaceScanModalCapture({
       canvas.height = displaySize.height;
     }
 
+    // High-speed 22 FPS pure-canvas eye-blink sampler (works even on CPU-only devices without WebGL)
+    const sampleCanvas = document.createElement('canvas');
+    sampleCanvas.width = 24;
+    sampleCanvas.height = 10;
+    const sampleCtx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+    blinkTimerRef.current = setInterval(() => {
+      const region = eyeRegionRef.current;
+      if (!region || !video || video.paused || video.ended || !isOpen || blinkStateRef.current === 'blinked') return;
+      try {
+        // 1. Sample cheek/bridge stability patch
+        sampleCtx.drawImage(video, region.cheekX, region.cheekY, region.cheekW, region.cheekH, 0, 0, 24, 10);
+        const cData = sampleCtx.getImageData(0, 0, 24, 10).data;
+        const cheekLuma = new Float32Array(240);
+        for (let i = 0, j = 0; i < cData.length; i += 4, j++) {
+          cheekLuma[j] = 0.299 * cData[i] + 0.587 * cData[i + 1] + 0.114 * cData[i + 2];
+        }
+        let cheekDiff = 0;
+        if (prevCheekPixelsRef.current) {
+          for (let j = 0; j < 240; j++) cheekDiff += Math.abs(cheekLuma[j] - prevCheekPixelsRef.current[j]);
+          cheekDiff /= 240;
+        }
+        prevCheekPixelsRef.current = cheekLuma;
+
+        // 2. Sample eye bounding box
+        sampleCtx.drawImage(video, region.minX, region.minY, region.w, region.h, 0, 0, 24, 10);
+        const eData = sampleCtx.getImageData(0, 0, 24, 10).data;
+        const eyeLuma = new Float32Array(240);
+        let sum = 0;
+        for (let i = 0, j = 0; i < eData.length; i += 4, j++) {
+          const v = 0.299 * eData[i] + 0.587 * eData[i + 1] + 0.114 * eData[i + 2];
+          eyeLuma[j] = v;
+          sum += v;
+        }
+        const mean = sum / 240;
+        let variance = 0;
+        for (let j = 0; j < 240; j++) {
+          const d = eyeLuma[j] - mean;
+          variance += d * d;
+        }
+        const eyeContrast = Math.sqrt(variance / 240);
+
+        // If whole photo/head is moving rapidly, reset open baseline so shaking a photo never passes
+        if (cheekDiff > 6.5) {
+          eyeBasePixelsRef.current = null;
+          eyeLumaSamplesRef.current = [];
+          return;
+        }
+
+        if (blinkStateRef.current === 'waiting_open') {
+          if (!eyeBasePixelsRef.current) {
+            eyeBasePixelsRef.current = eyeLuma;
+            return;
+          }
+          if (eyeLumaSamplesRef.current.length < 6) {
+            eyeLumaSamplesRef.current.push(eyeContrast);
+            eyeLumaBaselineRef.current =
+              eyeLumaSamplesRef.current.reduce((s, v) => s + v, 0) / eyeLumaSamplesRef.current.length;
+          }
+          let eyeDelta = 0;
+          for (let j = 0; j < 240; j++) eyeDelta += Math.abs(eyeLuma[j] - eyeBasePixelsRef.current[j]);
+          eyeDelta /= 240;
+
+          const cBase = eyeLumaBaselineRef.current;
+          const lumaBlink = eyeDelta > 5.2 && eyeDelta > cheekDiff * 1.7;
+          const contrastBlink = cBase && eyeLumaSamplesRef.current.length >= 4 && eyeContrast < cBase * 0.87;
+          if (lumaBlink || contrastBlink) {
+            blinkStateRef.current = 'eyes_closed';
+            eyesClosedAtRef.current = Date.now();
+            const syncBlob = captureVideoBlobSync(video, 0.82);
+            if (syncBlob) blinkFrameBlobRef.current = syncBlob;
+          }
+        } else if (blinkStateRef.current === 'eyes_closed') {
+          let eyeDelta = 0;
+          if (eyeBasePixelsRef.current) {
+            for (let j = 0; j < 240; j++) eyeDelta += Math.abs(eyeLuma[j] - eyeBasePixelsRef.current[j]);
+            eyeDelta /= 240;
+          }
+          const cBase = eyeLumaBaselineRef.current;
+          const reopened =
+            (eyeBasePixelsRef.current && eyeDelta < 4.5) ||
+            (cBase && eyeContrast >= cBase * 0.93) ||
+            (eyesClosedAtRef.current && Date.now() - eyesClosedAtRef.current > 180);
+          if (reopened) {
+            blinkStateRef.current = 'blinked';
+            setBlinkVerified(true);
+          }
+        }
+      } catch (e) {}
+    }, 45);
+
+    let isDetecting = false;
     const interval = setInterval(async () => {
-      if (!video || video.paused || video.ended || !isOpen) return;
+      if (!video || video.paused || video.ended || !isOpen || isDetecting) return;
+      isDetecting = true;
+      try {
 
       let detections = [];
       let singleFaceDetection = null;
 
-      // 1. Try detectSingleFace with fast 224 input size
-      if (api && api.detectSingleFace && api.nets?.faceRecognitionNet?.isLoaded) {
+      // 1. Fast path: run lightweight detector + 68 landmarks while waiting for blink
+      // Only run heavy faceRecognitionNet descriptor in register mode AFTER blink is verified (or once for duplicate check)
+      const needsDescriptor = mode === 'register' && blinkStateRef.current === 'blinked' && api?.nets?.faceRecognitionNet?.isLoaded;
+      if (api && api.detectSingleFace && api.nets?.tinyFaceDetector?.isLoaded) {
         try {
-          singleFaceDetection = await api.detectSingleFace(
-            video,
-            new api.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.2 })
-          ).withFaceLandmarks(true).withFaceDescriptor();
+          const detectorOpts = new api.TinyFaceDetectorOptions({
+            inputSize: needsDescriptor ? 224 : 160,
+            scoreThreshold: 0.2,
+          });
+          const task = api.detectSingleFace(video, detectorOpts).withFaceLandmarks(true);
+          singleFaceDetection = needsDescriptor ? await task.withFaceDescriptor() : await task;
 
           if (singleFaceDetection) {
             const resized = api.resizeResults ? api.resizeResults(singleFaceDetection, displaySize) : singleFaceDetection;
@@ -510,127 +699,300 @@ export default function FaceScanModalCapture({
             isCovered: false,
             text: '⚠️ Face Mismatch! (Not Matched)'
           });
-        } else if (mode === 'register') {
-          if (isTooFar) {
-            setFaceStatus({
-              valid: false,
-              count: 1,
-              isMismatch: false,
-              isCovered: false,
-              text: '🔍 Move closer to the camera'
-            });
-          } else if (isStraightHead && isCentered) {
-            scanProgressRef.current = Math.min(100, scanProgressRef.current + 4.0);
-            const p = Math.floor(scanProgressRef.current);
-            setScanProgress(p);
-
-            if (p >= 100) {
-              setScanProgress(100);
-              setFaceStatus({
-                valid: true,
-                count: 1,
-                isMismatch: false,
-                isCovered: false,
-                text: '✓ High-Accuracy Biometric Scan Complete (100%) — Registering...'
-              });
-
-              if (autoCapture && !autoCapturedRef.current) {
-                autoCapturedRef.current = true;
-                if (scanIntervalRef.current) {
-                  clearInterval(scanIntervalRef.current);
-                  scanIntervalRef.current = null;
-                }
-                if (handleCaptureRef.current) handleCaptureRef.current();
-              }
-            } else {
-              setFaceStatus({
-                valid: false,
-                count: 1,
-                isMismatch: false,
-                isCovered: false,
-                text: `🔍 Scanning face biometrics... ${p}%`
-              });
-            }
-          } else {
-            // PAUSE SCAN on movement or deviation (Keep current progress, do not reset)
-            const currentP = Math.floor(scanProgressRef.current);
-            if (currentP > 0) {
-              setFaceStatus({
-                valid: false,
-                count: 1,
-                isMismatch: false,
-                isCovered: false,
-                text: `⏸️ Scan Paused (${currentP}%): Look straight towards camera`
-              });
-            } else {
-              setFaceStatus({
-                valid: false,
-                count: 1,
-                isMismatch: false,
-                isCovered: false,
-                text: 'Align head straight inside circle to start scan'
-              });
-            }
-          }
         } else {
-          // Punch Mode (Strict Frontal Gaze & Proximity Check for High Security)
-          if (!isCentered) {
-            autoCapturedRef.current = false;
-            scanProgressRef.current = 0;
-            setScanProgress(0);
-            setFaceStatus({
-              valid: false,
-              count: 1,
-              isMismatch: false,
-              isCovered: false,
-              text: 'Position face inside the center circle'
-            });
-          } else if (isTooFar) {
-            autoCapturedRef.current = false;
-            scanProgressRef.current = 0;
-            setScanProgress(0);
-            setFaceStatus({
-              valid: false,
-              count: 1,
-              isMismatch: false,
-              isCovered: false,
-              text: '🔍 Move closer to the camera'
-            });
-          } else if (!isStraightHead) {
-            autoCapturedRef.current = false;
-            scanProgressRef.current = 0;
-            setScanProgress(0);
-            setFaceStatus({
-              valid: false,
-              count: 1,
-              isMismatch: false,
-              isCovered: false,
-              text: 'Look straight towards the camera to verify'
-            });
-          } else {
-            scanProgressRef.current = Math.min(100, scanProgressRef.current + 14.0);
-            const currentProgress = Math.floor(scanProgressRef.current);
-            setScanProgress(currentProgress);
+          // Shared Eye-Blink Liveness Helper (EAR + eye-region luma pulse, blocks printed & mobile screen photos)
+          const updateBlinkLiveness = () => {
+            if (blinkStateRef.current === 'blinked') return true;
+            if (!livenessPromptAtRef.current) {
+              livenessPromptAtRef.current = Date.now();
+            }
 
-            const statusText = currentProgress < 100
-              ? `Verifying face biometric... ${currentProgress}%`
-              : '✓ Face verified. Submitting attendance...';
+            // Check head steadiness so shaking a photo doesn't trigger eye-region change
+            let headMove = 0;
+            if (prevFaceBoxRef.current) {
+              headMove =
+                Math.abs(box.x - prevFaceBoxRef.current.x) +
+                Math.abs(box.y - prevFaceBoxRef.current.y) +
+                Math.abs(box.width - prevFaceBoxRef.current.width);
+            }
+            prevFaceBoxRef.current = { x: box.x, y: box.y, width: box.width };
 
-            setFaceStatus({
-              valid: currentProgress >= 100,
-              count: 1,
-              isMismatch: false,
-              isCovered: false,
-              text: statusText
-            });
+            const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+            const calcEAR = (eye) => {
+              if (!eye || eye.length < 6) return null;
+              const v1 = dist(eye[1], eye[5]);
+              const v2 = dist(eye[2], eye[4]);
+              const h = dist(eye[0], eye[3]);
+              return h > 1e-4 ? (v1 + v2) / (2.0 * h) : null;
+            };
+            const leftEye = det.landmarks && typeof det.landmarks.getLeftEye === 'function' ? det.landmarks.getLeftEye() : null;
+            const rightEye = det.landmarks && typeof det.landmarks.getRightEye === 'function' ? det.landmarks.getRightEye() : null;
+            const leftEar = calcEAR(leftEye);
+            const rightEar = calcEAR(rightEye);
+            if (leftEar === null || rightEar === null) return false;
 
-            if (currentProgress >= 100 && autoCapture && !autoCapturedRef.current) {
-              autoCapturedRef.current = true;
-              if (scanIntervalRef.current) {
-                clearInterval(scanIntervalRef.current);
-                scanIntervalRef.current = null;
+            // Update latest eye & cheek coordinates in video pixel space for the 22 FPS pure-canvas sampler
+            try {
+              const allEyePts = [...leftEye, ...rightEye];
+              const scaleX = (video.videoWidth || 640) / displaySize.width;
+              const scaleY = (video.videoHeight || 480) / displaySize.height;
+              const minX = Math.max(0, Math.min(...allEyePts.map(p => p.x)) * scaleX - 4);
+              const maxX = Math.min(video.videoWidth || 640, Math.max(...allEyePts.map(p => p.x)) * scaleX + 4);
+              const minY = Math.max(0, Math.min(...allEyePts.map(p => p.y)) * scaleY - 4);
+              const maxY = Math.min(video.videoHeight || 480, Math.max(...allEyePts.map(p => p.y)) * scaleY + 4);
+              const w = maxX - minX;
+              const h = maxY - minY;
+              if (w > 12 && h > 4) {
+                eyeRegionRef.current = {
+                  minX,
+                  minY,
+                  w,
+                  h,
+                  cheekX: minX + w * 0.2,
+                  cheekY: Math.min((video.videoHeight || 480) - h - 2, maxY + h * 0.8),
+                  cheekW: w * 0.6,
+                  cheekH: h,
+                };
               }
-              if (handleCaptureRef.current) handleCaptureRef.current();
+            } catch (e) {}
+
+            const avgEar = (leftEar + rightEar) / 2.0;
+
+            // Sample grayscale contrast inside eye bounding box (catches blinks even when tiny landmarks smooth over)
+            let eyeContrast = null;
+            try {
+              const allEyePts = [...leftEye, ...rightEye];
+              const scaleX = (video.videoWidth || 640) / displaySize.width;
+              const scaleY = (video.videoHeight || 480) / displaySize.height;
+              const minX = Math.max(0, Math.min(...allEyePts.map(p => p.x)) * scaleX - 4);
+              const maxX = Math.min(video.videoWidth || 640, Math.max(...allEyePts.map(p => p.x)) * scaleX + 4);
+              const minY = Math.max(0, Math.min(...allEyePts.map(p => p.y)) * scaleY - 4);
+              const maxY = Math.min(video.videoHeight || 480, Math.max(...allEyePts.map(p => p.y)) * scaleY + 4);
+              const w = maxX - minX;
+              const h = maxY - minY;
+              if (w > 12 && h > 4) {
+                const eyeCanvas = document.createElement('canvas');
+                eyeCanvas.width = 24;
+                eyeCanvas.height = 10;
+                const eCtx = eyeCanvas.getContext('2d');
+                eCtx.drawImage(video, minX, minY, w, h, 0, 0, 24, 10);
+                const px = eCtx.getImageData(0, 0, 24, 10).data;
+                let sum = 0;
+                const vals = [];
+                for (let i = 0; i < px.length; i += 4) {
+                  const luma = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+                  vals.push(luma);
+                  sum += luma;
+                }
+                const mean = sum / vals.length;
+                let variance = 0;
+                for (let i = 0; i < vals.length; i++) {
+                  const d = vals[i] - mean;
+                  variance += d * d;
+                }
+                eyeContrast = Math.sqrt(variance / vals.length);
+              }
+            } catch (e) {}
+
+            if (blinkStateRef.current === 'waiting_open') {
+              if (headMove < 10 && earSamplesRef.current.length < 6 && avgEar > 0.14) {
+                earSamplesRef.current.push(avgEar);
+                const mean = earSamplesRef.current.reduce((s, v) => s + v, 0) / earSamplesRef.current.length;
+                earBaselineRef.current = Math.max(0.18, mean);
+              }
+              if (headMove < 10 && eyeContrast !== null && eyeLumaSamplesRef.current.length < 6) {
+                eyeLumaSamplesRef.current.push(eyeContrast);
+                const cMean = eyeLumaSamplesRef.current.reduce((s, v) => s + v, 0) / eyeLumaSamplesRef.current.length;
+                eyeLumaBaselineRef.current = cMean;
+              }
+
+              const baseline = earBaselineRef.current || 0.26;
+              const earDropped = earSamplesRef.current.length >= 3 && avgEar < baseline * 0.87;
+              const cBase = eyeLumaBaselineRef.current;
+              // When eyelid closes over dark iris/pupil, contrast inside eye box drops cleanly
+              const contrastDropped = headMove < 8 && cBase && eyeContrast !== null && eyeLumaSamplesRef.current.length >= 4 && eyeContrast < cBase * 0.88;
+
+              if (earDropped || contrastDropped) {
+                blinkStateRef.current = 'eyes_closed';
+                closedEarRef.current = avgEar;
+                eyesClosedAtRef.current = Date.now();
+                // Capture the blink-moment frame synchronously for backend 2-frame liveness verification
+                const syncBlob = captureVideoBlobSync(video, 0.82);
+                if (syncBlob) blinkFrameBlobRef.current = syncBlob;
+              }
+            } else if (blinkStateRef.current === 'eyes_closed') {
+              const baseline = earBaselineRef.current || 0.26;
+              const closedEar = closedEarRef.current || baseline * 0.82;
+              const earReopened = avgEar >= Math.max(closedEar * 1.06, baseline * 0.91);
+              const cBase = eyeLumaBaselineRef.current;
+              const contrastReopened = cBase && eyeContrast !== null && eyeContrast >= cBase * 0.93;
+              const heldClosedLongEnough = eyesClosedAtRef.current && (Date.now() - eyesClosedAtRef.current) > 220 && avgEar >= closedEar;
+
+              if (earReopened || contrastReopened || heldClosedLongEnough) {
+                blinkStateRef.current = 'blinked';
+                setBlinkVerified(true);
+                return true;
+              }
+            }
+            return false;
+          };
+
+          if (mode === 'register') {
+            if (isTooFar) {
+              setFaceStatus({
+                valid: false,
+                count: 1,
+                isMismatch: false,
+                isCovered: false,
+                text: '🔍 Move closer to the camera'
+              });
+            } else if (isStraightHead && isCentered) {
+              const blinked = updateBlinkLiveness();
+              if (!blinked) {
+                scanProgressRef.current = Math.min(45, scanProgressRef.current + 6.0);
+                const p = Math.floor(scanProgressRef.current);
+                setScanProgress(p);
+                const elapsed = livenessPromptAtRef.current ? (Date.now() - livenessPromptAtRef.current) : 0;
+                setFaceStatus({
+                  valid: false,
+                  count: 1,
+                  isMismatch: false,
+                  isCovered: false,
+                  text: elapsed > 6000
+                    ? '👀 Blink your eyes clearly (remove dark glasses if needed)'
+                    : '👀 Blink your eyes once to verify live face'
+                });
+              } else {
+                scanProgressRef.current = Math.min(100, Math.max(45, scanProgressRef.current) + 12.0);
+                const p = Math.floor(scanProgressRef.current);
+                setScanProgress(p);
+
+                if (p >= 100) {
+                  setScanProgress(100);
+                  setFaceStatus({
+                    valid: true,
+                    count: 1,
+                    isMismatch: false,
+                    isCovered: false,
+                    text: '✓ Live Biometric Scan Complete (100%) — Registering...'
+                  });
+
+                  if (autoCapture && !autoCapturedRef.current) {
+                    autoCapturedRef.current = true;
+                    if (scanIntervalRef.current) {
+                      clearInterval(scanIntervalRef.current);
+                      scanIntervalRef.current = null;
+                    }
+                    if (handleCaptureRef.current) handleCaptureRef.current();
+                  }
+                } else {
+                  setFaceStatus({
+                    valid: false,
+                    count: 1,
+                    isMismatch: false,
+                    isCovered: false,
+                    text: `✓ Blink verified! Scanning... ${p}%`
+                  });
+                }
+              }
+            } else {
+              // PAUSE SCAN on movement or deviation (Keep current progress, do not reset)
+              const currentP = Math.floor(scanProgressRef.current);
+              if (currentP > 0) {
+                setFaceStatus({
+                  valid: false,
+                  count: 1,
+                  isMismatch: false,
+                  isCovered: false,
+                  text: `⏸️ Scan Paused (${currentP}%): Look straight towards camera`
+                });
+              } else {
+                setFaceStatus({
+                  valid: false,
+                  count: 1,
+                  isMismatch: false,
+                  isCovered: false,
+                  text: 'Align head straight inside circle to start scan'
+                });
+              }
+            }
+          } else {
+            // Punch Mode (Strict Frontal Gaze, Proximity & Eye-Blink Liveness)
+            if (!isCentered) {
+              autoCapturedRef.current = false;
+              scanProgressRef.current = 0;
+              setScanProgress(0);
+              setFaceStatus({
+                valid: false,
+                count: 1,
+                isMismatch: false,
+                isCovered: false,
+                text: 'Position face inside the center circle'
+              });
+            } else if (isTooFar) {
+              autoCapturedRef.current = false;
+              scanProgressRef.current = 0;
+              setScanProgress(0);
+              setFaceStatus({
+                valid: false,
+                count: 1,
+                isMismatch: false,
+                isCovered: false,
+                text: '🔍 Move closer to the camera'
+              });
+            } else if (!isStraightHead) {
+              autoCapturedRef.current = false;
+              scanProgressRef.current = 0;
+              setScanProgress(0);
+              setFaceStatus({
+                valid: false,
+                count: 1,
+                isMismatch: false,
+                isCovered: false,
+                text: 'Look straight towards the camera to verify'
+              });
+            } else {
+              const blinked = updateBlinkLiveness();
+              if (!blinked) {
+                scanProgressRef.current = Math.min(45, scanProgressRef.current + 8.0);
+                const currentProgress = Math.floor(scanProgressRef.current);
+                setScanProgress(currentProgress);
+                const elapsed = livenessPromptAtRef.current ? (Date.now() - livenessPromptAtRef.current) : 0;
+                setFaceStatus({
+                  valid: false,
+                  count: 1,
+                  isMismatch: false,
+                  isCovered: false,
+                  text: elapsed > 6000
+                    ? '👀 Blink your eyes clearly (remove dark glasses if needed)'
+                    : '👀 Blink your eyes once to verify live face'
+                });
+              } else {
+                scanProgressRef.current = Math.min(100, Math.max(45, scanProgressRef.current) + 14.0);
+                const currentProgress = Math.floor(scanProgressRef.current);
+                setScanProgress(currentProgress);
+
+                const statusText = currentProgress < 100
+                  ? `✓ Blink verified! Completing... ${currentProgress}%`
+                  : '✓ Live face verified. Submitting attendance...';
+
+                setFaceStatus({
+                  valid: currentProgress >= 100,
+                  count: 1,
+                  isMismatch: false,
+                  isCovered: false,
+                  text: statusText
+                });
+
+                if (currentProgress >= 100 && autoCapture && !autoCapturedRef.current) {
+                  autoCapturedRef.current = true;
+                  if (scanIntervalRef.current) {
+                    clearInterval(scanIntervalRef.current);
+                    scanIntervalRef.current = null;
+                  }
+                  if (handleCaptureRef.current) handleCaptureRef.current();
+                }
+              }
             }
           }
         }
@@ -638,9 +1000,13 @@ export default function FaceScanModalCapture({
         autoCapturedRef.current = false;
         scanProgressRef.current = 0;
         setScanProgress(0);
+        resetLivenessState();
         setFaceStatus({ valid: false, count: 0, isMismatch: false, isCovered: false, text: 'Align face inside the center circle' });
       }
-    }, 75);
+      } finally {
+        isDetecting = false;
+      }
+    }, 55);
 
     scanIntervalRef.current = interval;
   };
@@ -908,7 +1274,7 @@ export default function FaceScanModalCapture({
                     : 'Position face inside center circle'}
                 </span>
               </div>
-              {faceStatus.count === 1 && !faceStatus.isMismatch && !faceStatus.isCovered && scanProgress < 100 && (
+              {blinkVerified && faceStatus.count === 1 && !faceStatus.isMismatch && !faceStatus.isCovered && scanProgress < 100 && (
                 <button
                   type="button"
                   onClick={handleCapture}
